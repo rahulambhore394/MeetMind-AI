@@ -161,4 +161,8 @@ class AppContainer(context: Context) {
     val meetingCallRepository: MeetingCallRepository by lazy {
         MeetingCallRepository(webRtcApiService, meetingWebSocketManager, webRtcManager)
     }
+
+    val userApiService: com.developer_rahul.meetmind_ai.feature.profile.data.remote.UserApiService by lazy {
+        retrofit.create(com.developer_rahul.meetmind_ai.feature.profile.data.remote.UserApiService::class.java)
+    }
 }

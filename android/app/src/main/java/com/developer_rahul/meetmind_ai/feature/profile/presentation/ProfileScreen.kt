@@ -8,7 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -29,15 +29,79 @@ fun ProfileScreen(
     onBack: () -> Unit,
     onLogout: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    viewModel: AuthViewModel = viewModel(factory = ViewModelFactory)
+    authViewModel: AuthViewModel = viewModel(factory = ViewModelFactory),
+    profileViewModel: ProfileViewModel = viewModel(factory = ViewModelFactory)
 ) {
+    val uiState by profileViewModel.uiState.collectAsState()
+    var showEditDialog by remember { mutableStateOf(false) }
+
+    var editName by remember { mutableStateOf("") }
+    var editEmail by remember { mutableStateOf("") }
+
+    val user = uiState.userProfile
+    val userName = user?.name ?: "User Profile"
+    val userEmail = user?.email ?: "loading..."
+    val initialLetter = userName.take(1).uppercase().ifEmpty { "U" }
+
+    if (showEditDialog) {
+        AlertDialog(
+            onDismissRequest = { showEditDialog = false },
+            containerColor = BackgroundSurface,
+            title = { Text("Edit Profile", style = Typography.titleLarge, fontWeight = FontWeight.Bold, color = TextPrimary) },
+            text = {
+                Column {
+                    MeetMindTextField(
+                        value = editName,
+                        onValueChange = { editName = it },
+                        label = "Full Name",
+                        leadingIcon = Icons.Default.Person
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    MeetMindTextField(
+                        value = editEmail,
+                        onValueChange = { editEmail = it },
+                        label = "Email Address",
+                        leadingIcon = Icons.Default.Email
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        profileViewModel.updateProfile(editName, editEmail)
+                        showEditDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo)
+                ) {
+                    Text("Save Changes", color = Color.White)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEditDialog = false }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            }
+        )
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Profile", style = Typography.titleLarge, color = TextPrimary, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = TextPrimary)
+                    if (onBack != {}) {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = TextPrimary)
+                        }
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        editName = userName
+                        editEmail = userEmail
+                        showEditDialog = true
+                    }) {
+                        Icon(Icons.Default.Edit, contentDescription = "Edit Profile", tint = TextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundSurface)
@@ -45,59 +109,69 @@ fun ProfileScreen(
         },
         containerColor = BackgroundSurface
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            item {
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                Surface(
-                    modifier = Modifier.size(110.dp),
-                    shape = CircleShape,
-                    color = GlassWhite,
-                    border = androidx.compose.foundation.BorderStroke(2.dp, ElectricIndigo)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text("R", style = Typography.displayLarge, color = TextPrimary)
-                    }
-                }
-                
-                Spacer(modifier = Modifier.height(20.dp))
-                
-                Text("Rahul Developer", style = Typography.headlineMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
-                Text("rahul@meetmind.ai", style = Typography.bodyLarge, color = TextSecondary)
-                
-                Spacer(modifier = Modifier.height(40.dp))
+        if (uiState.isLoading) {
+            Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = NeonCyan)
             }
-            
-            item {
-                ProfileOption(icon = Icons.Default.Person, title = "Account Information")
-                ProfileOption(icon = Icons.Default.Settings, title = "Preferences", onClick = onNavigateToSettings)
-                ProfileOption(icon = Icons.Default.Security, title = "Security & Privacy")
-                ProfileOption(icon = Icons.Default.Description, title = "AI Subscription")
-                
-                Spacer(modifier = Modifier.height(32.dp))
-                
-                TextButton(
-                    onClick = {
-                        viewModel.logout()
-                        onLogout()
-                    },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    colors = ButtonDefaults.textButtonColors(contentColor = RoseRed)
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Logout, null)
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text("Sign Out", style = Typography.titleMedium, fontWeight = FontWeight.Bold)
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                item {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    Surface(
+                        modifier = Modifier.size(110.dp),
+                        shape = CircleShape,
+                        color = GlassWhite,
+                        border = androidx.compose.foundation.BorderStroke(2.dp, ElectricIndigo)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(initialLetter, style = Typography.displayLarge, color = TextPrimary)
+                        }
                     }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Text(userName, style = Typography.headlineMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+                    Text(userEmail, style = Typography.bodyLarge, color = TextSecondary)
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
                 }
                 
-                Spacer(modifier = Modifier.height(40.dp))
+                item {
+                    ProfileOption(icon = Icons.Default.Person, title = "Edit Account Details", onClick = {
+                        editName = userName
+                        editEmail = userEmail
+                        showEditDialog = true
+                    })
+                    ProfileOption(icon = Icons.Default.Settings, title = "Preferences", onClick = onNavigateToSettings)
+                    ProfileOption(icon = Icons.Default.Security, title = "Security & Privacy")
+                    ProfileOption(icon = Icons.Default.Description, title = "AI Subscription & Usage")
+                    
+                    Spacer(modifier = Modifier.height(32.dp))
+                    
+                    TextButton(
+                        onClick = {
+                            authViewModel.logout()
+                            onLogout()
+                        },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        colors = ButtonDefaults.textButtonColors(contentColor = RoseRed)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Logout, null)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("Sign Out", style = Typography.titleMedium, fontWeight = FontWeight.Bold)
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(40.dp))
+                }
             }
         }
     }

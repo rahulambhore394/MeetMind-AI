@@ -99,6 +99,9 @@ class BaseViewModelFactory(
             modelClass.isAssignableFrom(NotificationViewModel::class.java) -> {
                 NotificationViewModel(container.notificationRepository) as T
             }
+            modelClass.isAssignableFrom(com.developer_rahul.meetmind_ai.feature.profile.presentation.ProfileViewModel::class.java) -> {
+                com.developer_rahul.meetmind_ai.feature.profile.presentation.ProfileViewModel(container.userApiService) as T
+            }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }
     }

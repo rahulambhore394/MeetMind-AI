@@ -96,8 +96,11 @@ fun MainScreen(
                 )
             }
             composable("calendar_tab") {
-                // Placeholder for Calendar
-                NotificationsScreen(onBack = { navController.popBackStack() })
+                com.developer_rahul.meetmind_ai.feature.meetings.presentation.CalendarScreen(
+                    onMeetingClick = onMeetingClick,
+                    onCreateMeeting = onNewMeeting,
+                    onNotifications = onNotifications
+                )
             }
             composable("profile_tab") {
                 ProfileScreen(
