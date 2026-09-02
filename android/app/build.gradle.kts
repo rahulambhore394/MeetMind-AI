@@ -16,7 +16,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "BASE_URL", "\"http://10.70.44.195:8080/\"")
+        buildConfigField("String", "BASE_URL", "\"https://meetmind-backend-s3yy.onrender.com/\"")
     }
 
     buildTypes {
