@@ -14,6 +14,7 @@ meetmind-backend/target/
 meetmind-backend/.mvn/
 meetmind-backend/mvnw
 meetmind-backend/mvnw.cmd
+meetmind-backend/uploads/
 *.class
 *.jar
 *.war
