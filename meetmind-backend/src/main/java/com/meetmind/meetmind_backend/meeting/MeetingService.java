@@ -112,7 +112,7 @@ public class MeetingService {
                             MeetingParticipant invitedPart = new MeetingParticipant();
                             invitedPart.setMeeting(savedMeeting);
                             invitedPart.setUser(invitedUser);
-                            invitedPart.setRole(ParticipantRole.ATTENDEE);
+                            invitedPart.setRole(ParticipantRole.PARTICIPANT);
                             invitedPart.setStatus(ParticipantStatus.INVITED);
                             participantRepository.save(invitedPart);
                         }
@@ -145,7 +145,7 @@ public class MeetingService {
             MeetingParticipant part = new MeetingParticipant();
             part.setMeeting(meeting);
             part.setUser(joiningUser);
-            part.setRole(ParticipantRole.ATTENDEE);
+            part.setRole(ParticipantRole.PARTICIPANT);
             part.setStatus(ParticipantStatus.ACCEPTED);
             participantRepository.save(part);
         }
