@@ -46,22 +46,53 @@ class WebRtcManager(
     }
 
     fun createLocalStream() {
-        // Audio
-        localAudioSource = peerConnectionFactory?.createAudioSource(MediaConstraints())
-        localAudioTrack = peerConnectionFactory?.createAudioTrack("ARDAMSa0", localAudioSource)
+        if (peerConnectionFactory == null) {
+            initPeerConnectionFactory(context)
+        }
+        stopLocalStream()
 
-        // Video
-        localVideoSource = peerConnectionFactory?.createVideoSource(false)
-        videoCapturer = createVideoCapturer(context)
-        videoCapturer?.initialize(SurfaceTextureHelper.create("CaptureThread", eglBaseContext), context, localVideoSource?.capturerObserver)
-        videoCapturer?.startCapture(1280, 720, 30)
-        localVideoTrack = peerConnectionFactory?.createVideoTrack("ARDAMSv0", localVideoSource)
+        try {
+            // Audio
+            localAudioSource = peerConnectionFactory?.createAudioSource(MediaConstraints())
+            localAudioTrack = peerConnectionFactory?.createAudioTrack("ARDAMSa0", localAudioSource)
+
+            // Video
+            localVideoSource = peerConnectionFactory?.createVideoSource(false)
+            videoCapturer = createVideoCapturer(context)
+            videoCapturer?.initialize(SurfaceTextureHelper.create("CaptureThread", eglBaseContext), context, localVideoSource?.capturerObserver)
+            videoCapturer?.startCapture(1280, 720, 30)
+            localVideoTrack = peerConnectionFactory?.createVideoTrack("ARDAMSv0", localVideoSource)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creating local stream", e)
+        }
+    }
+
+    fun stopLocalStream() {
+        try {
+            videoCapturer?.stopCapture()
+            videoCapturer?.dispose()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping capturer: ${e.message}")
+        }
+        videoCapturer = null
+        localVideoTrack?.dispose()
+        localVideoTrack = null
+        localVideoSource?.dispose()
+        localVideoSource = null
+        localAudioTrack?.dispose()
+        localAudioTrack = null
+        localAudioSource?.dispose()
+        localAudioSource = null
     }
 
     fun createPeerConnection(
         iceServers: List<IceServerDto>,
         observer: PeerConnection.Observer
     ): PeerConnection? {
+        if (peerConnectionFactory == null) {
+            initPeerConnectionFactory(context)
+        }
+
         val rtcIceServers = iceServers.map {
             PeerConnection.IceServer.builder(it.urls)
                 .setUsername(it.username)
@@ -107,6 +138,9 @@ class WebRtcManager(
     }
 
     fun startScreenCapture(mediaProjectionData: android.content.Intent) {
+        if (peerConnectionFactory == null) {
+            initPeerConnectionFactory(context)
+        }
         screenVideoSource = peerConnectionFactory?.createVideoSource(true)
         screenCapturer = ScreenCapturerAndroid(mediaProjectionData, object : android.media.projection.MediaProjection.Callback() {
             override fun onStop() {
@@ -120,8 +154,12 @@ class WebRtcManager(
     }
 
     fun stopScreenCapture() {
-        screenCapturer?.stopCapture()
-        screenCapturer?.dispose()
+        try {
+            screenCapturer?.stopCapture()
+            screenCapturer?.dispose()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error stopping screen capturer: ${e.message}")
+        }
         screenCapturer = null
         screenVideoTrack?.dispose()
         screenVideoTrack = null
@@ -134,12 +172,12 @@ class WebRtcManager(
 
     fun dispose() {
         stopScreenCapture()
-        videoCapturer?.stopCapture()
-        videoCapturer?.dispose()
-        localVideoTrack?.dispose()
-        localVideoSource?.dispose()
-        localAudioTrack?.dispose()
-        localAudioSource?.dispose()
-        peerConnectionFactory?.dispose()
+        stopLocalStream()
+        try {
+            peerConnectionFactory?.dispose()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error disposing factory: ${e.message}")
+        }
+        peerConnectionFactory = null
     }
 }
