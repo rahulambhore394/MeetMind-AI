@@ -6,7 +6,17 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Title
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -15,7 +25,16 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.developer_rahul.meetmind_ai.core.designsystem.*
+import com.developer_rahul.meetmind_ai.core.designsystem.BackgroundSurface
+import com.developer_rahul.meetmind_ai.core.designsystem.BorderColor
+import com.developer_rahul.meetmind_ai.core.designsystem.CardSurface
+import com.developer_rahul.meetmind_ai.core.designsystem.ElectricIndigo
+import com.developer_rahul.meetmind_ai.core.designsystem.EmeraldGreen
+import com.developer_rahul.meetmind_ai.core.designsystem.NeonCyan
+import com.developer_rahul.meetmind_ai.core.designsystem.RoseRed
+import com.developer_rahul.meetmind_ai.core.designsystem.TextDisabled
+import com.developer_rahul.meetmind_ai.core.designsystem.TextPrimary
+import com.developer_rahul.meetmind_ai.core.designsystem.TextSecondary
 import com.developer_rahul.meetmind_ai.core.ui.ViewModelFactory
 import com.developer_rahul.meetmind_ai.core.ui.components.*
 
@@ -34,26 +53,56 @@ fun CreateMeetingScreen(
     var isInstantMeeting by remember { mutableStateOf(true) }
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
-    var scheduledDateText by remember { mutableStateOf(java.time.LocalDateTime.now().plusHours(1).toString()) }
     
+    val calendar = remember { java.util.Calendar.getInstance().apply { add(java.util.Calendar.HOUR_OF_DAY, 1) } }
+    var selectedYear by remember { mutableStateOf(calendar.get(java.util.Calendar.YEAR)) }
+    var selectedMonth by remember { mutableStateOf(calendar.get(java.util.Calendar.MONTH)) }
+    var selectedDay by remember { mutableStateOf(calendar.get(java.util.Calendar.DAY_OF_MONTH)) }
+    var selectedHour by remember { mutableStateOf(calendar.get(java.util.Calendar.HOUR_OF_DAY)) }
+    var selectedMinute by remember { mutableStateOf(calendar.get(java.util.Calendar.MINUTE)) }
+
+    val formattedPreview = remember(selectedYear, selectedMonth, selectedDay, selectedHour, selectedMinute) {
+        val ldt = java.time.LocalDateTime.of(selectedYear, selectedMonth + 1, selectedDay, selectedHour, selectedMinute)
+        val formatter = java.time.format.DateTimeFormatter.ofPattern("EEE, MMM dd, yyyy 'at' hh:mm a")
+        ldt.format(formatter)
+    }
+
+    val datePickerDialog = android.app.DatePickerDialog(
+        context,
+        { _, year, month, dayOfMonth ->
+            selectedYear = year
+            selectedMonth = month
+            selectedDay = dayOfMonth
+        },
+        selectedYear,
+        selectedMonth,
+        selectedDay
+    )
+
+    val timePickerDialog = android.app.TimePickerDialog(
+        context,
+        { _, hourOfDay, minute ->
+            selectedHour = hourOfDay
+            selectedMinute = minute
+        },
+        selectedHour,
+        selectedMinute,
+        false
+    )
+
     var showSuccessModal by remember { mutableStateOf(false) }
     var copyMessage by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(uiState.creationSuccess) {
         if (uiState.creationSuccess) {
-            if (isInstantMeeting && uiState.selectedMeeting != null) {
-                // Instantly launch meeting or show popup
-                showSuccessModal = true
-            } else {
-                showSuccessModal = true
-            }
+            showSuccessModal = true
         }
     }
 
     if (showSuccessModal && uiState.selectedMeeting != null) {
         val createdMeeting = uiState.selectedMeeting!!
         val meetingCode = createdMeeting.meetingCode ?: "mm-${createdMeeting.id}"
-        val meetingLink = "http://10.70.44.195:8080/join/$meetingCode"
+        val meetingLink = "https://meetmind-backend-s3yy.onrender.com/join/$meetingCode"
 
         AlertDialog(
             onDismissRequest = {
@@ -64,17 +113,17 @@ fun CreateMeetingScreen(
             containerColor = BackgroundSurface,
             title = {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CheckCircle, null, tint = EmeraldGreen)
+                    Icon(Icons.Default.CheckCircle, null, tint = com.developer_rahul.meetmind_ai.core.designsystem.EmeraldGreen)
                     Spacer(Modifier.width(8.dp))
-                    Text("Meeting Ready!", style = Typography.titleLarge, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("Meeting Ready!", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = TextPrimary)
                 }
             },
             text = {
                 Column {
-                    Text(createdMeeting.title.ifEmpty { "New Meeting" }, style = Typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+                    Text(createdMeeting.title.ifEmpty { "New Meeting" }, style = MaterialTheme.typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(12.dp))
 
-                    Text("Meeting Code", style = Typography.labelMedium, color = TextSecondary)
+                    Text("Meeting Code", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                     Spacer(Modifier.height(4.dp))
                     Surface(
                         color = CardSurface,
@@ -87,7 +136,7 @@ fun CreateMeetingScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(meetingCode, style = Typography.titleMedium, fontWeight = FontWeight.Bold, color = NeonCyan)
+                            Text(meetingCode, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = NeonCyan)
                             IconButton(onClick = {
                                 clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(meetingCode))
                                 copyMessage = "Meeting code copied!"
@@ -99,7 +148,7 @@ fun CreateMeetingScreen(
 
                     Spacer(Modifier.height(12.dp))
 
-                    Text("Meeting Link", style = Typography.labelMedium, color = TextSecondary)
+                    Text("Meeting Link", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                     Spacer(Modifier.height(4.dp))
                     Surface(
                         color = CardSurface,
@@ -112,7 +161,7 @@ fun CreateMeetingScreen(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween
                         ) {
-                            Text(meetingLink, style = Typography.bodySmall, color = TextSecondary, maxLines = 1)
+                            Text(meetingLink, style = MaterialTheme.typography.bodySmall, color = TextSecondary, maxLines = 1)
                             IconButton(onClick = {
                                 clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(meetingLink))
                                 copyMessage = "Meeting link copied!"
@@ -124,7 +173,7 @@ fun CreateMeetingScreen(
 
                     if (copyMessage != null) {
                         Spacer(Modifier.height(8.dp))
-                        Text(copyMessage!!, style = Typography.bodySmall, color = EmeraldGreen)
+                        Text(copyMessage!!, style = MaterialTheme.typography.bodySmall, color = EmeraldGreen)
                     }
 
                     Spacer(Modifier.height(16.dp))
@@ -176,7 +225,7 @@ fun CreateMeetingScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("New Meeting", style = Typography.titleLarge, color = TextPrimary, fontWeight = FontWeight.Bold) },
+                title = { Text("New Meeting", style = MaterialTheme.typography.titleLarge, color = TextPrimary, fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.Default.Close, contentDescription = null, tint = TextPrimary)
@@ -191,9 +240,15 @@ fun CreateMeetingScreen(
                 MeetMindButton(
                     text = if (isInstantMeeting) "⚡ Start Instant Meeting" else "📅 Schedule Meeting",
                     onClick = {
-                        val finalTitle = title.ifBlank { if (isInstantMeeting) "Instant Meeting" else "Scheduled Meeting" }
-                        val scheduledTime = if (isInstantMeeting) java.time.LocalDateTime.now().toString() else scheduledDateText
-                        viewModel.createMeeting(finalTitle, description, scheduledTime, null)
+                        if (!uiState.isCreating) {
+                            val finalTitle = title.ifBlank { if (isInstantMeeting) "Instant Meeting" else "Scheduled Meeting" }
+                            val scheduledTime = if (isInstantMeeting) {
+                                java.time.LocalDateTime.now().toString()
+                            } else {
+                                java.time.LocalDateTime.of(selectedYear, selectedMonth + 1, selectedDay, selectedHour, selectedMinute).toString()
+                            }
+                            viewModel.createMeeting(finalTitle, description, scheduledTime, null)
+                        }
                     },
                     isLoading = uiState.isCreating
                 )
@@ -268,11 +323,56 @@ fun CreateMeetingScreen(
             if (!isInstantMeeting) {
                 Spacer(modifier = Modifier.height(24.dp))
                 SectionHeader(title = "Schedule Date & Time")
-                Text(
-                    "Scheduled for 1 hour from now",
-                    style = Typography.bodyMedium,
-                    color = TextSecondary
-                )
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = { datePickerDialog.show() },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor)
+                    ) {
+                        Icon(Icons.Default.CalendarToday, contentDescription = null, modifier = Modifier.size(18.dp), tint = ElectricIndigo)
+                        Spacer(Modifier.width(8.dp))
+                        Text(String.format("%02d/%02d/%04d", selectedDay, selectedMonth + 1, selectedYear))
+                    }
+
+                    OutlinedButton(
+                        onClick = { timePickerDialog.show() },
+                        modifier = Modifier.weight(1f),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor)
+                    ) {
+                        Icon(Icons.Default.Schedule, contentDescription = null, modifier = Modifier.size(18.dp), tint = ElectricIndigo)
+                        Spacer(Modifier.width(8.dp))
+                        val amPm = if (selectedHour >= 12) "PM" else "AM"
+                        val hour12 = if (selectedHour % 12 == 0) 12 else if (selectedHour > 12) selectedHour - 12 else selectedHour
+                        Text(String.format("%02d:%02d %s", hour12, selectedMinute, amPm))
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                Surface(
+                    color = ElectricIndigo.copy(alpha = 0.1f),
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Event, contentDescription = null, tint = ElectricIndigo, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Scheduled for: $formattedPreview",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
             }
             
             Spacer(modifier = Modifier.height(40.dp))

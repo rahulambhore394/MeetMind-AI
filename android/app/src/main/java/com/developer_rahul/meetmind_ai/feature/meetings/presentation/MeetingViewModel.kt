@@ -298,6 +298,7 @@ class MeetingViewModel(
     }
 
     fun createMeeting(title: String, description: String, scheduledAt: String, invitedEmails: List<String>? = null) {
+        if (_uiState.value.isCreating) return
         viewModelScope.launch {
             _uiState.update { it.copy(isCreating = true, creationError = null, creationSuccess = false) }
             when (val result = meetingRepository.createMeeting(title, description, scheduledAt, invitedEmails)) {
