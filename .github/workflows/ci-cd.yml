@@ -1,0 +1,108 @@
+name: MeetMind AI - CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  # =======================================================
+  # 1. SPRING BOOT BACKEND CI/CD
+  # =======================================================
+  backend-ci:
+    name: Build & Test Spring Boot Backend
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Make Maven Wrapper Executable
+        run: chmod +x meetmind-backend/mvnw
+
+      - name: Compile & Build Spring Boot Backend
+        run: |
+          cd meetmind-backend
+          ./mvnw clean package -DskipTests
+
+      - name: Upload Backend Executable JAR Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: meetmind-backend-jar
+          path: meetmind-backend/target/*.jar
+          retention-days: 7
+
+  # =======================================================
+  # 2. ANDROID MOBILE APP CI/CD
+  # =======================================================
+  android-ci:
+    name: Build Android APK (Debug & Release)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Make Gradle Wrapper Executable
+        run: chmod +x android/gradlew
+
+      - name: Build Android Debug & Release APKs
+        run: |
+          cd android
+          ./gradlew assembleDebug assembleRelease
+
+      - name: Upload Debug APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: meetmind-android-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+
+      - name: Upload Release APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: meetmind-android-release-apk
+          path: android/app/build/outputs/apk/release/app-release-unsigned.apk
+          retention-days: 14
+
+  # =======================================================
+  # 3. WEB DASHBOARD CI/CD
+  # =======================================================
+  web-ci:
+    name: Build Web Dashboard
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install Dependencies & Build Web Dashboard
+        run: |
+          cd web
+          npm ci
+          npm run build

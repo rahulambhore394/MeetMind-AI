@@ -1,0 +1,574 @@
+package com.meetmind.meetmind_backend.participant;
+
+
+import com.meetmind.meetmind_backend.meeting.Meeting;
+import com.meetmind.meetmind_backend.meeting.MeetingRepository;
+import com.meetmind.meetmind_backend.meeting.MeetingStatus;
+import com.meetmind.meetmind_backend.participant.dto.InviteParticipantRequest;
+import com.meetmind.meetmind_backend.participant.dto.ParticipantResponse;
+import com.meetmind.meetmind_backend.user.User;
+import com.meetmind.meetmind_backend.user.UserRepository;
+import com.meetmind.meetmind_backend.websocket.MeetingEvent;
+import com.meetmind.meetmind_backend.websocket.MeetingEventPublisher;
+import com.meetmind.meetmind_backend.websocket.MeetingEventType;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.LocalDateTime;
+import java.util.List;
+
+import com.meetmind.meetmind_backend.event.SpringParticipantJoinedEvent;
+import com.meetmind.meetmind_backend.event.SpringParticipantLeftEvent;
+import com.meetmind.meetmind_backend.event.SpringMeetingInvitationEvent;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class ParticipantService {
+
+    private final ParticipantRepository participantRepository;
+    private final MeetingEventPublisher eventPublisher;
+    private final MeetingRepository meetingRepository;
+    private final UserRepository userRepository;
+    private final ApplicationEventPublisher applicationEventPublisher;
+
+
+    public ParticipantService(
+            ParticipantRepository participantRepository,
+            MeetingRepository meetingRepository,
+            UserRepository userRepository,
+            MeetingEventPublisher eventPublisher,
+            ApplicationEventPublisher applicationEventPublisher
+    ) {
+
+        this.participantRepository =
+                participantRepository;
+
+        this.meetingRepository =
+                meetingRepository;
+
+        this.userRepository =
+                userRepository;
+
+        this.eventPublisher =
+                eventPublisher;
+
+        this.applicationEventPublisher =
+                applicationEventPublisher;
+    }
+
+
+    // =====================================================
+    // INVITE PARTICIPANT
+    // =====================================================
+
+    public ParticipantResponse inviteParticipant(
+            Long meetingId,
+            InviteParticipantRequest request,
+            Long currentUserId
+    ) {
+
+        Meeting meeting =
+                getMeeting(meetingId);
+
+
+        // Only host can invite
+
+        verifyHost(
+                meeting,
+                currentUserId
+        );
+
+
+        // Find invited user
+
+        User user =
+                userRepository
+                        .findByEmail(
+                                request.getEmail()
+                        )
+                        .orElseThrow(() ->
+                                new ResponseStatusException(
+                                        HttpStatus.NOT_FOUND,
+                                        "User with this email does not exist"
+                                )
+                        );
+
+
+        // Don't allow host to invite themselves
+
+        if (user.getId().equals(currentUserId)) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Host cannot be invited"
+            );
+        }
+
+
+        // Check duplicate
+
+        if (
+                participantRepository
+                        .existsByMeetingIdAndUserId(
+                                meetingId,
+                                user.getId()
+                        )
+        ) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
+                    "User is already part of this meeting"
+            );
+        }
+
+
+        MeetingParticipant participant =
+                new MeetingParticipant();
+
+
+        participant.setMeeting(meeting);
+
+        participant.setUser(user);
+
+        participant.setRole(
+                ParticipantRole.PARTICIPANT
+        );
+
+        participant.setStatus(
+                ParticipantStatus.INVITED
+        );
+
+
+        MeetingParticipant saved =
+                participantRepository.save(
+                        participant
+                );
+
+        applicationEventPublisher.publishEvent(
+            new SpringMeetingInvitationEvent(
+                this, meetingId, user.getId(), meeting.getTitle(), meeting.getHost().getName()
+            )
+        );
+
+        return new ParticipantResponse(
+                saved
+        );
+    }
+
+
+    // =====================================================
+    // GET PARTICIPANTS
+    // =====================================================
+
+    public List<ParticipantResponse>
+    getParticipants(
+            Long meetingId,
+            Long currentUserId
+    ) {
+
+        Meeting meeting =
+                getMeeting(meetingId);
+
+
+        verifyParticipantOrHost(
+                meeting,
+                currentUserId
+        );
+
+
+        return participantRepository
+                .findByMeetingId(meetingId)
+                .stream()
+                .map(ParticipantResponse::new)
+                .toList();
+    }
+
+
+    // =====================================================
+    // ACCEPT INVITATION
+    // =====================================================
+
+    public ParticipantResponse acceptInvitation(
+            Long meetingId,
+            Long currentUserId
+    ) {
+
+        MeetingParticipant participant =
+                getParticipant(
+                        meetingId,
+                        currentUserId
+                );
+
+        if (
+                participant.getStatus()
+                        != ParticipantStatus.INVITED
+        ) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invitation cannot be accepted"
+            );
+        }
+
+
+        participant.setStatus(
+                ParticipantStatus.ACCEPTED
+        );
+
+
+        MeetingParticipant saved =
+                participantRepository.save(
+                        participant
+                );
+        MeetingEvent event =
+                new MeetingEvent(
+                        MeetingEventType.PARTICIPANT_LEFT,
+                        meetingId,
+                        currentUserId,
+                        participant.getUser().getName(),
+                        participant.getUser().getName()
+                                + " left the meeting"
+                );
+
+
+        eventPublisher.publish(
+                meetingId,
+                event
+        );
+
+        return new ParticipantResponse(
+                saved
+        );
+    }
+
+
+    // =====================================================
+    // DECLINE INVITATION
+    // =====================================================
+
+    public ParticipantResponse declineInvitation(
+            Long meetingId,
+            Long currentUserId
+    ) {
+
+        MeetingParticipant participant =
+                getParticipant(
+                        meetingId,
+                        currentUserId
+                );
+
+
+        if (
+                participant.getStatus()
+                        != ParticipantStatus.INVITED
+        ) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invitation cannot be declined"
+            );
+        }
+
+
+        participant.setStatus(
+                ParticipantStatus.DECLINED
+        );
+
+
+        MeetingParticipant saved =
+                participantRepository.save(
+                        participant
+                );
+        MeetingEvent event =
+                new MeetingEvent(
+                        MeetingEventType.PARTICIPANT_DECLINED,
+                        meetingId,
+                        currentUserId,
+                        participant.getUser().getName(),
+                        participant.getUser().getName()
+                                + " declined the invitation"
+                );
+
+
+        eventPublisher.publish(
+                meetingId,
+                event
+        );
+
+        return new ParticipantResponse(
+                saved
+        );
+    }
+
+
+    // =====================================================
+    // JOIN MEETING
+    // =====================================================
+
+    @Transactional
+    public ParticipantResponse joinMeeting(
+            Long meetingId,
+            Long currentUserId
+    ) {
+
+        Meeting meeting =
+                getMeeting(meetingId);
+
+
+        if (
+                meeting.getStatus()
+                        != MeetingStatus.LIVE
+        ) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Meeting is not live"
+            );
+        }
+
+
+        MeetingParticipant participant =
+                getParticipant(
+                        meetingId,
+                        currentUserId
+                );
+
+
+        ParticipantStatus status =
+                participant.getStatus();
+
+
+        if (
+                status != ParticipantStatus.ACCEPTED
+                        &&
+                        status != ParticipantStatus.LEFT
+        ) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "You cannot join this meeting"
+            );
+        }
+
+
+        participant.setStatus(
+                ParticipantStatus.JOINED
+        );
+
+        participant.setJoinedAt(
+                LocalDateTime.now()
+        );
+
+        participant.setLeftAt(null);
+
+
+        MeetingParticipant saved =
+                participantRepository.save(
+                        participant
+                );
+        MeetingEvent event =
+                new MeetingEvent(
+                        MeetingEventType.PARTICIPANT_JOINED,
+                        meetingId,
+                        currentUserId,
+                        participant.getUser().getName(),
+                        participant.getUser().getName()
+                                + " joined the meeting"
+                );
+
+
+        eventPublisher.publish(
+                meetingId,
+                event
+        );
+
+        applicationEventPublisher.publishEvent(
+                new SpringParticipantJoinedEvent(
+                        this,
+                        meetingId,
+                        currentUserId,
+                        participant.getUser().getName()
+                )
+        );
+
+        return new ParticipantResponse(
+                saved
+        );
+    }
+
+    // =====================================================
+    // LEAVE MEETING
+    // =====================================================
+
+    @Transactional
+    public ParticipantResponse leaveMeeting(
+            Long meetingId,
+            Long currentUserId
+    ) {
+
+        MeetingParticipant participant =
+                getParticipant(
+                        meetingId,
+                        currentUserId
+                );
+
+
+        if (
+                participant.getStatus()
+                        != ParticipantStatus.JOINED
+        ) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "You are not currently in this meeting"
+            );
+        }
+
+
+        participant.setStatus(
+                ParticipantStatus.LEFT
+        );
+
+        participant.setLeftAt(
+                LocalDateTime.now()
+        );
+
+
+        MeetingParticipant saved =
+                participantRepository.save(
+                        participant
+                );
+        MeetingEvent event =
+                new MeetingEvent(
+                        MeetingEventType.PARTICIPANT_LEFT,
+                        meetingId,
+                        currentUserId,
+                        participant.getUser().getName(),
+                        participant.getUser().getName()
+                                + " left the meeting"
+                );
+
+
+        eventPublisher.publish(
+                meetingId,
+                event
+        );
+
+        applicationEventPublisher.publishEvent(
+                new SpringParticipantLeftEvent(
+                        this,
+                        meetingId,
+                        currentUserId,
+                        participant.getUser().getName()
+                )
+        );
+
+        return new ParticipantResponse(
+                saved
+        );
+    }
+
+
+    // =====================================================
+    // GET MEETING
+    // =====================================================
+
+    private Meeting getMeeting(
+            Long meetingId
+    ) {
+
+        return meetingRepository
+                .findById(meetingId)
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "Meeting not found"
+                        )
+                );
+    }
+
+
+    // =====================================================
+    // GET PARTICIPANT
+    // =====================================================
+
+    private MeetingParticipant getParticipant(
+            Long meetingId,
+            Long userId
+    ) {
+
+        return participantRepository
+                .findByMeetingIdAndUserId(
+                        meetingId,
+                        userId
+                )
+                .orElseThrow(() ->
+                        new ResponseStatusException(
+                                HttpStatus.NOT_FOUND,
+                                "You are not a participant of this meeting"
+                        )
+                );
+    }
+
+
+    // =====================================================
+    // VERIFY HOST
+    // =====================================================
+
+    private void verifyHost(
+            Meeting meeting,
+            Long currentUserId
+    ) {
+
+        if (
+                !meeting
+                        .getHost()
+                        .getId()
+                        .equals(currentUserId)
+        ) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "Only the meeting host can perform this action"
+            );
+        }
+    }
+
+
+    // =====================================================
+    // VERIFY PARTICIPANT OR HOST
+    // =====================================================
+
+    private void verifyParticipantOrHost(
+            Meeting meeting,
+            Long currentUserId
+    ) {
+
+        if (
+                meeting
+                        .getHost()
+                        .getId()
+                        .equals(currentUserId)
+        ) {
+
+            return;
+        }
+
+
+        if (
+                !participantRepository
+                        .existsByMeetingIdAndUserId(
+                                meeting.getId(),
+                                currentUserId
+                        )
+        ) {
+
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You are not part of this meeting"
+            );
+        }
+    }
+}
