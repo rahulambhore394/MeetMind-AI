@@ -381,6 +381,6 @@ public class KafkaEventPublisher {
                 metadata
         );
 
-        kafkaTemplate.send("representative-events", String.valueOf(event.getMeetingId()), kafkaEvent);
+        sendEvent("representative-events", String.valueOf(event.getMeetingId()), kafkaEvent);
     }
 }
