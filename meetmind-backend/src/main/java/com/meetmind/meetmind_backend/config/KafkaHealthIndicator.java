@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 import java.util.concurrent.TimeUnit;
 
 @Component
-@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = true)
 public class KafkaHealthIndicator implements HealthIndicator {
 
     private final KafkaAdmin kafkaAdmin;

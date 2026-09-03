@@ -11,7 +11,7 @@ import org.springframework.util.backoff.FixedBackOff;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 @Configuration
-@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = true)
 public class KafkaConsumerConfig {
 
     @Bean

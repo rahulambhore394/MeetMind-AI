@@ -12,7 +12,7 @@ import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 @Component
-@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = false)
+@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = true)
 public class RecordingProcessingConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(RecordingProcessingConsumer.class);

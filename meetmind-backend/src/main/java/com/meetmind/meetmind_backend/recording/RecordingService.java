@@ -125,7 +125,7 @@ public class RecordingService {
         Files.copy(file.getInputStream(), targetLocation, StandardCopyOption.REPLACE_EXISTING);
 
         recording.setStoragePath(targetLocation.toString());
-        recording.setStatus(RecordingStatus.PROCESSING);
+        recording.setStatus(RecordingStatus.COMPLETED);
 
         MeetingRecording saved = recordingRepository.save(recording);
 

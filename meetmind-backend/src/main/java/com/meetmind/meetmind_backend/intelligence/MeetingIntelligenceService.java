@@ -87,9 +87,13 @@ public class MeetingIntelligenceService {
             String fullText = transcript.getFullText() != null ? transcript.getFullText() : "";
 
             if (fullText.isBlank() && segments.isEmpty()) {
-                summary.setStatus("FAILED");
-                summaryRepository.save(summary);
-                throw new IntelligenceException("Transcript content is empty");
+                summary.setSummary("No transcript content provided");
+                summary.setKeyPointsJson("[]");
+                summary.setDecisionsJson("[]");
+                summary.setTopicsJson("[]");
+                summary.setQuestionsJson("[]");
+                summary.setStatus("COMPLETED");
+                return summaryRepository.save(summary);
             }
 
             // Perform analysis via provider
