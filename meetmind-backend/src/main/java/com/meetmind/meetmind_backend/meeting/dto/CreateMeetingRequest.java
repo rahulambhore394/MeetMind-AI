@@ -18,7 +18,6 @@ public class CreateMeetingRequest {
     private String description;
 
     @NotNull(message = "Scheduled time is required")
-    @FutureOrPresent(message = "Meeting scheduled time cannot be in the past")
     private LocalDateTime scheduledAt;
 
     private java.util.List<String> invitedEmails;
