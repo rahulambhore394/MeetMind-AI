@@ -49,7 +49,8 @@ public class NotificationConsumer {
                     "intelligence-events",
                     "representative-events"
             },
-            groupId = CONSUMER_GROUP
+            groupId = CONSUMER_GROUP,
+            autoStartup = "${spring.kafka.listener.auto-startup:false}"
     )
     public void consume(MeetMindEvent event) {
         String requestId = (String) event.getMetadata().get("requestId");

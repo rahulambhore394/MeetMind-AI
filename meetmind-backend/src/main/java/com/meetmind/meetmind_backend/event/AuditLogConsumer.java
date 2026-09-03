@@ -26,7 +26,8 @@ public class AuditLogConsumer {
 
     @KafkaListener(
             topics = {"meeting-lifecycle-events", "participant-lifecycle-events", "chat-message-events"},
-            groupId = CONSUMER_GROUP
+            groupId = CONSUMER_GROUP,
+            autoStartup = "${spring.kafka.listener.auto-startup:false}"
     )
     public void consume(MeetMindEvent event) {
         if (idempotencyRegistry.isDuplicate(event.getEventId(), CONSUMER_GROUP)) {

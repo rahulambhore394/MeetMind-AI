@@ -39,7 +39,8 @@ public class IntelligenceConsumer {
 
     @KafkaListener(
             topics = "transcription-events",
-            groupId = CONSUMER_GROUP
+            groupId = CONSUMER_GROUP,
+            autoStartup = "${spring.kafka.listener.auto-startup:false}"
     )
     public void consume(MeetMindEvent event) {
         if (idempotencyRegistry.isDuplicate(event.getEventId(), CONSUMER_GROUP)) {

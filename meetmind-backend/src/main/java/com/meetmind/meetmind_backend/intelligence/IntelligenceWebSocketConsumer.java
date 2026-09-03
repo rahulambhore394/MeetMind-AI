@@ -26,7 +26,8 @@ public class IntelligenceWebSocketConsumer {
 
     @KafkaListener(
             topics = "intelligence-events",
-            groupId = CONSUMER_GROUP
+            groupId = CONSUMER_GROUP,
+            autoStartup = "${spring.kafka.listener.auto-startup:false}"
     )
     public void consume(MeetMindEvent event) {
         if (!"AI_SUMMARY_READY".equals(event.getEventType())) {

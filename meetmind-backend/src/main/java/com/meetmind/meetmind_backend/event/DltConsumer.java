@@ -25,7 +25,8 @@ public class DltConsumer {
                     "participant-lifecycle-events.DLT",
                     "chat-message-events.DLT"
             },
-            groupId = CONSUMER_GROUP
+            groupId = CONSUMER_GROUP,
+            autoStartup = "${spring.kafka.listener.auto-startup:false}"
     )
     public void consumeDlt(MeetMindEvent event) {
         log.error("DLT ALERT - Message failed consumption retries. EventId: {}, Type: {}, MeetingId: {}",

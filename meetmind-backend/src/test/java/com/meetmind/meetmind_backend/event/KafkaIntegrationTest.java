@@ -42,7 +42,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 @SpringBootTest(properties = {
         "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
-        "spring.embedded.kafka.kraft=false"
+        "spring.embedded.kafka.kraft=false",
+        "spring.kafka.enabled=true",
+        "spring.kafka.listener.auto-startup=true"
 })
 @Import(TestRedisConfig.class)
 @ActiveProfiles("test")
