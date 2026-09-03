@@ -21,7 +21,10 @@ import java.util.Map;
  * If TranscriptionService.transcribe() throws (non-idempotency), the message is retried
  * up to the configured attempts, then sent to the DLT (Dead Letter Topic).
  */
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+
 @Component
+@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = false)
 public class TranscriptionConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(TranscriptionConsumer.class);

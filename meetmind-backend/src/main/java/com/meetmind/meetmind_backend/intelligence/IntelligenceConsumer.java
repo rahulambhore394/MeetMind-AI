@@ -17,7 +17,10 @@ import java.util.Map;
  *
  * Consumer group: meetmind-intelligence-group
  */
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+
 @Component
+@ConditionalOnProperty(name = "spring.kafka.enabled", havingValue = "true", matchIfMissing = false)
 public class IntelligenceConsumer {
 
     private static final Logger log = LoggerFactory.getLogger(IntelligenceConsumer.class);

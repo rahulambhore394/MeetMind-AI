@@ -25,7 +25,7 @@ import org.slf4j.MDC;
 public class KafkaEventPublisher {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaEventPublisher.class);
-    private final KafkaTemplate<Object, Object> kafkaTemplate;
+    private final org.springframework.beans.factory.ObjectProvider<KafkaTemplate<Object, Object>> kafkaTemplateProvider;
 
     private void addCorrelationId(Map<String, Object> metadata) {
         String requestId = MDC.get("requestId");
@@ -34,8 +34,17 @@ public class KafkaEventPublisher {
         }
     }
 
-    public KafkaEventPublisher(KafkaTemplate<Object, Object> kafkaTemplate) {
-        this.kafkaTemplate = kafkaTemplate;
+    public KafkaEventPublisher(org.springframework.beans.factory.ObjectProvider<KafkaTemplate<Object, Object>> kafkaTemplateProvider) {
+        this.kafkaTemplateProvider = kafkaTemplateProvider;
+    }
+
+    private void sendEvent(String topic, String key, MeetMindEvent kafkaEvent) {
+        KafkaTemplate<Object, Object> template = kafkaTemplateProvider.getIfAvailable();
+        if (template != null) {
+            template.send(topic, key, kafkaEvent);
+        } else {
+            log.debug("Kafka is disabled; skipping event publish to topic {}", topic);
+        }
     }
 
     @PostConstruct
@@ -83,7 +92,7 @@ public class KafkaEventPublisher {
                     metadata
             );
 
-            kafkaTemplate.send("meeting-lifecycle-events", String.valueOf(event.getMeetingId()), kafkaEvent);
+            sendEvent("meeting-lifecycle-events", String.valueOf(event.getMeetingId()), kafkaEvent);
         });
     }
 
@@ -106,7 +115,7 @@ public class KafkaEventPublisher {
                 metadata
         );
 
-        kafkaTemplate.send("participant-lifecycle-events", String.valueOf(event.getMeetingId()), kafkaEvent);
+        sendEvent("participant-lifecycle-events", String.valueOf(event.getMeetingId()), kafkaEvent);
     }
 
     @EventListener
@@ -130,7 +139,7 @@ public class KafkaEventPublisher {
                     metadata
             );
 
-            kafkaTemplate.send("meeting-lifecycle-events", String.valueOf(event.getMeetingId()), kafkaEvent);
+            sendEvent("meeting-lifecycle-events", String.valueOf(event.getMeetingId()), kafkaEvent);
         });
     }
 
@@ -155,7 +164,7 @@ public class KafkaEventPublisher {
                     metadata
             );
 
-            kafkaTemplate.send("participant-lifecycle-events", String.valueOf(event.getMeetingId()), kafkaEvent);
+            sendEvent("participant-lifecycle-events", String.valueOf(event.getMeetingId()), kafkaEvent);
         });
     }
 
@@ -180,7 +189,7 @@ public class KafkaEventPublisher {
                     metadata
             );
 
-            kafkaTemplate.send("participant-lifecycle-events", String.valueOf(event.getMeetingId()), kafkaEvent);
+            sendEvent("participant-lifecycle-events", String.valueOf(event.getMeetingId()), kafkaEvent);
         });
     }
 
@@ -207,7 +216,7 @@ public class KafkaEventPublisher {
                     metadata
             );
 
-            kafkaTemplate.send("chat-message-events", String.valueOf(event.getMeetingId()), kafkaEvent);
+            sendEvent("chat-message-events", String.valueOf(event.getMeetingId()), kafkaEvent);
         });
     }
 
@@ -232,7 +241,7 @@ public class KafkaEventPublisher {
                 metadata
         );
 
-        kafkaTemplate.send("recording-events", String.valueOf(event.getMeetingId()), kafkaEvent);
+        sendEvent("recording-events", String.valueOf(event.getMeetingId()), kafkaEvent);
     }
 
     @EventListener
@@ -255,7 +264,7 @@ public class KafkaEventPublisher {
                 metadata
         );
 
-        kafkaTemplate.send("transcription-events", String.valueOf(event.getMeetingId()), kafkaEvent);
+        sendEvent("transcription-events", String.valueOf(event.getMeetingId()), kafkaEvent);
     }
 
     @EventListener
@@ -280,7 +289,7 @@ public class KafkaEventPublisher {
                 metadata
         );
 
-        kafkaTemplate.send("transcription-events", String.valueOf(event.getMeetingId()), kafkaEvent);
+        sendEvent("transcription-events", String.valueOf(event.getMeetingId()), kafkaEvent);
     }
 
     @EventListener
@@ -304,7 +313,7 @@ public class KafkaEventPublisher {
                 metadata
         );
 
-        kafkaTemplate.send("intelligence-events", String.valueOf(event.getMeetingId()), kafkaEvent);
+        sendEvent("intelligence-events", String.valueOf(event.getMeetingId()), kafkaEvent);
     }
 
     @EventListener
@@ -327,7 +336,7 @@ public class KafkaEventPublisher {
                 metadata
         );
 
-        kafkaTemplate.send("intelligence-events", String.valueOf(event.getMeetingId()), kafkaEvent);
+        sendEvent("intelligence-events", String.valueOf(event.getMeetingId()), kafkaEvent);
     }
 
     @EventListener
@@ -349,7 +358,7 @@ public class KafkaEventPublisher {
                 metadata
         );
 
-        kafkaTemplate.send("representative-events", String.valueOf(event.getMeetingId()), kafkaEvent);
+        sendEvent("representative-events", String.valueOf(event.getMeetingId()), kafkaEvent);
     }
 
     @EventListener
