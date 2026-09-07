@@ -6,7 +6,7 @@ plugins {
 
 android {
     namespace = "com.developer_rahul.meetmind_ai"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.developer_rahul.meetmind_ai"
