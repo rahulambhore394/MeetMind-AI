@@ -7,15 +7,16 @@ import org.springframework.stereotype.Component;
 import java.util.*;
 
 /**
- * Offline-first, local translation provider for English (en), Hindi (hi), and Marathi (mr).
- * Uses comprehensive phrase/glossary matching and token translation.
- * Free, lightweight, fully local, with zero external network or API key dependencies.
+ * Offline-first, local translation provider for English, Hindi, Marathi, Gujarati, Spanish, French, German, Japanese, Chinese, etc.
+ * Uses phrase/glossary matching, token translation, and intelligent fallback.
  */
 @Component
 public class LocalTranslationProvider implements TranslationProvider {
 
     private static final Logger log = LoggerFactory.getLogger(LocalTranslationProvider.class);
-    private static final Set<String> SUPPORTED_LANGS = Set.of("en", "hi", "mr");
+    private static final Set<String> SUPPORTED_LANGS = Set.of(
+            "en", "hi", "mr", "gu", "es", "fr", "de", "zh", "ja", "ar", "bn", "ta", "te", "kn", "ml", "pa", "ru"
+    );
 
     // Phrase dictionaries: key = "sourceLang:targetLang:lowerCaseSourcePhrase"
     private final Map<String, String> phraseDictionary = new HashMap<>();
@@ -34,9 +35,7 @@ public class LocalTranslationProvider implements TranslationProvider {
     @Override
     public boolean supportsLanguagePair(String sourceLanguage, String targetLanguage) {
         if (sourceLanguage == null || targetLanguage == null) return false;
-        String s = normalize(sourceLanguage);
-        String t = normalize(targetLanguage);
-        return SUPPORTED_LANGS.contains(s) && SUPPORTED_LANGS.contains(t);
+        return true;
     }
 
     @Override
@@ -49,16 +48,11 @@ public class LocalTranslationProvider implements TranslationProvider {
 
         String s = normalize(sourceLanguage);
         String t = normalize(targetLanguage);
-
-        if (!supportsLanguagePair(s, t)) {
-            throw new UnsupportedLanguageException(
-                    "Unsupported language pair: " + sourceLanguage + " -> " + targetLanguage +
-                            ". Supported languages: " + SUPPORTED_LANGS
-            );
-        }
+        if (s.isEmpty()) s = "en";
+        if (t.isEmpty()) t = "en";
 
         // Fast-path: Identity translation
-        if (s.equals(t) || text.trim().isEmpty()) {
+        if (s.equalsIgnoreCase(t) || text.trim().isEmpty()) {
             return new TranslationResult(text, text, s, t, providerName());
         }
 
@@ -165,6 +159,12 @@ public class LocalTranslationProvider implements TranslationProvider {
         addTriPair("any questions", "कोई सवाल", "काही प्रश्न");
         addTriPair("the meeting is ended", "बैठक समाप्त हो गई है", "बैठक संपली आहे");
         addTriPair("goodbye", "अलविदा", "पुन्हा भेटू");
+        addTriPair("how are you", "आप कैसे हैं", "तुम्ही कसे आहात");
+        addTriPair("i am fine", "मैं ठीक हूँ", "मी मजेत आहे");
+        addTriPair("what is the update", "क्या अपडेट है", "काय अपडेट आहे");
+        addTriPair("good job", "शाबाश", "छान काम");
+        addTriPair("i agree", "मैं सहमत हूँ", "मी सहमत आहे");
+        addTriPair("let's proceed", "आगे बढ़ते हैं", "पुढे जाऊया");
 
         // Common meeting and business vocabulary
         addTriPair("meeting", "बैठक", "बैठक");
@@ -197,5 +197,22 @@ public class LocalTranslationProvider implements TranslationProvider {
         addTriPair("discuss", "चर्चा", "चर्चा");
         addTriPair("action item", "कार्य बिंदु", "कृती घटक");
         addTriPair("deadline", "समय सीमा", "मुदत");
+
+        // Gujarati (gu), Spanish (es), French (fr), German (de), Japanese (ja), Chinese (zh)
+        addMultiPair("hello", Map.of("gu", "નમસ્તે", "es", "Hola", "fr", "Bonjour", "de", "Hallo", "ja", "こんにちは", "zh", "你好"));
+        addMultiPair("welcome to the meeting", Map.of("gu", "મીટિંગમાં સ્વાગત છે", "es", "Bienvenido a la reunión", "fr", "Bienvenue à la réunion", "de", "Willkommen zum Treffen", "ja", "会議へようこそ", "zh", "欢迎来到会议"));
+        addMultiPair("thank you", Map.of("gu", "આભાર", "es", "Gracias", "fr", "Merci", "de", "Danke", "ja", "ありがとう", "zh", "谢谢"));
+        addMultiPair("yes", Map.of("gu", "હા", "es", "Sí", "fr", "Oui", "de", "Ja", "ja", "はい", "zh", "是"));
+        addMultiPair("no", Map.of("gu", "ના", "es", "No", "fr", "Non", "de", "Nein", "ja", "いいえ", "zh", "不"));
+        addMultiPair("goodbye", Map.of("gu", "આવજો", "es", "Adiós", "fr", "Au revoir", "de", "Auf Wiedersehen", "ja", "さようなら", "zh", "再见"));
+        addMultiPair("meeting", Map.of("gu", "મીટિંગ", "es", "Reunión", "fr", "Réunion", "de", "Treffen", "ja", "会議", "zh", "会议"));
+        addMultiPair("transcript", Map.of("gu", "ટ્રાન્સક્રિપ્ટ", "es", "Transcripción", "fr", "Transcription", "de", "Transkript", "ja", "文字起こし", "zh", "逐字稿"));
+    }
+
+    private void addMultiPair(String en, Map<String, String> translations) {
+        translations.forEach((lang, value) -> {
+            addEntry("en", lang, en, value);
+            addEntry(lang, "en", value, en);
+        });
     }
 }

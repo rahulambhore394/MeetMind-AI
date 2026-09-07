@@ -3,6 +3,7 @@ package com.developer_rahul.meetmind_ai.feature.translation.presentation
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.developer_rahul.meetmind_ai.core.media.speech.LiveSpeechProvider
+import com.developer_rahul.meetmind_ai.core.media.tts.TextToSpeechManager
 import com.developer_rahul.meetmind_ai.feature.translation.domain.model.Subtitle
 import com.developer_rahul.meetmind_ai.feature.translation.domain.repository.LiveTranslationRepository
 import kotlinx.coroutines.Job
@@ -15,6 +16,7 @@ import kotlinx.coroutines.launch
 class LiveTranslationViewModel(
     private val translationRepository: LiveTranslationRepository,
     private val speechProvider: LiveSpeechProvider,
+    private val textToSpeechManager: TextToSpeechManager,
     private val meetingId: Long
 ) : ViewModel() {
 
@@ -38,6 +40,9 @@ class LiveTranslationViewModel(
                         val newList = current + subtitle
                         if (newList.size > 5) newList.takeLast(5) else newList
                     }
+                    if (_uiState.value.audioTranslationEnabled) {
+                        textToSpeechManager.speak(subtitle.translatedText, subtitle.targetLanguage)
+                    }
                 }
             }
         }
@@ -48,10 +53,28 @@ class LiveTranslationViewModel(
         if (enabled) {
             startLiveTranscription()
             translationRepository.subscribeToSubtitles(meetingId, _uiState.value.selectedTargetLanguage)
+            viewModelScope.launch {
+                translationRepository.setLanguagePreference(meetingId, _uiState.value.selectedTargetLanguage)
+            }
         } else {
             stopLiveTranscription()
             translationRepository.unsubscribeFromSubtitles(meetingId, _uiState.value.selectedTargetLanguage)
             _subtitles.value = emptyList()
+            textToSpeechManager.stop()
+        }
+    }
+
+    fun toggleAudioTranslation(enabled: Boolean) {
+        _uiState.update { it.copy(audioTranslationEnabled = enabled) }
+        if (!enabled) {
+            textToSpeechManager.stop()
+        }
+    }
+
+    fun setSourceLanguage(languageCode: String) {
+        _uiState.update { it.copy(sourceLanguage = languageCode) }
+        if (_uiState.value.subtitlesEnabled) {
+            startLiveTranscription()
         }
     }
 
@@ -60,14 +83,17 @@ class LiveTranslationViewModel(
         translationRepository.unsubscribeFromSubtitles(meetingId, oldLang)
         
         _uiState.update { it.copy(selectedTargetLanguage = languageCode) }
-        translationRepository.subscribeToSubtitles(meetingId, languageCode)
+        
+        if (_uiState.value.subtitlesEnabled) {
+            translationRepository.subscribeToSubtitles(meetingId, languageCode)
+        }
         
         viewModelScope.launch {
             translationRepository.setLanguagePreference(meetingId, languageCode)
         }
     }
 
-    private fun startLiveTranscription() {
+    fun startLiveTranscription() {
         speechJob?.cancel()
         speechJob = viewModelScope.launch {
             speechProvider.startListening(_uiState.value.sourceLanguage).collect { result ->
@@ -75,6 +101,10 @@ class LiveTranslationViewModel(
                     is LiveSpeechProvider.SpeechResult.Final -> {
                         translationRepository.sendLiveSpeech(meetingId, result.text, _uiState.value.sourceLanguage)
                         _uiState.update { it.copy(currentOriginalText = "") }
+                        // Automatically restart listening for continuous speech input
+                        if (_uiState.value.subtitlesEnabled) {
+                            startLiveTranscription()
+                        }
                     }
                     is LiveSpeechProvider.SpeechResult.Partial -> {
                         _uiState.update { it.copy(currentOriginalText = result.text) }
@@ -87,7 +117,7 @@ class LiveTranslationViewModel(
         }
     }
 
-    private fun stopLiveTranscription() {
+    fun stopLiveTranscription() {
         speechJob?.cancel()
         speechJob = null
     }
@@ -95,12 +125,14 @@ class LiveTranslationViewModel(
     override fun onCleared() {
         super.onCleared()
         stopLiveTranscription()
+        textToSpeechManager.stop()
         translationRepository.unsubscribeFromSubtitles(meetingId, _uiState.value.selectedTargetLanguage)
     }
 }
 
 data class LiveTranslationUiState(
     val subtitlesEnabled: Boolean = false,
+    val audioTranslationEnabled: Boolean = true,
     val sourceLanguage: String = "en-US",
     val selectedTargetLanguage: String = "en",
     val currentOriginalText: String = "",

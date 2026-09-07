@@ -20,6 +20,9 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.border
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import com.developer_rahul.meetmind_ai.core.designsystem.*
 
 @Composable
@@ -44,7 +47,9 @@ fun MeetMindButton(
     }
 
     Box(
-        modifier = modifier
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(modifier)
             .graphicsLayer(scaleX = scale, scaleY = scale)
             .height(56.dp)
             .clip(MaterialTheme.shapes.medium)
@@ -212,6 +217,61 @@ fun SectionHeader(
         if (action != null) {
             TextButton(onClick = onActionClick) {
                 Text(text = action, style = Typography.labelLarge, color = ElectricIndigo)
+            }
+        }
+    }
+}
+
+@Composable
+fun GradientFloatingActionButton(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    icon: ImageVector = Icons.Default.Add
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(28.dp),
+        color = Color.Transparent,
+        shadowElevation = 12.dp,
+        modifier = modifier
+            .padding(bottom = 88.dp, end = 8.dp)
+            .aiGlow(color = ElectricIndigo, radius = 20.dp)
+            .bounceClick()
+    ) {
+        Box(
+            modifier = Modifier
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(ElectricIndigo, Color(0xFF8B5CF6), Color(0xFF06B6D4))
+                    ),
+                    shape = RoundedCornerShape(28.dp)
+                )
+                .border(1.5.dp, GlassWhite, RoundedCornerShape(28.dp))
+                .padding(horizontal = 20.dp, vertical = 14.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .background(Color.White.copy(alpha = 0.25f), androidx.compose.foundation.shape.CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        icon,
+                        contentDescription = text,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = text,
+                    style = Typography.titleMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
             }
         }
     }

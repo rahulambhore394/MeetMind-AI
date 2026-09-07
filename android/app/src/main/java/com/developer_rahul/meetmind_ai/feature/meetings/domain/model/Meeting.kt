@@ -12,7 +12,9 @@ data class Meeting(
     val endedAt: String?,
     val createdAt: String,
     val status: MeetingStatus,
-    val meetingCode: String? = null
+    val meetingCode: String? = null,
+    val hasJoinedBefore: Boolean = false,
+    val userParticipantStatus: String? = null
 )
 
 enum class MeetingStatus {

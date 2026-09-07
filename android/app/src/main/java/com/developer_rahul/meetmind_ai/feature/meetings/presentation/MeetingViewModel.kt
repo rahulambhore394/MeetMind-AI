@@ -11,6 +11,7 @@ import com.developer_rahul.meetmind_ai.feature.meetings.data.repository.MeetingR
 import com.developer_rahul.meetmind_ai.feature.meetings.data.repository.PresenceRepository
 import com.developer_rahul.meetmind_ai.feature.recording.data.repository.RecordingRepository
 import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.*
+import com.developer_rahul.meetmind_ai.core.network.token.TokenProvider
 import com.developer_rahul.meetmind_ai.feature.recording.domain.model.RecordingStatus
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -22,8 +23,12 @@ class MeetingViewModel(
     private val recordingRepository: RecordingRepository,
     private val intelligenceRepository: IntelligenceRepository,
     private val recordingManager: RecordingManager,
-    private val recordingUploadManager: RecordingUploadManager
+    private val recordingUploadManager: RecordingUploadManager,
+    private val tokenProvider: TokenProvider
 ) : ViewModel() {
+
+    val currentUserId: Long
+        get() = tokenProvider.getUserId()
 
     private val _uiState = MutableStateFlow(MeetingUiState())
     val uiState = _uiState.asStateFlow()
@@ -174,20 +179,36 @@ class MeetingViewModel(
         }
     }
 
-    fun loadMeetingDetails(meetingId: String) {
-        val id = meetingId.toLongOrNull() ?: return
-        
-        // Subscribe to real-time updates, presence, and recordings for this meeting
-        webSocketManager.subscribeToMeeting(id)
-        presenceRepository.subscribeToPresence(id)
-        recordingRepository.subscribeToRecordingEvents(id)
+    fun loadMeetingDetails(meetingIdOrCode: String) {
+        val numericId = meetingIdOrCode.toLongOrNull()
         
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingDetails = true, detailsError = null) }
             
-            val meetingResult = meetingRepository.getMeeting(id)
-            val participantsResult = meetingRepository.getParticipants(id)
-            val recordingsResult = recordingRepository.listRecordings(id)
+            val meetingResult = if (numericId != null) {
+                webSocketManager.subscribeToMeeting(numericId)
+                presenceRepository.subscribeToPresence(numericId)
+                recordingRepository.subscribeToRecordingEvents(numericId)
+                meetingRepository.getMeeting(numericId)
+            } else {
+                meetingRepository.getMeetingByCode(meetingIdOrCode)
+            }
+
+            val fetchedId = when (meetingResult) {
+                is NetworkResult.Success -> {
+                    val m = meetingResult.data
+                    if (numericId == null) {
+                        webSocketManager.subscribeToMeeting(m.id)
+                        presenceRepository.subscribeToPresence(m.id)
+                        recordingRepository.subscribeToRecordingEvents(m.id)
+                    }
+                    m.id
+                }
+                else -> numericId
+            }
+
+            val participantsResult = if (fetchedId != null) meetingRepository.getParticipants(fetchedId) else NetworkResult.Error(com.developer_rahul.meetmind_ai.core.network.model.MeetMindError(type = com.developer_rahul.meetmind_ai.core.network.model.ErrorType.NOT_FOUND, message = "Invalid ID"))
+            val recordingsResult = if (fetchedId != null) recordingRepository.listRecordings(fetchedId) else NetworkResult.Error(com.developer_rahul.meetmind_ai.core.network.model.MeetMindError(type = com.developer_rahul.meetmind_ai.core.network.model.ErrorType.NOT_FOUND, message = "Invalid ID"))
 
             _uiState.update { state ->
                 var newState = state.copy(isLoadingDetails = false)
@@ -222,8 +243,9 @@ class MeetingViewModel(
                 newState
             }
             
-            // Fetch intelligence summary if available
-            loadIntelligenceSummary(id)
+            if (fetchedId != null) {
+                loadIntelligenceSummary(fetchedId)
+            }
         }
     }
 

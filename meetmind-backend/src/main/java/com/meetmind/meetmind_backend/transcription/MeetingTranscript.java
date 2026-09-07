@@ -9,7 +9,7 @@ import java.time.LocalDateTime;
  * Segments are stored separately in transcript_segments.
  */
 @Entity
-@Table(name = "meeting_transcripts")
+@Table(name = "transcripts")
 public class MeetingTranscript {
 
     @Id
@@ -19,7 +19,7 @@ public class MeetingTranscript {
     @Column(name = "meeting_id", nullable = false)
     private Long meetingId;
 
-    @Column(name = "recording_id", nullable = false, unique = true)
+    @Column(name = "recording_id", nullable = true)
     private Long recordingId;
 
     /**

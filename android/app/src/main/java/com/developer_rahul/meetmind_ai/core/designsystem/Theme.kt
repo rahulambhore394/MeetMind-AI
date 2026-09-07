@@ -16,36 +16,38 @@ private val MeetMindDarkColorScheme = darkColorScheme(
     primary = ElectricIndigo,
     onPrimary = Color.White,
     secondary = NeonCyan,
-    onSecondary = DeepCharcoal,
+    onSecondary = Color(0xFF090D14),
     tertiary = EmeraldGreen,
-    onTertiary = DeepCharcoal,
-    background = BackgroundSurface,
-    onBackground = TextPrimary,
-    surface = CardSurface,
-    onSurface = TextPrimary,
+    onTertiary = Color.White,
+    background = Color(0xFF090D14),
+    onBackground = Color(0xFFF1F5F9),
+    surface = Color(0xFF131822),
+    onSurface = Color(0xFFF1F5F9),
+    surfaceVariant = Color(0xFF1E2430),
+    onSurfaceVariant = Color(0xFF94A3B8),
+    outline = Color(0xFF2E3646),
+    outlineVariant = Color(0xFF1E2430),
     error = RoseRed,
-    onError = Color.White,
-    outline = BorderColor,
-    surfaceVariant = DeepCharcoal,
-    onSurfaceVariant = TextSecondary
+    onError = Color.White
 )
 
 private val MeetMindLightColorScheme = lightColorScheme(
-    primary = ElectricIndigo,
+    primary = Color(0xFF4F46E5),
     onPrimary = Color.White,
-    secondary = NeonCyan,
+    secondary = Color(0xFF0891B2),
     onSecondary = Color.White,
-    tertiary = EmeraldGreen,
+    tertiary = Color(0xFF059669),
     onTertiary = Color.White,
-    background = Color(0xFFF8F9FA),
-    onBackground = Color(0xFF1A1C1E),
-    surface = Color.White,
-    onSurface = Color(0xFF1A1C1E),
-    error = RoseRed,
-    onError = Color.White,
-    outline = Color(0xFFD1D9E0),
-    surfaceVariant = Color(0xFFF1F3F4),
-    onSurfaceVariant = Color(0xFF444746)
+    background = Color(0xFFF8FAFC),
+    onBackground = Color(0xFF0F172A),
+    surface = Color(0xFFFFFFFF),
+    onSurface = Color(0xFF0F172A),
+    surfaceVariant = Color(0xFFF1F5F9),
+    onSurfaceVariant = Color(0xFF64748B),
+    outline = Color(0xFFE2E8F0),
+    outlineVariant = Color(0xFFCBD5E1),
+    error = Color(0xFFDC2626),
+    onError = Color.White
 )
 
 @Composable
@@ -53,7 +55,6 @@ fun MeetMindTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    // Premium preference for Dark Theme in AI context, but allowing system toggle
     val colorScheme = if (darkTheme) MeetMindDarkColorScheme else MeetMindLightColorScheme
     val view = LocalView.current
     

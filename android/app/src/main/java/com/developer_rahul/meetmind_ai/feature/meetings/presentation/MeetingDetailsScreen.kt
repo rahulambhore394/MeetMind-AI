@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -125,9 +126,10 @@ fun MeetingDetailsScreen(
                             Text("AI Rep", color = ElectricIndigo, fontWeight = FontWeight.Bold)
                         }
                         
+                        val isRejoin = meeting.hasJoinedBefore || meeting.userParticipantStatus == "LEFT"
                         val buttonText = when (meeting.status) {
                             MeetingStatus.SCHEDULED -> "Start Meeting"
-                            MeetingStatus.LIVE -> "Join Meeting"
+                            MeetingStatus.LIVE -> if (isRejoin) "Re-join Meeting" else "Join Meeting"
                             else -> "Replay"
                         }
                         
@@ -175,21 +177,101 @@ fun MeetingDetailsScreen(
             ) {
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                StatusChip(
-                    text = meeting.status.name, 
-                    color = if (meeting.status == MeetingStatus.LIVE) RoseRed else ElectricIndigo
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    StatusChip(
+                        text = if (meeting.status == MeetingStatus.LIVE) "LIVE NOW 🟢" else meeting.status.name, 
+                        color = if (meeting.status == MeetingStatus.LIVE) EmeraldGreen else ElectricIndigo
+                    )
+                    
+                    if (meeting.meetingCode != null) {
+                        Surface(
+                            shape = RoundedCornerShape(100.dp),
+                            color = NeonCyan.copy(alpha = 0.12f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.3f))
+                        ) {
+                            Text(
+                                text = meeting.meetingCode!!,
+                                color = NeonCyan,
+                                style = Typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text(
                     meeting.title,
                     style = Typography.displayMedium,
+                    fontWeight = FontWeight.Bold,
                     color = TextPrimary
                 )
                 
                 Spacer(modifier = Modifier.height(24.dp))
                 
+                // Meeting Code Copy & Share Hero Card
+                val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+                val context = androidx.compose.ui.platform.LocalContext.current
+                var copiedNotice by remember { mutableStateOf(false) }
+
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    color = CardSurface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text("Meeting Invitation Code", style = Typography.labelSmall, color = TextSecondary)
+                        Spacer(Modifier.height(6.dp))
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                meeting.meetingCode ?: "mm-${meeting.id}",
+                                style = Typography.titleLarge,
+                                fontWeight = FontWeight.Black,
+                                letterSpacing = 1.sp,
+                                color = NeonCyan
+                            )
+                            Row {
+                                IconButton(
+                                    onClick = {
+                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(meeting.meetingCode ?: "mm-${meeting.id}"))
+                                        copiedNotice = true
+                                    }
+                                ) {
+                                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy Code", tint = TextPrimary)
+                                }
+                                IconButton(
+                                    onClick = {
+                                        val shareIntent = android.content.Intent().apply {
+                                            action = android.content.Intent.ACTION_SEND
+                                            putExtra(android.content.Intent.EXTRA_TEXT, "Join my MeetMind AI meeting!\nTitle: ${meeting.title}\nCode: ${meeting.meetingCode ?: meeting.id}")
+                                            type = "text/plain"
+                                        }
+                                        context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Meeting Code"))
+                                    }
+                                ) {
+                                    Icon(Icons.Default.Share, contentDescription = "Share Link", tint = ElectricIndigo)
+                                }
+                            }
+                        }
+                        if (copiedNotice) {
+                            Text("Meeting code copied to clipboard!", style = Typography.labelSmall, color = EmeraldGreen)
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
                 MeetMindCard {
                     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                         DetailRow(icon = Icons.Default.Event, text = meeting.scheduledAt, label = "Scheduled Time")
@@ -197,32 +279,33 @@ fun MeetingDetailsScreen(
                     }
                 }
                 
-                Spacer(modifier = Modifier.height(32.dp))
+                Spacer(modifier = Modifier.height(28.dp))
                 
                 SectionHeader(title = "Description")
                 Text(
                     meeting.description ?: "No description provided.",
                     style = Typography.bodyLarge,
                     color = TextSecondary,
-                    lineHeight = 26.sp
+                    lineHeight = 24.sp
                 )
                 
                 if (uiState.participants.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(32.dp))
-                    SectionHeader(title = "Participants", action = "Invite")
+                    Spacer(modifier = Modifier.height(28.dp))
+                    SectionHeader(title = "Participants (${uiState.participants.size})")
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         uiState.participants.forEach { participant ->
                             ParticipantRow(
                                 name = participant.name, 
                                 status = participant.status.name,
-                                isOnline = participant.isOnline
+                                isOnline = participant.isOnline,
+                                isHost = participant.userId == meeting.hostId
                             )
                         }
                     }
                 }
 
                 if (uiState.recordings.isNotEmpty()) {
-                    Spacer(modifier = Modifier.height(32.dp))
+                    Spacer(modifier = Modifier.height(28.dp))
                     SectionHeader(title = "Recordings")
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         uiState.recordings.forEach { recording ->
@@ -247,50 +330,64 @@ fun MeetingDetailsScreen(
 fun DetailRow(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String, label: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Surface(
-            modifier = Modifier.size(36.dp),
+            modifier = Modifier.size(40.dp),
             shape = MaterialTheme.shapes.medium,
-            color = ElectricIndigo.copy(alpha = 0.1f)
+            color = ElectricIndigo.copy(alpha = 0.12f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, ElectricIndigo.copy(alpha = 0.25f))
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(icon, contentDescription = null, tint = ElectricIndigo, modifier = Modifier.size(18.dp))
+                Icon(icon, contentDescription = null, tint = ElectricIndigo, modifier = Modifier.size(20.dp))
             }
         }
         Spacer(modifier = Modifier.width(16.dp))
         Column {
             Text(label, style = Typography.labelSmall, color = TextSecondary)
-            Text(text, style = Typography.bodyLarge, color = TextPrimary, fontWeight = FontWeight.Medium)
+            Spacer(Modifier.height(2.dp))
+            Text(text, style = Typography.bodyLarge, color = TextPrimary, fontWeight = FontWeight.SemiBold)
         }
     }
 }
 
 @Composable
-fun ParticipantRow(name: String, status: String, isOnline: Boolean = false) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Surface(
-            modifier = Modifier.size(44.dp),
-            shape = CircleShape,
-            color = Color.DarkGray
+fun ParticipantRow(name: String, status: String, isOnline: Boolean = false, isHost: Boolean = false) {
+    val initials = name.split(" ")
+        .mapNotNull { it.firstOrNull()?.uppercase() }
+        .take(2)
+        .joinToString("")
+        .ifEmpty { name.take(1).uppercase() }
+
+    MeetMindCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(contentAlignment = Alignment.Center) {
-                Text(name.take(1), style = Typography.titleMedium, color = Color.White)
-            }
-        }
-        Spacer(modifier = Modifier.width(16.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(name, style = Typography.bodyLarge, color = TextPrimary)
-                if (isOnline) {
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Box(modifier = Modifier.size(8.dp).background(EmeraldGreen, CircleShape))
+            Surface(
+                modifier = Modifier.size(44.dp),
+                shape = CircleShape,
+                color = ElectricIndigo.copy(alpha = 0.2f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Text(initials, style = Typography.titleMedium, fontWeight = FontWeight.Bold, color = NeonCyan)
                 }
             }
-            Text(status, style = Typography.labelSmall, color = TextSecondary)
-        }
-        if (name.contains("(You)")) {
-            StatusChip(text = "Host", color = TextDisabled)
+            Spacer(modifier = Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(name, style = Typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = TextPrimary)
+                    if (isOnline) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Box(modifier = Modifier.size(8.dp).background(EmeraldGreen, CircleShape))
+                    }
+                }
+                Spacer(Modifier.height(2.dp))
+                Text(status.lowercase().replaceFirstChar { it.uppercase() }, style = Typography.labelSmall, color = TextSecondary)
+            }
+            if (isHost) {
+                StatusChip(text = "Host 👑", color = AmberGold)
+            } else {
+                StatusChip(text = "Participant", color = TextSecondary)
+            }
         }
     }
 }

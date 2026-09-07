@@ -84,6 +84,9 @@ public class ChatWebSocketController {
 
     private Long getUserId(Principal principal) {
         if (principal instanceof UsernamePasswordAuthenticationToken auth) {
+            if (auth.getPrincipal() instanceof com.meetmind.meetmind_backend.auth.UserPrincipal up) {
+                return up.getUser().getId();
+            }
             if (auth.getPrincipal() instanceof User user) {
                 return user.getId();
             }

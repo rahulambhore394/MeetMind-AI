@@ -3,6 +3,7 @@ package com.developer_rahul.meetmind_ai.feature.auth.presentation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -17,6 +18,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.developer_rahul.meetmind_ai.core.designsystem.*
 import com.developer_rahul.meetmind_ai.core.ui.ViewModelFactory
@@ -27,6 +29,7 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit,
     onBack: () -> Unit,
     onForgotPassword: () -> Unit,
+    onRegister: () -> Unit = {},
     viewModel: AuthViewModel = viewModel(factory = ViewModelFactory)
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -40,7 +43,7 @@ fun LoginScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundSurface)
+            .background(BackgroundGradient)
             .padding(24.dp)
             .statusBarsPadding()
     ) {
@@ -51,21 +54,60 @@ fun LoginScreen(
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = TextPrimary)
         }
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Hero Brand Badge
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = ElectricIndigo.copy(alpha = 0.15f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder),
+                modifier = Modifier.size(56.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = NeonCyan,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(16.dp))
+            Column {
+                Text(
+                    "MEETMIND AI",
+                    style = Typography.labelMedium,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.5.sp,
+                    color = NeonCyan
+                )
+                Text(
+                    "Smart Meetings",
+                    style = Typography.bodySmall,
+                    color = TextSecondary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(32.dp))
 
         Text(
             "Welcome Back",
             style = Typography.displayMedium,
+            fontWeight = FontWeight.Bold,
             color = TextPrimary
         )
 
         Text(
-            "Sign in to access your intelligent meetings",
+            "Sign in to access your intelligent meeting assistant",
             style = Typography.bodyLarge,
             color = TextSecondary
         )
 
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(36.dp))
 
         MeetMindTextField(
             value = uiState.email,
@@ -100,25 +142,26 @@ fun LoginScreen(
 
         Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
             TextButton(onClick = onForgotPassword) {
-                Text("Forgot Password?", color = ElectricIndigo, style = Typography.labelLarge)
+                Text("Forgot Password?", color = ElectricIndigo, style = Typography.labelLarge, fontWeight = FontWeight.SemiBold)
             }
         }
 
         if (uiState.error != null) {
             Text(
                 text = uiState.error!!,
-                color = MaterialTheme.colorScheme.error,
+                color = RoseRed,
                 style = Typography.bodySmall,
                 modifier = Modifier.padding(top = 8.dp)
             )
         }
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
         MeetMindButton(
-            text = "Sign In",
+            text = "Sign In to MeetMind",
             onClick = viewModel::login,
-            isLoading = uiState.isLoading
+            isLoading = uiState.isLoading,
+            isAiAction = true
         )
         
         Spacer(modifier = Modifier.weight(1f))
@@ -129,8 +172,8 @@ fun LoginScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text("Don't have an account?", color = TextSecondary, style = Typography.bodyMedium)
-            TextButton(onClick = { /* Navigate to Register handled by AppNav */ }) {
-                Text("Create One", color = NeonCyan, style = Typography.labelLarge)
+            TextButton(onClick = onRegister) {
+                Text("Create One", color = NeonCyan, style = Typography.labelLarge, fontWeight = FontWeight.Bold)
             }
         }
         

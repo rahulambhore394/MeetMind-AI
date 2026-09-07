@@ -7,9 +7,12 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -31,8 +34,9 @@ public class RecordingController {
     @PostMapping("/start")
     public ResponseEntity<MeetingRecording> startRecording(
             @PathVariable Long meetingId,
-            @AuthenticationPrincipal User user
+            Authentication authentication
     ) {
+        User user = extractUser(authentication);
         MeetingRecording recording = recordingService.startRecording(meetingId, user);
 
         // Broadcast STOMP alert to let participants know recording has started
@@ -55,8 +59,9 @@ public class RecordingController {
     public ResponseEntity<MeetingRecording> stopRecording(
             @PathVariable Long meetingId,
             @PathVariable Long recordingId,
-            @AuthenticationPrincipal User user
+            Authentication authentication
     ) {
+        User user = extractUser(authentication);
         MeetingRecording recording = recordingService.stopRecording(meetingId, recordingId, user);
 
         // Broadcast STOMP alert to let participants know recording has stopped
@@ -79,8 +84,9 @@ public class RecordingController {
             @PathVariable Long meetingId,
             @PathVariable Long recordingId,
             @RequestParam("file") MultipartFile file,
-            @AuthenticationPrincipal User user
+            Authentication authentication
     ) throws IOException {
+        User user = extractUser(authentication);
         MeetingRecording recording = recordingService.uploadRecordingFile(meetingId, recordingId, file, user);
         return ResponseEntity.ok(recording);
     }
@@ -88,8 +94,9 @@ public class RecordingController {
     @GetMapping
     public ResponseEntity<List<MeetingRecording>> listRecordings(
             @PathVariable Long meetingId,
-            @AuthenticationPrincipal User user
+            Authentication authentication
     ) {
+        User user = extractUser(authentication);
         return ResponseEntity.ok(recordingService.listRecordings(meetingId, user));
     }
 
@@ -97,8 +104,9 @@ public class RecordingController {
     public ResponseEntity<Resource> downloadRecording(
             @PathVariable Long meetingId,
             @PathVariable Long recordingId,
-            @AuthenticationPrincipal User user
+            Authentication authentication
     ) throws IOException {
+        User user = extractUser(authentication);
         Path filePath = recordingService.getRecordingFile(meetingId, recordingId, user);
         Resource resource = new UrlResource(filePath.toUri());
 
@@ -106,5 +114,18 @@ public class RecordingController {
                 .contentType(MediaType.parseMediaType("video/mp4"))
                 .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + resource.getFilename() + "\"")
                 .body(resource);
+    }
+
+    private User extractUser(Authentication authentication) {
+        if (authentication == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthenticated user");
+        }
+        if (authentication.getPrincipal() instanceof User user) {
+            return user;
+        }
+        if (authentication.getPrincipal() instanceof com.meetmind.meetmind_backend.auth.UserPrincipal up) {
+            return up.getUser();
+        }
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid user authentication");
     }
 }

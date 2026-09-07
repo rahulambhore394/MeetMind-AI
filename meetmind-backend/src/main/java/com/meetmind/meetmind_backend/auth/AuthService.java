@@ -7,8 +7,10 @@ import com.meetmind.meetmind_backend.auth.dto.RegisterRequest;
 import com.meetmind.meetmind_backend.auth.jwt.JwtService;
 import com.meetmind.meetmind_backend.user.User;
 import com.meetmind.meetmind_backend.user.UserRepository;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.web.server.ResponseStatusException;
 
 @Service
 public class AuthService {
@@ -30,7 +32,8 @@ public class AuthService {
     public User register(RegisterRequest request) {
 
         if (userRepository.existsByEmail(request.getEmail())) {
-            throw new RuntimeException(
+            throw new ResponseStatusException(
+                    HttpStatus.CONFLICT,
                     "Email already registered"
             );
         }
@@ -56,7 +59,8 @@ public class AuthService {
         User user = userRepository
                 .findByEmail(request.getEmail())
                 .orElseThrow(() ->
-                        new RuntimeException(
+                        new ResponseStatusException(
+                                HttpStatus.UNAUTHORIZED,
                                 "Invalid email or password"
                         )
                 );
@@ -68,7 +72,8 @@ public class AuthService {
                 );
 
         if (!passwordMatches) {
-            throw new RuntimeException(
+            throw new ResponseStatusException(
+                    HttpStatus.UNAUTHORIZED,
                     "Invalid email or password"
             );
         }

@@ -41,7 +41,13 @@ public class KafkaEventPublisher {
     private void sendEvent(String topic, String key, MeetMindEvent kafkaEvent) {
         KafkaTemplate<Object, Object> template = kafkaTemplateProvider.getIfAvailable();
         if (template != null) {
-            template.send(topic, key, kafkaEvent);
+            java.util.concurrent.CompletableFuture.runAsync(() -> {
+                try {
+                    template.send(topic, key, kafkaEvent);
+                } catch (Exception e) {
+                    log.warn("Kafka cluster unavailable; skipping message publish for topic {}: {}", topic, e.getMessage());
+                }
+            });
         } else {
             log.debug("Kafka is disabled; skipping event publish to topic {}", topic);
         }

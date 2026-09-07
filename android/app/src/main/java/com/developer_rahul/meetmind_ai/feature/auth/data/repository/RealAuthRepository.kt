@@ -19,6 +19,8 @@ class RealAuthRepository(
             val response = authApiService.login(LoginRequest(email, password))
             tokenProvider.saveToken(response.accessToken)
             tokenProvider.saveUserId(response.userId)
+            tokenProvider.saveUserName(response.name)
+            tokenProvider.saveUserEmail(response.email)
             NetworkResult.Success(response)
         } catch (e: Exception) {
             NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
@@ -32,6 +34,9 @@ class RealAuthRepository(
     ): NetworkResult<RegisterResponse> {
         return try {
             val response = authApiService.register(RegisterRequest(name, email, password))
+            tokenProvider.saveUserId(response.id)
+            tokenProvider.saveUserName(response.name)
+            tokenProvider.saveUserEmail(response.email)
             NetworkResult.Success(response)
         } catch (e: Exception) {
             NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))

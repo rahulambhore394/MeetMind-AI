@@ -78,6 +78,29 @@ fun AiRepActiveScreen(
             color = TextSecondary,
             textAlign = TextAlign.Center
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Mandatory Ethical AI Disclosure Banner
+        Surface(
+            color = ElectricIndigo.copy(alpha = 0.15f),
+            shape = MaterialTheme.shapes.medium,
+            border = androidx.compose.foundation.BorderStroke(1.dp, ElectricIndigo)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(Icons.Default.SmartToy, null, tint = NeonCyan, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(
+                    "AUTOMATED AI PARTICIPANT — Disclosed to all participants in meeting",
+                    style = Typography.labelMedium,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+        }
         
         Spacer(modifier = Modifier.height(48.dp))
         

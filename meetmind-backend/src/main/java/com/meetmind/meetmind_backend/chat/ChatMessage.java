@@ -16,7 +16,7 @@ public class ChatMessage {
     @Column(nullable = false)
     private Long meetingId;
 
-    @Column(nullable = false)
+    @Column(name = "user_id", nullable = false)
     private Long senderId;
 
     @Column(nullable = false, columnDefinition = "TEXT")

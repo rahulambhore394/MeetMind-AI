@@ -15,5 +15,7 @@ data class MeetingResponseDto(
     val endedAt: String? = null,
     val createdAt: String,
     val status: String,
-    val meetingCode: String? = null
+    val meetingCode: String? = null,
+    val hasJoinedBefore: Boolean? = false,
+    val userParticipantStatus: String? = null
 )

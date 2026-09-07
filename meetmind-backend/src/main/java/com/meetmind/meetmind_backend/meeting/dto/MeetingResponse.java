@@ -22,9 +22,14 @@ public class MeetingResponse implements java.io.Serializable {
     private LocalDateTime startedAt;
     private LocalDateTime endedAt;
     private LocalDateTime createdAt;
+    private Boolean hasJoinedBefore = false;
+    private String userParticipantStatus;
 
     public MeetingResponse(Meeting meeting) {
+        this(meeting, false, null);
+    }
 
+    public MeetingResponse(Meeting meeting, Boolean hasJoinedBefore, String userParticipantStatus) {
         this.id = meeting.getId();
         this.title = meeting.getTitle();
         this.description = meeting.getDescription();
@@ -39,6 +44,16 @@ public class MeetingResponse implements java.io.Serializable {
         this.endedAt = meeting.getEndedAt();
         this.createdAt = meeting.getCreatedAt();
         this.status = meeting.getStatus().name();
+        this.hasJoinedBefore = hasJoinedBefore != null ? hasJoinedBefore : false;
+        this.userParticipantStatus = userParticipantStatus;
+    }
+
+    public Boolean getHasJoinedBefore() {
+        return hasJoinedBefore;
+    }
+
+    public String getUserParticipantStatus() {
+        return userParticipantStatus;
     }
 
     public String getMeetingCode() {

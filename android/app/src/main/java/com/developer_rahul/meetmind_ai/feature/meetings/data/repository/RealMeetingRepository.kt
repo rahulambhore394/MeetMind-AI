@@ -3,8 +3,10 @@ package com.developer_rahul.meetmind_ai.feature.meetings.data.repository
 import com.developer_rahul.meetmind_ai.core.network.error.ErrorMapper
 import com.developer_rahul.meetmind_ai.core.network.model.NetworkResult
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.MeetingApiService
+import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.ComprehensiveReportDto
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.CreateMeetingRequestDto
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.InviteParticipantRequestDto
+import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.MeetingReportSummaryDto
 import com.developer_rahul.meetmind_ai.feature.meetings.domain.mapper.toDomain
 import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Meeting
 import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Participant
@@ -116,6 +118,24 @@ class RealMeetingRepository(
         return try {
             val response = meetingApiService.inviteParticipant(meetingId, InviteParticipantRequestDto(email))
             NetworkResult.Success(response.toDomain())
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun getAllMeetingReports(): NetworkResult<List<MeetingReportSummaryDto>> {
+        return try {
+            val response = meetingApiService.getAllMeetingReports()
+            NetworkResult.Success(response)
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun getComprehensiveReport(meetingId: Long): NetworkResult<ComprehensiveReportDto> {
+        return try {
+            val response = meetingApiService.getComprehensiveReport(meetingId)
+            NetworkResult.Success(response)
         } catch (e: Exception) {
             NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
         }

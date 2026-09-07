@@ -106,7 +106,12 @@ public class SignalingWebSocketController {
 
     private User extractUser(Principal principal) {
         if (principal instanceof UsernamePasswordAuthenticationToken auth) {
-            return (User) auth.getPrincipal();
+            if (auth.getPrincipal() instanceof com.meetmind.meetmind_backend.auth.UserPrincipal up) {
+                return up.getUser();
+            }
+            if (auth.getPrincipal() instanceof User u) {
+                return u;
+            }
         }
         return userRepository.findByEmail(principal.getName())
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));

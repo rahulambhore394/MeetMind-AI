@@ -169,7 +169,12 @@ public class ChatService {
 
     private User extractUserFromPrincipal(Principal principal) {
         if (principal instanceof UsernamePasswordAuthenticationToken auth) {
-            return (User) auth.getPrincipal();
+            if (auth.getPrincipal() instanceof User user) {
+                return user;
+            }
+            if (auth.getPrincipal() instanceof com.meetmind.meetmind_backend.auth.UserPrincipal up) {
+                return up.getUser();
+            }
         }
         return userRepository.findByEmail(principal.getName())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));

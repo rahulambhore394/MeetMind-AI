@@ -92,10 +92,13 @@ public class LiveTranslationService {
         entity.setSourceLanguage(srcLang);
         entity.setTargetLanguage(tgtLang);
         entity.setSourceText(sourceText);
-        entity.setTranslatedText(result.getTranslatedText());
+        String safeTranslatedText = (result != null && result.getTranslatedText() != null)
+                ? result.getTranslatedText()
+                : sourceText;
+        entity.setTranslatedText(safeTranslatedText);
         entity.setSpeaker(speaker);
         entity.setTimestamp(timestamp != null ? timestamp : System.currentTimeMillis());
-        entity.setProviderName(result.getProvider());
+        entity.setProviderName(result != null ? result.getProvider() : provider.providerName());
 
         LiveTranslation saved = translationRepository.save(entity);
 

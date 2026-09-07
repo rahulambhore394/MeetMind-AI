@@ -89,7 +89,7 @@ public class WebSocketAuthInterceptor
 
             UsernamePasswordAuthenticationToken authentication =
                     new UsernamePasswordAuthenticationToken(
-                            user,
+                            new com.meetmind.meetmind_backend.auth.UserPrincipal(user),
                             null,
                             List.of(
                                     new SimpleGrantedAuthority(
@@ -124,10 +124,14 @@ public class WebSocketAuthInterceptor
                 if (meetingId != null) {
                     Principal principal = accessor.getUser();
                     if (principal instanceof UsernamePasswordAuthenticationToken auth) {
-                        User user = (User) auth.getPrincipal();
-                        boolean isParticipant = participantRepository.existsByMeetingIdAndUserId(meetingId, user.getId());
-                        if (!isParticipant) {
-                            return null; // Silent drop of unauthorized subscription
+                        User user = auth.getPrincipal() instanceof com.meetmind.meetmind_backend.auth.UserPrincipal up ? up.getUser() : (auth.getPrincipal() instanceof User u ? u : null);
+                        if (user != null) {
+                            boolean isParticipant = participantRepository.existsByMeetingIdAndUserId(meetingId, user.getId());
+                            if (!isParticipant) {
+                                return null; // Silent drop of unauthorized subscription
+                            }
+                        } else {
+                            return null;
                         }
                     } else {
                         return null; // Silent drop if not authenticated

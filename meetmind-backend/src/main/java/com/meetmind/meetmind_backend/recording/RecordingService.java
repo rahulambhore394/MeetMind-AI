@@ -48,7 +48,7 @@ public class RecordingService {
 
     public MeetingRecording startRecording(Long meetingId, User user) {
         Meeting meeting = getMeeting(meetingId);
-        verifyHost(meeting, user.getId());
+        verifyParticipantOrHost(meeting, user.getId());
 
         if (meeting.getStatus() != MeetingStatus.LIVE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Meeting must be Live to record");
@@ -71,7 +71,7 @@ public class RecordingService {
 
     public MeetingRecording stopRecording(Long meetingId, Long recordingId, User user) {
         Meeting meeting = getMeeting(meetingId);
-        verifyHost(meeting, user.getId());
+        verifyParticipantOrHost(meeting, user.getId());
 
         MeetingRecording recording = recordingRepository.findById(recordingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Recording not found"));
@@ -93,7 +93,7 @@ public class RecordingService {
 
     public MeetingRecording uploadRecordingFile(Long meetingId, Long recordingId, MultipartFile file, User user) throws IOException {
         Meeting meeting = getMeeting(meetingId);
-        verifyHost(meeting, user.getId());
+        verifyParticipantOrHost(meeting, user.getId());
 
         MeetingRecording recording = recordingRepository.findById(recordingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Recording not found"));

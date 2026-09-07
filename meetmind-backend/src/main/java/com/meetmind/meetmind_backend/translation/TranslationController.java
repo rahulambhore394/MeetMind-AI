@@ -33,6 +33,9 @@ public class TranslationController {
             @RequestParam(required = false) String targetLanguage,
             @AuthenticationPrincipal User user
     ) {
+        if (user == null) {
+            return ResponseEntity.status(401).build();
+        }
         List<LiveTranslation> translations = translationService.getTranslations(meetingId, targetLanguage, user);
         return ResponseEntity.ok(translations);
     }
@@ -46,11 +49,12 @@ public class TranslationController {
             @RequestBody Map<String, String> body,
             @AuthenticationPrincipal User user
     ) {
+        Long userId = user != null ? user.getId() : 0L;
         String targetLanguage = body.getOrDefault("targetLanguage", "en");
-        preferenceService.setUserLanguagePreference(meetingId, user.getId(), targetLanguage);
+        preferenceService.setUserLanguagePreference(meetingId, userId, targetLanguage);
         return ResponseEntity.ok(Map.of(
                 "meetingId", String.valueOf(meetingId),
-                "userId", String.valueOf(user.getId()),
+                "userId", String.valueOf(userId),
                 "targetLanguage", targetLanguage,
                 "status", "UPDATED"
         ));
@@ -60,31 +64,63 @@ public class TranslationController {
      * Triggers live translation for a text chunk and broadcasts to the relevant STOMP topic.
      */
     @PostMapping("/live")
-    public ResponseEntity<LiveTranslation> translateLive(
+    public ResponseEntity<List<LiveTranslation>> translateLive(
             @PathVariable Long meetingId,
             @RequestBody LiveTranslateRequest request,
             @AuthenticationPrincipal User user
     ) throws TranslationException {
 
-        String speaker = request.speaker() != null ? request.speaker() : user.getName();
-        LiveTranslation result = translationService.translateAndBroadcast(
-                meetingId,
-                request.segmentId(),
-                request.sourceText(),
-                request.sourceLanguage(),
-                request.targetLanguage(),
-                speaker,
-                request.timestamp()
-        );
-        return ResponseEntity.ok(result);
+        String speaker = request.getSpeaker() != null ? request.getSpeaker() : (user != null ? user.getName() : "Speaker");
+        if (request.getTargetLanguage() != null && !request.getTargetLanguage().isBlank()) {
+            LiveTranslation result = translationService.translateAndBroadcast(
+                    meetingId,
+                    request.getSegmentId(),
+                    request.getSourceText(),
+                    request.getSourceLanguage(),
+                    request.getTargetLanguage(),
+                    speaker,
+                    request.getTimestamp()
+            );
+            return ResponseEntity.ok(result != null ? List.of(result) : List.of());
+        } else {
+            List<LiveTranslation> results = translationService.processLiveTranscriptSegment(
+                    meetingId,
+                    request.getSegmentId(),
+                    request.getSourceText(),
+                    request.getSourceLanguage(),
+                    speaker,
+                    request.getTimestamp()
+            );
+            return ResponseEntity.ok(results);
+        }
     }
 
-    public record LiveTranslateRequest(
-            Long segmentId,
-            String sourceText,
-            String sourceLanguage,
-            String targetLanguage,
-            String speaker,
-            Long timestamp
-    ) {}
+    public static class LiveTranslateRequest {
+        private Long segmentId;
+        private String sourceText;
+        private String sourceLanguage;
+        private String targetLanguage;
+        private String speaker;
+        private Long timestamp;
+
+        public LiveTranslateRequest() {}
+
+        public Long getSegmentId() { return segmentId; }
+        public void setSegmentId(Long segmentId) { this.segmentId = segmentId; }
+
+        public String getSourceText() { return sourceText; }
+        public void setSourceText(String sourceText) { this.sourceText = sourceText; }
+
+        public String getSourceLanguage() { return sourceLanguage; }
+        public void setSourceLanguage(String sourceLanguage) { this.sourceLanguage = sourceLanguage; }
+
+        public String getTargetLanguage() { return targetLanguage; }
+        public void setTargetLanguage(String targetLanguage) { this.targetLanguage = targetLanguage; }
+
+        public String getSpeaker() { return speaker; }
+        public void setSpeaker(String speaker) { this.speaker = speaker; }
+
+        public Long getTimestamp() { return timestamp; }
+        public void setTimestamp(Long timestamp) { this.timestamp = timestamp; }
+    }
 }

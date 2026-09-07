@@ -1,10 +1,13 @@
 package com.developer_rahul.meetmind_ai.feature.transcript.presentation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -50,7 +53,10 @@ fun TranscriptScreen(
                             singleLine = true
                         )
                     } else {
-                        Text("Meeting Transcript", style = Typography.titleLarge, color = TextPrimary) 
+                        Column {
+                            Text("Meeting Transcript", style = Typography.titleLarge, color = TextPrimary) 
+                            Text("Live Multilingual Translation", style = Typography.labelSmall, color = TextSecondary)
+                        }
                     }
                 },
                 navigationIcon = {
@@ -75,6 +81,88 @@ fun TranscriptScreen(
                 .fillMaxSize()
                 .padding(padding)
         ) {
+            // Preferred Language selector bar
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = CardSurface,
+                tonalElevation = 2.dp
+            ) {
+                Column(modifier = Modifier.padding(vertical = 10.dp, horizontal = 16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Translate, contentDescription = null, tint = ElectricIndigo, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "PREFERRED LANGUAGE:", 
+                            style = Typography.labelMedium.copy(fontWeight = FontWeight.Bold), 
+                            color = TextSecondary
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        viewModel.availableLanguages.forEach { lang ->
+                            val isSelected = uiState.selectedLanguage == lang.code
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { viewModel.selectLanguage(lang.code) },
+                                label = { 
+                                    Text(
+                                        lang.displayName, 
+                                        style = Typography.labelMedium,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    ) 
+                                },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = ElectricIndigo,
+                                    selectedLabelColor = Color.White,
+                                    containerColor = BackgroundSurface,
+                                    labelColor = TextPrimary
+                                ),
+                                shape = RoundedCornerShape(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Live status banner
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                color = BackgroundSurface,
+                border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    val isActive = uiState.transcript?.status != "COMPLETED"
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .background(if (isActive) EmeraldGreen else TextDisabled, CircleShape)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        if (isActive) "LIVE TRANSCRIPTION IN PROGRESS" else "TRANSCRIPTION COMPLETED", 
+                        style = Typography.labelLarge, 
+                        color = if (isActive) EmeraldGreen else TextSecondary, 
+                        letterSpacing = 1.sp
+                    )
+                    Spacer(modifier = Modifier.weight(1f))
+                    val currentLangName = viewModel.availableLanguages.find { it.code == uiState.selectedLanguage }?.displayName ?: uiState.selectedLanguage
+                    Text(
+                        currentLangName,
+                        style = Typography.labelSmall,
+                        color = ElectricIndigo,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
             if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = ElectricIndigo)
@@ -83,6 +171,7 @@ fun TranscriptScreen(
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(uiState.error!!, color = RoseRed)
+                        Spacer(modifier = Modifier.height(12.dp))
                         Button(onClick = { viewModel.loadTranscript() }) {
                             Text("Retry")
                         }
@@ -90,41 +179,21 @@ fun TranscriptScreen(
                 }
             } else if (uiState.isEmpty) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("No transcript available for this meeting", color = TextSecondary)
-                }
-            } else {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = BackgroundSurface,
-                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        val isActive = uiState.transcript?.status != "COMPLETED"
-                        Box(
-                            modifier = Modifier
-                                .size(10.dp)
-                                .background(if (isActive) EmeraldGreen else TextDisabled, CircleShape)
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            if (isActive) "TRANSCRIPTION IN PROGRESS" else "TRANSCRIPTION COMPLETED", 
-                            style = Typography.labelLarge, 
-                            color = if (isActive) EmeraldGreen else TextSecondary, 
-                            letterSpacing = 1.sp
-                        )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(Icons.Default.Subtitles, contentDescription = null, tint = TextDisabled, modifier = Modifier.size(48.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Text("No transcript available in this language yet", color = TextSecondary)
+                        Text("Speak in the live meeting to see live translation!", style = Typography.bodySmall, color = TextDisabled)
                     }
                 }
-
+            } else {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(28.dp)
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     items(uiState.filteredSegments) { segment ->
-                        TranscriptSegmentItem(segment)
+                        TranscriptSegmentCard(segment)
                     }
                 }
             }
@@ -133,25 +202,43 @@ fun TranscriptScreen(
 }
 
 @Composable
-fun TranscriptSegmentItem(segment: TranscriptSegment) {
-    Row(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.width(60.dp)) {
-            Text(segment.time, style = Typography.labelSmall, color = TextDisabled)
-        }
-        
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                segment.speaker, 
-                style = Typography.titleSmall, 
-                color = if (segment.speaker.contains("AI")) NeonCyan else ElectricIndigo,
-                fontWeight = FontWeight.Bold
-            )
-            Spacer(modifier = Modifier.height(6.dp))
+fun TranscriptSegmentCard(segment: TranscriptSegment) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    segment.speaker, 
+                    style = Typography.titleSmall, 
+                    color = if (segment.speaker.contains("AI", ignoreCase = true)) NeonCyan else ElectricIndigo,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Surface(
+                    color = BackgroundSurface,
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        segment.time, 
+                        style = Typography.labelSmall, 
+                        color = TextDisabled,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 segment.text,
                 style = Typography.bodyLarge,
                 color = TextPrimary,
-                lineHeight = 26.sp
+                lineHeight = 24.sp
             )
         }
     }

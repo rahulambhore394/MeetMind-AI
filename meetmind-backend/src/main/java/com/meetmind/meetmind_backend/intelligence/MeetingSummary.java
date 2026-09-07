@@ -14,7 +14,7 @@ public class MeetingSummary {
     @Column(name = "meeting_id", nullable = false)
     private Long meetingId;
 
-    @Column(name = "transcript_id", nullable = false)
+    @Column(name = "transcript_id", nullable = true)
     private Long transcriptId;
 
     @Column(name = "summary", columnDefinition = "TEXT")

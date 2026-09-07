@@ -1,19 +1,34 @@
 package com.developer_rahul.meetmind_ai.feature.meetings.presentation
 
+import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.developer_rahul.meetmind_ai.core.designsystem.*
 import com.developer_rahul.meetmind_ai.core.ui.ViewModelFactory
@@ -30,9 +45,16 @@ fun MeetingsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("Upcoming", "Live", "History")
-    
     var showFilterSheet by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
+    val tabs = listOf(
+        "Upcoming (${uiState.upcomingMeetings.size})",
+        "Live (${uiState.liveMeetings.size})",
+        "History (${uiState.pastMeetings.size})"
+    )
 
     if (showFilterSheet) {
         FilterMeetingsSheet(
@@ -46,64 +68,79 @@ fun MeetingsScreen(
             Column(modifier = Modifier.background(BackgroundSurface)) {
                 TopAppBar(
                     title = { 
-                        Text(
-                            "Meetings", 
-                            style = Typography.headlineMedium, 
-                            color = TextPrimary,
-                            fontWeight = FontWeight.Bold
-                        ) 
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "Meetings & Calls", 
+                                style = Typography.headlineSmall, 
+                                color = TextPrimary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Surface(
+                                color = ElectricIndigo.copy(alpha = 0.2f),
+                                shape = CircleShape
+                            ) {
+                                Text(
+                                    "${uiState.meetings.size}",
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp),
+                                    style = Typography.labelSmall,
+                                    color = ElectricIndigo,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
                     },
                     actions = {
-                        IconButton(onClick = { /* Navigate to Search handled by AppNav */ }) {
-                            Icon(Icons.Default.Search, contentDescription = null, tint = TextPrimary)
+                        IconButton(onClick = { viewModel.loadMeetings() }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = TextPrimary)
                         }
                         IconButton(onClick = { showFilterSheet = true }) {
-                            Icon(Icons.Default.FilterList, contentDescription = null, tint = TextPrimary)
+                            Icon(Icons.Default.FilterList, contentDescription = "Filter", tint = TextPrimary)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundSurface)
                 )
                 
-                ScrollableTabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = BackgroundSurface,
-                    contentColor = ElectricIndigo,
-                    edgePadding = 20.dp,
-                    divider = {},
-                    indicator = { tabPositions ->
-                        if (selectedTab < tabPositions.size) {
-                            TabRowDefaults.SecondaryIndicator(
-                                modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                                color = ElectricIndigo
-                            )
-                        }
-                    }
+                // Custom Modern Pill Tab Row
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     tabs.forEachIndexed { index, title ->
-                        Tab(
-                            selected = selectedTab == index,
+                        val isSelected = selectedTab == index
+                        Surface(
                             onClick = { selectedTab = index },
-                            text = { 
+                            shape = CircleShape,
+                            color = if (isSelected) ElectricIndigo else CardSurface,
+                            border = if (isSelected) null else androidx.compose.foundation.BorderStroke(1.dp, BorderColor),
+                            modifier = Modifier
+                                .weight(1f)
+                                .bounceClick()
+                        ) {
+                            Box(
+                                modifier = Modifier.padding(vertical = 10.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
                                 Text(
-                                    title, 
-                                    style = if (selectedTab == index) Typography.labelLarge else Typography.bodyMedium,
-                                    color = if (selectedTab == index) ElectricIndigo else TextSecondary
-                                ) 
+                                    title,
+                                    style = Typography.labelMedium,
+                                    color = if (isSelected) Color.White else TextSecondary,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                )
                             }
-                        )
+                        }
                     }
                 }
             }
         },
         floatingActionButton = {
-            LargeFloatingActionButton(
+            GradientFloatingActionButton(
+                text = "New Meeting",
                 onClick = onCreateMeeting,
-                containerColor = ElectricIndigo,
-                contentColor = Color.White,
-                shape = MaterialTheme.shapes.large
-            ) {
-                Icon(Icons.Default.Add, contentDescription = "Create Meeting", modifier = Modifier.size(32.dp))
-            }
+                icon = Icons.Default.VideoCall
+            )
         },
         containerColor = BackgroundSurface
     ) { padding ->
@@ -118,92 +155,142 @@ fun MeetingsScreen(
                     .padding(padding)
                     .padding(horizontal = 20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(top = 16.dp, bottom = 100.dp)
+                contentPadding = PaddingValues(top = 12.dp, bottom = 160.dp)
             ) {
-                // PROMINENT GOOGLE MEET-STYLE REJOIN LIVE MEETING BANNER
+                // PROMINENT REJOIN LIVE MEETING HERO BANNER
                 if (uiState.liveMeetings.isNotEmpty()) {
                     val activeMeeting = uiState.liveMeetings.first()
                     item {
                         Surface(
-                            shape = MaterialTheme.shapes.large,
-                            color = EmeraldGreen.copy(alpha = 0.15f),
+                            shape = RoundedCornerShape(24.dp),
+                            color = EmeraldGreen.copy(alpha = 0.12f),
                             border = androidx.compose.foundation.BorderStroke(1.5.dp, EmeraldGreen),
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .bounceClick()
                         ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(10.dp)
-                                            .background(EmeraldGreen, androidx.compose.foundation.shape.CircleShape)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        "LIVE MEETING IN PROGRESS",
-                                        style = Typography.labelMedium,
-                                        color = EmeraldGreen,
-                                        fontWeight = FontWeight.Bold
-                                    )
+                            Column(modifier = Modifier.padding(18.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(10.dp)
+                                                .background(EmeraldGreen, CircleShape)
+                                                .pulse(color = EmeraldGreen)
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            "LIVE MEETING IN PROGRESS",
+                                            style = Typography.labelMedium,
+                                            color = EmeraldGreen,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+
+                                    if (!activeMeeting.meetingCode.isNullOrEmpty()) {
+                                        Surface(
+                                            onClick = {
+                                                clipboardManager.setText(AnnotatedString(activeMeeting.meetingCode))
+                                                Toast.makeText(context, "Code copied: ${activeMeeting.meetingCode}", Toast.LENGTH_SHORT).show()
+                                            },
+                                            shape = CircleShape,
+                                            color = EmeraldGreen.copy(alpha = 0.2f),
+                                            modifier = Modifier.bounceClick()
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Text(
+                                                    activeMeeting.meetingCode,
+                                                    style = Typography.labelSmall,
+                                                    color = EmeraldGreen,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Icon(Icons.Default.ContentCopy, null, tint = EmeraldGreen, modifier = Modifier.size(12.dp))
+                                            }
+                                        }
+                                    }
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
+                                
+                                Spacer(modifier = Modifier.height(10.dp))
                                 Text(
                                     activeMeeting.title,
-                                    style = Typography.titleMedium,
+                                    style = Typography.titleLarge,
                                     color = TextPrimary,
                                     fontWeight = FontWeight.Bold
                                 )
-                                if (!activeMeeting.meetingCode.isNullOrEmpty()) {
-                                    Text(
-                                        "Code: ${activeMeeting.meetingCode}",
-                                        style = Typography.bodySmall,
-                                        color = TextSecondary
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(12.dp))
-                                MeetMindButton(
-                                    text = "REJOIN MEETING NOW 🟢",
-                                    onClick = { onMeetingClick(activeMeeting.id.toString()) },
-                                    modifier = Modifier.fillMaxWidth()
+                                
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    "Hosted by ${activeMeeting.hostName}",
+                                    style = Typography.bodyMedium,
+                                    color = TextSecondary
                                 )
+
+                                Spacer(modifier = Modifier.height(16.dp))
+                                Button(
+                                    onClick = { onMeetingClick(activeMeeting.id.toString()) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .bounceClick(),
+                                    shape = RoundedCornerShape(14.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen)
+                                ) {
+                                    Icon(Icons.Default.VideoCall, null, tint = Color.White)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("REJOIN MEETING NOW 🟢", fontWeight = FontWeight.Bold, color = Color.White)
+                                }
                             }
                         }
                     }
                 }
 
-                // JOIN WITH A CODE INPUT CARD
+                // JOIN WITH A CODE CARD
                 item {
                     var inputCode by remember { mutableStateOf("") }
                     Surface(
-                        shape = MaterialTheme.shapes.medium,
-                        color = BackgroundSurface,
+                        shape = RoundedCornerShape(20.dp),
+                        color = CardSurface,
                         border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Row(
-                            modifier = Modifier.padding(12.dp),
+                            modifier = Modifier.padding(14.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             OutlinedTextField(
                                 value = inputCode,
                                 onValueChange = { inputCode = it },
-                                placeholder = { Text("Enter meeting code (e.g. mm-809)", style = Typography.bodySmall) },
+                                placeholder = { Text("Enter meeting code (e.g. mm-809)", style = Typography.bodySmall, color = TextDisabled) },
+                                leadingIcon = {
+                                    Icon(Icons.Default.VpnKey, null, tint = ElectricIndigo, modifier = Modifier.size(18.dp))
+                                },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = ElectricIndigo,
                                     unfocusedBorderColor = BorderColor
                                 )
                             )
-                            Spacer(modifier = Modifier.width(8.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
                             Button(
                                 onClick = {
                                     if (inputCode.isNotBlank()) {
                                         viewModel.joinByCode(inputCode.trim())
                                     }
                                 },
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.bounceClick(),
                                 colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo)
                             ) {
-                                Text("Join")
+                                Text("Join", fontWeight = FontWeight.Bold)
                             }
                         }
                     }
@@ -233,32 +320,122 @@ fun MeetingsScreen(
 
 @Composable
 fun MeetingItemCard(meeting: Meeting, onClick: () -> Unit) {
-    MeetMindCard(onClick = onClick) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        color = CardSurface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor),
+        modifier = Modifier
+            .fillMaxWidth()
+            .bounceClick()
+    ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Status Vertical Indicator Bar
+            Box(
+                modifier = Modifier
+                    .width(4.dp)
+                    .height(64.dp)
+                    .clip(CircleShape)
+                    .background(
+                        when (meeting.status) {
+                            MeetingStatus.LIVE -> EmeraldGreen
+                            MeetingStatus.SCHEDULED -> ElectricIndigo
+                            else -> TextDisabled
+                        }
+                    )
+            )
+            
+            Spacer(modifier = Modifier.width(14.dp))
+
             Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    meeting.title, 
-                    style = Typography.titleMedium, 
-                    color = TextPrimary
-                )
-                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        meeting.title, 
+                        style = Typography.titleMedium, 
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
+                    )
+                    
+                    val isRejoin = meeting.hasJoinedBefore || meeting.userParticipantStatus == "LEFT"
+                    val statusText = when {
+                        meeting.status == MeetingStatus.LIVE && isRejoin -> "RE-JOIN"
+                        else -> meeting.status.name
+                    }
+                    StatusChip(
+                        text = statusText,
+                        color = when (meeting.status) {
+                            MeetingStatus.LIVE -> EmeraldGreen
+                            MeetingStatus.SCHEDULED -> ElectricIndigo
+                            else -> TextDisabled
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                // Meeting Code Copy Chip
+                if (!meeting.meetingCode.isNullOrEmpty()) {
+                    Surface(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(meeting.meetingCode!!))
+                            Toast.makeText(context, "Code copied: ${meeting.meetingCode}", Toast.LENGTH_SHORT).show()
+                        },
+                        shape = CircleShape,
+                        color = NeonCyan.copy(alpha = 0.12f),
+                        modifier = Modifier.bounceClick()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                meeting.meetingCode!!,
+                                style = Typography.labelSmall,
+                                color = NeonCyan,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Icon(Icons.Default.ContentCopy, null, tint = NeonCyan, modifier = Modifier.size(11.dp))
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Schedule, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
+                    Icon(Icons.Default.Event, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(meeting.scheduledAt, style = Typography.bodySmall, color = TextSecondary)
                 }
-                Spacer(modifier = Modifier.height(12.dp))
+
+                Spacer(modifier = Modifier.height(8.dp))
+
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val initials = meeting.hostName.split(" ")
+                        .mapNotNull { it.firstOrNull()?.uppercase() }
+                        .take(2)
+                        .joinToString("")
+                        .ifEmpty { meeting.hostName.take(1).uppercase() }
+
                     Surface(
-                        modifier = Modifier.size(24.dp),
-                        shape = androidx.compose.foundation.shape.CircleShape,
-                        color = Color.DarkGray
+                        modifier = Modifier.size(22.dp),
+                        shape = CircleShape,
+                        color = ElectricIndigo
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Text(meeting.hostName.take(1), style = Typography.labelSmall, color = Color.White)
+                            Text(initials, style = Typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
                         }
                     }
                     Spacer(modifier = Modifier.width(8.dp))
@@ -269,16 +446,17 @@ fun MeetingItemCard(meeting: Meeting, onClick: () -> Unit) {
                     )
                 }
             }
-            
-            Column(horizontalAlignment = Alignment.End) {
-                StatusChip(
-                    text = meeting.status.name,
-                    color = when (meeting.status) {
-                        MeetingStatus.LIVE -> RoseRed
-                        MeetingStatus.SCHEDULED -> ElectricIndigo
-                        else -> TextDisabled
-                    }
-                )
+
+            Spacer(modifier = Modifier.width(8.dp))
+
+            // Action Arrow Button
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(Color.White.copy(alpha = 0.06f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.ChevronRight, contentDescription = "View Details", tint = TextSecondary, modifier = Modifier.size(20.dp))
             }
         }
     }
@@ -289,37 +467,44 @@ fun EmptyMeetingsState(onAction: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 80.dp),
+            .padding(vertical = 60.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Surface(
-            modifier = Modifier.size(100.dp),
-            shape = MaterialTheme.shapes.extraLarge,
-            color = GlassWhite
+            modifier = Modifier.size(90.dp),
+            shape = CircleShape,
+            color = GlassBackground,
+            border = androidx.compose.foundation.BorderStroke(1.dp, GlassWhite)
         ) {
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     Icons.Default.EventBusy,
                     contentDescription = null,
-                    modifier = Modifier.size(48.dp),
+                    modifier = Modifier.size(42.dp),
                     tint = TextDisabled
                 )
             }
         }
-        Spacer(modifier = Modifier.height(32.dp))
-        Text("No meetings found", style = Typography.headlineMedium, color = TextPrimary)
+        Spacer(modifier = Modifier.height(24.dp))
+        Text("No Meetings Found", style = Typography.titleLarge, color = TextPrimary, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            "Your scheduled and past meetings will appear here.", 
-            style = Typography.bodyLarge, 
+            "Your scheduled, live, and past meetings\nwill appear here.", 
+            style = Typography.bodyMedium, 
             color = TextSecondary,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
-        Spacer(modifier = Modifier.height(48.dp))
-        MeetMindButton(
-            text = "Create Meeting",
+        Spacer(modifier = Modifier.height(32.dp))
+        Button(
             onClick = onAction,
-            modifier = Modifier.width(200.dp)
-        )
+            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.bounceClick(),
+            colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo)
+        ) {
+            Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Create New Meeting", fontWeight = FontWeight.Bold)
+        }
     }
 }
+

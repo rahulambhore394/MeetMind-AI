@@ -11,9 +11,10 @@ android {
     defaultConfig {
         applicationId = "com.developer_rahul.meetmind_ai"
         minSdk = 28
-        targetSdk = 37
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
+        multiDexEnabled = true
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "BASE_URL", "\"https://meetmind-backend-s3yy.onrender.com/\"")
@@ -21,8 +22,10 @@ android {
 
     buildTypes {
         debug {
+            buildConfigField("String", "BASE_URL", "\"http://10.70.40.176:8080/\"")
         }
         release {
+            buildConfigField("String", "BASE_URL", "\"https://meetmind-backend-s3yy.onrender.com/\"")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }

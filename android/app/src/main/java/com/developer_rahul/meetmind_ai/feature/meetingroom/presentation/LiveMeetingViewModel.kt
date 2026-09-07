@@ -43,6 +43,9 @@ class LiveMeetingViewModel(
             is MeetingCallEvent.LocalStreamReady -> {
                 _uiState.update { it.copy(localVideoTrack = event.videoTrack) }
             }
+            is MeetingCallEvent.LocalScreenStreamReady -> {
+                _uiState.update { it.copy(localScreenTrack = event.videoTrack, isScreenSharing = (event.videoTrack != null)) }
+            }
             is MeetingCallEvent.RemoteStreamReady -> {
                 updateParticipantState(event.userId) { it.copy(videoTrack = event.videoTrack, videoEnabled = true) }
             }
@@ -98,14 +101,23 @@ class LiveMeetingViewModel(
         meetingCallRepository.setVideoEnabled(enabled)
     }
 
+    fun switchCamera() {
+        meetingCallRepository.switchCamera()
+    }
+
     fun startScreenSharing(mediaProjectionData: android.content.Intent) {
         meetingCallRepository.startScreenSharing(mediaProjectionData)
-        _uiState.update { it.copy(isScreenSharing = true) }
+        val track = meetingCallRepository.getLocalScreenTrack()
+        if (track != null) {
+            _uiState.update { it.copy(isScreenSharing = true, localScreenTrack = track) }
+        } else {
+            _uiState.update { it.copy(isScreenSharing = false, localScreenTrack = null, error = "Failed to start screen capture") }
+        }
     }
 
     fun stopScreenSharing() {
         meetingCallRepository.stopScreenSharing()
-        _uiState.update { it.copy(isScreenSharing = false) }
+        _uiState.update { it.copy(isScreenSharing = false, localScreenTrack = null) }
     }
 
     fun leaveMeeting() {
@@ -121,6 +133,7 @@ class LiveMeetingViewModel(
 data class LiveMeetingUiState(
     val isLoading: Boolean = false,
     val localVideoTrack: VideoTrack? = null,
+    val localScreenTrack: VideoTrack? = null,
     val participants: Map<Long, ParticipantMediaState> = emptyMap(),
     val isScreenSharing: Boolean = false,
     val error: String? = null

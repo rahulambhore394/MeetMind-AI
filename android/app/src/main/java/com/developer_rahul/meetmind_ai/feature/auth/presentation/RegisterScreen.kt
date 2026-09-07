@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -19,6 +20,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.developer_rahul.meetmind_ai.core.designsystem.*
 import com.developer_rahul.meetmind_ai.core.ui.ViewModelFactory
@@ -41,7 +43,7 @@ fun RegisterScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundSurface)
+            .background(BackgroundGradient)
             .padding(24.dp)
             .statusBarsPadding()
             .verticalScroll(rememberScrollState())
@@ -53,11 +55,50 @@ fun RegisterScreen(
             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null, tint = TextPrimary)
         }
 
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // Hero Brand Badge
+        Row(
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = ElectricIndigo.copy(alpha = 0.15f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder),
+                modifier = Modifier.size(48.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = NeonCyan,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+            Spacer(Modifier.width(14.dp))
+            Column {
+                Text(
+                    "MEETMIND AI",
+                    style = Typography.labelMedium,
+                    fontWeight = FontWeight.Black,
+                    letterSpacing = 1.5.sp,
+                    color = NeonCyan
+                )
+                Text(
+                    "Join the Future",
+                    style = Typography.bodySmall,
+                    color = TextSecondary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         Text(
             "Create Account",
             style = Typography.displayMedium,
+            fontWeight = FontWeight.Bold,
             color = TextPrimary
         )
 
@@ -67,7 +108,7 @@ fun RegisterScreen(
             color = TextSecondary
         )
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
         MeetMindTextField(
             value = uiState.name,
@@ -77,7 +118,7 @@ fun RegisterScreen(
             error = uiState.nameError
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         MeetMindTextField(
             value = uiState.email,
@@ -88,7 +129,7 @@ fun RegisterScreen(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email)
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
         var passwordVisible by remember { mutableStateOf(false) }
         MeetMindTextField(
@@ -119,15 +160,16 @@ fun RegisterScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(40.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
         MeetMindButton(
             text = "Create Account",
             onClick = viewModel::register,
-            isLoading = uiState.isLoading
+            isLoading = uiState.isLoading,
+            isAiAction = true
         )
         
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(20.dp))
         
         Text(
             "By creating an account, you agree to our Terms of Service and Privacy Policy.",
@@ -137,7 +179,7 @@ fun RegisterScreen(
             modifier = Modifier.fillMaxWidth()
         )
         
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(24.dp))
         
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -146,7 +188,7 @@ fun RegisterScreen(
         ) {
             Text("Already have an account?", color = TextSecondary, style = Typography.bodyMedium)
             TextButton(onClick = onBack) {
-                Text("Sign In", color = ElectricIndigo, style = Typography.labelLarge)
+                Text("Sign In", color = ElectricIndigo, style = Typography.labelLarge, fontWeight = FontWeight.Bold)
             }
         }
     }

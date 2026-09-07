@@ -20,7 +20,7 @@ public class Meeting {
     @Column(columnDefinition = "TEXT")
     private String description;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
     @JoinColumn(name = "host_id", nullable = false)
     private User host;
 
@@ -40,8 +40,19 @@ public class Meeting {
     @Column(name = "meeting_code", length = 50, unique = true)
     private String meetingCode;
 
+    @Column(name = "empty_since")
+    private LocalDateTime emptySince;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    public LocalDateTime getEmptySince() {
+        return emptySince;
+    }
+
+    public void setEmptySince(LocalDateTime emptySince) {
+        this.emptySince = emptySince;
+    }
 
     public String getMeetingCode() {
         return meetingCode;

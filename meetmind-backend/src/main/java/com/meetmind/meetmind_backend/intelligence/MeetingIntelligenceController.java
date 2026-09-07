@@ -1,9 +1,11 @@
 package com.meetmind.meetmind_backend.intelligence;
 
+import com.meetmind.meetmind_backend.intelligence.dto.ComprehensiveMeetingReportDto;
+import com.meetmind.meetmind_backend.intelligence.dto.MeetingReportSummaryDto;
 import com.meetmind.meetmind_backend.user.User;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -11,7 +13,6 @@ import java.util.List;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/meetings/{meetingId}")
 public class MeetingIntelligenceController {
 
     private final MeetingIntelligenceService intelligenceService;
@@ -20,34 +21,53 @@ public class MeetingIntelligenceController {
         this.intelligenceService = intelligenceService;
     }
 
-    @GetMapping("/intelligence")
+    @GetMapping("/api/meetings/reports/all")
+    public ResponseEntity<List<MeetingReportSummaryDto>> getAllMeetingReports(
+            Authentication authentication
+    ) {
+        User user = extractUser(authentication);
+        List<MeetingReportSummaryDto> reports = intelligenceService.getAllMeetingReports(user);
+        return ResponseEntity.ok(reports);
+    }
+
+    @GetMapping("/api/meetings/{meetingId}/comprehensive-report")
+    public ResponseEntity<ComprehensiveMeetingReportDto> getComprehensiveReport(
+            @PathVariable Long meetingId,
+            Authentication authentication
+    ) {
+        User user = extractUser(authentication);
+        ComprehensiveMeetingReportDto report = intelligenceService.getComprehensiveReport(meetingId, user);
+        return ResponseEntity.ok(report);
+    }
+
+    @GetMapping("/api/meetings/{meetingId}/intelligence")
     public ResponseEntity<MeetingIntelligenceService.SummaryDetailView> getIntelligenceSummary(
             @PathVariable Long meetingId,
-            @AuthenticationPrincipal User user
+            Authentication authentication
     ) {
-        verifyAuthenticated(user);
+        User user = extractUser(authentication);
         MeetingIntelligenceService.SummaryDetailView summary = intelligenceService.getSummaryDetail(meetingId, user);
         return ResponseEntity.ok(summary);
     }
 
-    @GetMapping("/action-items")
+    @GetMapping("/api/meetings/{meetingId}/action-items")
     public ResponseEntity<List<ActionItem>> listActionItems(
             @PathVariable Long meetingId,
-            @AuthenticationPrincipal User user
+            Authentication authentication
     ) {
-        verifyAuthenticated(user);
+        User user = extractUser(authentication);
         List<ActionItem> actionItems = intelligenceService.listActionItems(meetingId, user);
         return ResponseEntity.ok(actionItems);
     }
 
-    @PatchMapping("/action-items/{actionItemId}")
+    @PatchMapping("/api/meetings/{meetingId}/action-items/{actionItemId}")
     public ResponseEntity<ActionItem> updateActionItemStatus(
             @PathVariable Long meetingId,
             @PathVariable Long actionItemId,
             @RequestBody Map<String, String> body,
-            @AuthenticationPrincipal User user
+            Authentication authentication
     ) {
-        verifyAuthenticated(user);
+        User user = extractUser(authentication);
         String statusStr = body.get("status");
         if (statusStr == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status is required");
@@ -58,13 +78,13 @@ public class MeetingIntelligenceController {
         return ResponseEntity.ok(updated);
     }
 
-    @PostMapping("/intelligence/generate")
+    @PostMapping("/api/meetings/{meetingId}/intelligence/generate")
     public ResponseEntity<MeetingIntelligenceService.SummaryDetailView> triggerAnalysis(
             @PathVariable Long meetingId,
             @RequestBody(required = false) Map<String, Long> requestBody,
-            @AuthenticationPrincipal User user
+            Authentication authentication
     ) {
-        verifyAuthenticated(user);
+        User user = extractUser(authentication);
         Long transcriptId = (requestBody != null) ? requestBody.get("transcriptId") : null;
 
         if (transcriptId == null) {
@@ -79,9 +99,16 @@ public class MeetingIntelligenceController {
         }
     }
 
-    private void verifyAuthenticated(User user) {
-        if (user == null || user.getId() == null) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthenticated request");
+    private User extractUser(Authentication authentication) {
+        if (authentication == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthenticated user");
         }
+        if (authentication.getPrincipal() instanceof User user) {
+            return user;
+        }
+        if (authentication.getPrincipal() instanceof com.meetmind.meetmind_backend.auth.UserPrincipal up) {
+            return up.getUser();
+        }
+        throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid user authentication");
     }
 }

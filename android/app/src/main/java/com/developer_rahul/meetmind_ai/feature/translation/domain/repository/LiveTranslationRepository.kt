@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.SharedFlow
 interface LiveTranslationRepository {
     val subtitles: SharedFlow<Subtitle>
     
+    suspend fun getTranslations(meetingId: Long, targetLanguage: String? = null): List<Subtitle>
     suspend fun setLanguagePreference(meetingId: Long, targetLanguage: String)
     suspend fun sendLiveSpeech(meetingId: Long, text: String, sourceLanguage: String)
     fun subscribeToSubtitles(meetingId: Long, targetLanguage: String)

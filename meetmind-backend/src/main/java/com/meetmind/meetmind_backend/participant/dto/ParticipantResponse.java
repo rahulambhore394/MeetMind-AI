@@ -54,6 +54,21 @@ public class ParticipantResponse {
     }
 
 
+    public ParticipantResponse(
+            String email,
+            String role,
+            String status
+    ) {
+        this.id = null;
+        this.userId = null;
+        this.name = email;
+        this.email = email;
+        this.role = role;
+        this.status = status;
+        this.joinedAt = null;
+        this.leftAt = null;
+    }
+
     public Long getId() {
         return id;
     }

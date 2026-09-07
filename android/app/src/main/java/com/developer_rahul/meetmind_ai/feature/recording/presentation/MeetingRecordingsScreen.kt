@@ -18,12 +18,22 @@ import androidx.compose.ui.unit.dp
 import com.developer_rahul.meetmind_ai.core.designsystem.*
 import com.developer_rahul.meetmind_ai.core.ui.components.*
 
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.developer_rahul.meetmind_ai.core.ui.ViewModelFactory
+import com.developer_rahul.meetmind_ai.feature.meetings.presentation.MeetingViewModel
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MeetingRecordingsScreen(
     onBack: () -> Unit,
-    onPlayRecording: (String) -> Unit
+    onPlayRecording: (String) -> Unit,
+    viewModel: MeetingViewModel = viewModel(factory = ViewModelFactory)
 ) {
+    val uiState by viewModel.uiState.collectAsState()
+    val recordings = uiState.recordings
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -34,8 +44,8 @@ fun MeetingRecordingsScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { }) {
-                        Icon(Icons.Default.FilterList, null, tint = TextPrimary)
+                    IconButton(onClick = { viewModel.loadMeetings() }) {
+                        Icon(Icons.Default.Refresh, null, tint = TextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundSurface)
@@ -43,23 +53,45 @@ fun MeetingRecordingsScreen(
         },
         containerColor = BackgroundSurface
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(vertical = 24.dp)
-        ) {
-            items(sampleRecordings) { item ->
-                RecordingItemCard(
-                    title = item.title,
-                    date = item.date,
-                    duration = item.duration,
-                    status = "COMPLETED",
-                    hasAiSummary = item.hasAiSummary,
-                    onClick = { onPlayRecording(item.id) }
-                )
+        if (uiState.isLoading && recordings.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = ElectricIndigo)
+            }
+        } else if (recordings.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(Icons.Default.VideocamOff, contentDescription = null, tint = TextDisabled, modifier = Modifier.size(64.dp))
+                    Spacer(Modifier.height(16.dp))
+                    Text("No Recordings Available", style = Typography.titleLarge, color = TextPrimary)
+                    Spacer(Modifier.height(8.dp))
+                    Text("Recordings will automatically appear here after live meetings end.", style = Typography.bodyMedium, color = TextSecondary)
+                }
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 20.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(vertical = 24.dp)
+            ) {
+                items(recordings) { item ->
+                    RecordingItemCard(
+                        title = "Recording #${item.id}",
+                        date = item.startedAt.take(10),
+                        duration = if (item.duration != null) "${item.duration}s" else "Live",
+                        status = item.status,
+                        hasAiSummary = item.status == "COMPLETED",
+                        onClick = { onPlayRecording(item.id.toString()) }
+                    )
+                }
             }
         }
     }
@@ -144,9 +176,3 @@ data class MeetingRecording(
     val hasAiSummary: Boolean = false
 )
 
-val sampleRecordings = listOf(
-    MeetingRecording("1", "Architecture Review", "Oct 12, 2023", "45:20", "124 MB", true),
-    MeetingRecording("2", "Product Design Sync", "Oct 11, 2023", "15:05", "42 MB", true),
-    MeetingRecording("3", "Budget Planning Q4", "Oct 10, 2023", "1:12:40", "310 MB", false),
-    MeetingRecording("4", "Security Implementation", "Oct 09, 2023", "30:15", "85 MB", true)
-)

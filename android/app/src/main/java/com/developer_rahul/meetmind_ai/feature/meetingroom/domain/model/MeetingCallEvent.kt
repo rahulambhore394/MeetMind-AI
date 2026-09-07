@@ -4,6 +4,7 @@ import org.webrtc.VideoTrack
 
 sealed interface MeetingCallEvent {
     data class LocalStreamReady(val videoTrack: VideoTrack?) : MeetingCallEvent
+    data class LocalScreenStreamReady(val videoTrack: VideoTrack?) : MeetingCallEvent
     data class RemoteStreamReady(val userId: Long, val videoTrack: VideoTrack) : MeetingCallEvent
     data class RemoteStreamRemoved(val userId: Long) : MeetingCallEvent
     data class MediaStateChanged(

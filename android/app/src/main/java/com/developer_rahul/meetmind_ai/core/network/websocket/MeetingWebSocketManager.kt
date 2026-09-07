@@ -113,17 +113,17 @@ class MeetingWebSocketManager(
                         val destination = frame.headers["destination"]
                         val body = frame.body
                         if (body != null) {
-                            if (destination?.endsWith("/chat") == true) {
+                            if (destination?.contains("/chat") == true) {
                                 parseAndEmitChatMessage(body)
-                            } else if (destination?.endsWith("/signaling") == true) {
+                            } else if (destination?.contains("/signaling") == true) {
                                 parseAndEmitSignalingMessage(body)
-                            } else if (destination?.endsWith("/recordings") == true) {
+                            } else if (destination?.contains("/recordings") == true) {
                                 parseAndEmitRecordingEvent(body)
-                            } else if (destination?.endsWith("/intelligence") == true) {
+                            } else if (destination?.contains("/intelligence") == true) {
                                 parseAndEmitIntelligenceEvent(body)
-                            } else if (destination?.contains("/translations/") == true) {
+                            } else if (destination?.contains("/translations") == true) {
                                 parseAndEmitTranslation(body)
-                            } else if (destination?.endsWith("/notifications") == true) {
+                            } else if (destination?.contains("/notifications") == true) {
                                 parseAndEmitNotification(body)
                             } else {
                                 parseAndEmitEvent(body)

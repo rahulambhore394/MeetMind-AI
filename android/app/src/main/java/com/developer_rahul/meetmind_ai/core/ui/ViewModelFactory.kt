@@ -46,7 +46,8 @@ class BaseViewModelFactory(
                     container.recordingRepository,
                     container.intelligenceRepository,
                     container.recordingManager,
-                    container.recordingUploadManager
+                    container.recordingUploadManager,
+                    container.tokenProvider
                 ) as T
             }
             modelClass.isAssignableFrom(ChatViewModel::class.java) -> {
@@ -56,12 +57,17 @@ class BaseViewModelFactory(
                 LiveMeetingViewModel(container.meetingCallRepository, meetingId ?: -1L) as T
             }
             modelClass.isAssignableFrom(TranscriptViewModel::class.java) -> {
-                TranscriptViewModel(container.transcriptRepository, meetingId ?: -1L) as T
+                TranscriptViewModel(
+                    container.transcriptRepository,
+                    container.liveTranslationRepository,
+                    meetingId ?: -1L
+                ) as T
             }
             modelClass.isAssignableFrom(LiveTranslationViewModel::class.java) -> {
                 LiveTranslationViewModel(
                     container.liveTranslationRepository,
                     container.liveSpeechProvider,
+                    container.textToSpeechManager,
                     meetingId ?: -1L
                 ) as T
             }
@@ -100,7 +106,11 @@ class BaseViewModelFactory(
                 NotificationViewModel(container.notificationRepository) as T
             }
             modelClass.isAssignableFrom(com.developer_rahul.meetmind_ai.feature.profile.presentation.ProfileViewModel::class.java) -> {
-                com.developer_rahul.meetmind_ai.feature.profile.presentation.ProfileViewModel(container.userApiService) as T
+                com.developer_rahul.meetmind_ai.feature.profile.presentation.ProfileViewModel(
+                    container.userApiService,
+                    container.tokenProvider,
+                    container.meetingRepository
+                ) as T
             }
             else -> throw IllegalArgumentException("Unknown ViewModel class: ${modelClass.name}")
         }

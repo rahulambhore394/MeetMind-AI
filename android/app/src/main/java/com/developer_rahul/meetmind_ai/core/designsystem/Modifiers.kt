@@ -4,12 +4,16 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.draw.drawBehind
@@ -75,4 +79,33 @@ fun Modifier.aiGlow(
         )
         canvas.drawRect(0f, 0f, size.width, size.height, paint)
     }
+}
+
+fun Modifier.bounceClick(
+    scaleDown: Float = 0.95f
+) = composed {
+    var isPressed by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) scaleDown else 1f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "bounceScale"
+    )
+    this
+        .graphicsLayer(scaleX = scale, scaleY = scale)
+        .composed {
+            this.then(
+                Modifier.pointerInput(Unit) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            if (event.changes.any { it.pressed }) {
+                                isPressed = true
+                            } else if (event.changes.all { !it.pressed }) {
+                                isPressed = false
+                            }
+                        }
+                    }
+                }
+            )
+        }
 }

@@ -32,6 +32,7 @@ public class ParticipantService {
     private final MeetingRepository meetingRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final com.meetmind.meetmind_backend.notification.EmailService emailService;
 
 
     public ParticipantService(
@@ -39,7 +40,8 @@ public class ParticipantService {
             MeetingRepository meetingRepository,
             UserRepository userRepository,
             MeetingEventPublisher eventPublisher,
-            ApplicationEventPublisher applicationEventPublisher
+            ApplicationEventPublisher applicationEventPublisher,
+            com.meetmind.meetmind_backend.notification.EmailService emailService
     ) {
 
         this.participantRepository =
@@ -56,6 +58,9 @@ public class ParticipantService {
 
         this.applicationEventPublisher =
                 applicationEventPublisher;
+
+        this.emailService =
+                emailService;
     }
 
 
@@ -63,6 +68,7 @@ public class ParticipantService {
     // INVITE PARTICIPANT
     // =====================================================
 
+    @Transactional
     public ParticipantResponse inviteParticipant(
             Long meetingId,
             InviteParticipantRequest request,
@@ -73,88 +79,85 @@ public class ParticipantService {
                 getMeeting(meetingId);
 
 
-        // Only host can invite
-
-        verifyHost(
+        // Allow host or any participant of the meeting to invite
+        verifyParticipantOrHost(
                 meeting,
                 currentUserId
         );
 
 
-        // Find invited user
-
-        User user =
-                userRepository
-                        .findByEmail(
-                                request.getEmail()
-                        )
-                        .orElseThrow(() ->
-                                new ResponseStatusException(
-                                        HttpStatus.NOT_FOUND,
-                                        "User with this email does not exist"
-                                )
-                        );
-
-
-        // Don't allow host to invite themselves
-
-        if (user.getId().equals(currentUserId)) {
-
+        String email = request.getEmail() != null ? request.getEmail().trim() : "";
+        if (email.isEmpty()) {
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
-                    "Host cannot be invited"
+                    "Email is required"
             );
         }
 
+        // Find invited user if registered
 
-        // Check duplicate
+        java.util.Optional<User> optionalUser =
+                userRepository.findByEmail(email);
 
-        if (
-                participantRepository
-                        .existsByMeetingIdAndUserId(
-                                meetingId,
-                                user.getId()
-                        )
-        ) {
+        boolean isRegistered = optionalUser.isPresent();
+        User user = optionalUser.orElse(null);
 
+        // Don't allow current user to invite themselves
+
+        if (isRegistered && user.getId().equals(currentUserId)) {
             throw new ResponseStatusException(
-                    HttpStatus.CONFLICT,
-                    "User is already part of this meeting"
+                    HttpStatus.BAD_REQUEST,
+                    "You cannot invite yourself"
             );
         }
 
+        MeetingParticipant participant = null;
 
-        MeetingParticipant participant =
-                new MeetingParticipant();
+        if (isRegistered) {
+            // Check duplicate or reuse
+            java.util.Optional<MeetingParticipant> existingOpt =
+                    participantRepository.findByMeetingIdAndUserId(meetingId, user.getId());
+            if (existingOpt.isPresent()) {
+                participant = existingOpt.get();
+            } else {
+                participant = new MeetingParticipant();
+                participant.setMeeting(meeting);
+                participant.setUser(user);
+                participant.setRole(ParticipantRole.PARTICIPANT);
+                participant.setStatus(ParticipantStatus.INVITED);
+                participant = participantRepository.save(participant);
 
-
-        participant.setMeeting(meeting);
-
-        participant.setUser(user);
-
-        participant.setRole(
-                ParticipantRole.PARTICIPANT
-        );
-
-        participant.setStatus(
-                ParticipantStatus.INVITED
-        );
-
-
-        MeetingParticipant saved =
-                participantRepository.save(
-                        participant
+                applicationEventPublisher.publishEvent(
+                    new SpringMeetingInvitationEvent(
+                        this, meetingId, user.getId(), meeting.getTitle(), meeting.getHost().getName()
+                    )
                 );
+            }
+        }
 
-        applicationEventPublisher.publishEvent(
-            new SpringMeetingInvitationEvent(
-                this, meetingId, user.getId(), meeting.getTitle(), meeting.getHost().getName()
-            )
+        if (meeting != null && meeting.getHost() != null) {
+            org.hibernate.Hibernate.initialize(meeting.getHost());
+        }
+        if (user != null) {
+            org.hibernate.Hibernate.initialize(user);
+        }
+
+        // Send Email Invitation to all users (registered or unregistered)
+        emailService.sendMeetingInvitationEmail(
+                email,
+                meeting.getHost().getName(),
+                meeting.getTitle(),
+                meeting.getDescription(),
+                meeting.getMeetingCode(),
+                meeting.getScheduledAt(),
+                isRegistered
         );
 
-        return new ParticipantResponse(
-                saved
-        );
+        if (participant != null) {
+            return new ParticipantResponse(participant);
+        } else {
+            return new ParticipantResponse(email, "PARTICIPANT", "INVITED");
+        }
     }
 
 
@@ -162,6 +165,7 @@ public class ParticipantService {
     // GET PARTICIPANTS
     // =====================================================
 
+    @Transactional(readOnly = true)
     public List<ParticipantResponse>
     getParticipants(
             Long meetingId,
@@ -190,6 +194,7 @@ public class ParticipantService {
     // ACCEPT INVITATION
     // =====================================================
 
+    @Transactional
     public ParticipantResponse acceptInvitation(
             Long meetingId,
             Long currentUserId
@@ -248,6 +253,7 @@ public class ParticipantService {
     // DECLINE INVITATION
     // =====================================================
 
+    @Transactional
     public ParticipantResponse declineInvitation(
             Long meetingId,
             Long currentUserId
@@ -368,6 +374,12 @@ public class ParticipantService {
                 participantRepository.save(
                         participant
                 );
+
+        if (meeting.getEmptySince() != null) {
+            meeting.setEmptySince(null);
+            meetingRepository.save(meeting);
+        }
+
         MeetingEvent event =
                 new MeetingEvent(
                         MeetingEventType.PARTICIPANT_JOINED,
@@ -440,6 +452,13 @@ public class ParticipantService {
                 participantRepository.save(
                         participant
                 );
+
+        long activeCount = participantRepository.countByMeetingIdAndStatus(meetingId, ParticipantStatus.JOINED);
+        if (activeCount == 0) {
+            Meeting meeting = participant.getMeeting();
+            meeting.setEmptySince(LocalDateTime.now());
+            meetingRepository.save(meeting);
+        }
         MeetingEvent event =
                 new MeetingEvent(
                         MeetingEventType.PARTICIPANT_LEFT,

@@ -133,5 +133,3 @@ fun UserSearchItem(name: String, isSelected: Boolean, onToggle: () -> Unit) {
         }
     }
 }
-
-val sampleUsers = listOf("Alice Chen", "Bob Wilson", "Charlie Day", "David Miller", "Eve Adams", "Frank Wright")

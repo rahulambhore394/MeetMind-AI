@@ -11,7 +11,7 @@ import org.webrtc.*
 import java.util.concurrent.ConcurrentHashMap
 
 class MeetingCallRepository(
-    private val webRtcApiService: WebRtcApiService,
+    private val webRtcApiService: WebRtcApiService?,
     private val webSocketManager: MeetingWebSocketManager,
     private val webRtcManager: WebRtcManager
 ) {
@@ -49,12 +49,23 @@ class MeetingCallRepository(
         }
     }
 
+    private fun fallbackIceServers(): List<com.developer_rahul.meetmind_ai.core.webrtc.data.remote.dto.IceServerDto> {
+        return listOf(
+            com.developer_rahul.meetmind_ai.core.webrtc.data.remote.dto.IceServerDto(urls = listOf("stun:stun.l.google.com:19302")),
+            com.developer_rahul.meetmind_ai.core.webrtc.data.remote.dto.IceServerDto(urls = listOf("stun:stun1.l.google.com:19302")),
+            com.developer_rahul.meetmind_ai.core.webrtc.data.remote.dto.IceServerDto(urls = listOf("stun:stun2.l.google.com:19302"))
+        )
+    }
+
     suspend fun joinMeeting(meetingId: Long) {
         currentMeetingId = meetingId
+        webSocketManager.connect()
+        
         iceServers = try {
-            webRtcApiService.getIceServers()
+            val fetched = webRtcApiService?.getIceServers() ?: emptyList()
+            if (fetched.isEmpty()) fallbackIceServers() else fetched
         } catch (e: Exception) {
-            emptyList()
+            fallbackIceServers()
         }
         
         webRtcManager.createLocalStream()
@@ -64,21 +75,30 @@ class MeetingCallRepository(
     }
 
     private fun handleSignalingMessage(message: com.developer_rahul.meetmind_ai.core.network.websocket.model.SignalingMessageDto) {
+        if (message.type == "PEER_LIST") {
+            val payload = message.payload
+            if (!payload.isNullOrEmpty()) {
+                val peerIds = payload.split(",").mapNotNull { 
+                    it.split(":").firstOrNull()?.toLongOrNull() 
+                }
+                for (id in peerIds) {
+                    if (id > 0L && !peerConnections.containsKey(id)) {
+                        Log.d("MeetingCallRepo", "PEER_LIST: Creating offer connection to peer $id")
+                        createPeerConnection(id, true)
+                    }
+                }
+            }
+            return
+        }
+
         val peerId = message.senderId ?: return
-        if (peerId == 0L) return 
+        if (peerId <= 0L) return 
 
         when (message.type) {
-            "PEER_LIST" -> {
-                val payload = message.payload
-                if (payload != null) {
-                    val peerIds = payload.split(",").mapNotNull { 
-                        it.split(":").firstOrNull()?.toLongOrNull() 
-                    }
-                    for (id in peerIds) {
-                        if (!peerConnections.containsKey(id)) {
-                            createPeerConnection(id, true)
-                        }
-                    }
+            "JOIN" -> {
+                Log.d("MeetingCallRepo", "Peer $peerId joined meeting")
+                if (!peerConnections.containsKey(peerId)) {
+                    createPeerConnection(peerId, false)
                 }
             }
             "OFFER" -> {
@@ -255,27 +275,42 @@ class MeetingCallRepository(
         sendMediaUpdate(videoEnabled = enabled)
     }
 
+    fun switchCamera() {
+        webRtcManager.switchCamera()
+    }
+
     fun startScreenSharing(mediaProjectionData: android.content.Intent) {
         webRtcManager.startScreenCapture(mediaProjectionData)
-        val screenTrack = webRtcManager.getLocalScreenTrack() ?: return
+        val screenTrack = webRtcManager.getLocalScreenTrack()
         
-        for (pc in peerConnections.values) {
-            pc.addTrack(screenTrack, listOf("ARDAMS_SCREEN"))
+        scope.launch {
+            _events.emit(MeetingCallEvent.LocalScreenStreamReady(screenTrack))
+        }
+
+        if (screenTrack != null) {
+            for (pc in peerConnections.values) {
+                pc.addTrack(screenTrack, listOf("ARDAMS_SCREEN"))
+            }
         }
     }
 
     fun stopScreenSharing() {
         webRtcManager.stopScreenCapture()
+        scope.launch {
+            _events.emit(MeetingCallEvent.LocalScreenStreamReady(null))
+        }
         for (pc in peerConnections.values) {
             val senders = pc.senders
             val screenSender = senders.find { sender ->
-                sender.track()?.id()?.contains("SCREEN") == true
+                sender.track()?.id()?.contains("SCREEN") == true || sender.track()?.id()?.contains("ARDAMSs") == true
             }
             if (screenSender != null) {
                 pc.removeTrack(screenSender)
             }
         }
     }
+
+    fun getLocalScreenTrack(): VideoTrack? = webRtcManager.getLocalScreenTrack()
 
     private fun sendMediaUpdate(
         audioEnabled: Boolean? = null,

@@ -171,10 +171,3 @@ data class ParticipantInfo(
     val isOnline: Boolean,
     val isAi: Boolean = false
 )
-
-val sampleParticipants = listOf(
-    ParticipantInfo("Alice Chen", "Product Manager", true),
-    ParticipantInfo("Bob Wilson", "Senior Architect", false),
-    ParticipantInfo("AI Representative", "Automated Assistant", true, true),
-    ParticipantInfo("Charlie Day", "Lead Developer", true)
-)

@@ -64,6 +64,18 @@ public class MeetingService {
     // CREATE MEETING
     // ==========================================
 
+    private MeetingResponse toResponse(Meeting meeting, Long userId) {
+        if (userId == null) {
+            return new MeetingResponse(meeting);
+        }
+        return participantRepository.findByMeetingIdAndUserId(meeting.getId(), userId)
+                .map(p -> {
+                    boolean hasJoined = (p.getStatus() == ParticipantStatus.LEFT || p.getStatus() == ParticipantStatus.JOINED || p.getJoinedAt() != null);
+                    return new MeetingResponse(meeting, hasJoined, p.getStatus().name());
+                })
+                .orElseGet(() -> new MeetingResponse(meeting, false, null));
+    }
+
     public MeetingResponse createMeeting(
             CreateMeetingRequest request,
             Long currentUserId
@@ -121,9 +133,10 @@ public class MeetingService {
             }
         }
 
-        return new MeetingResponse(savedMeeting);
+        return toResponse(savedMeeting, currentUserId);
     }
 
+    @Transactional
     public MeetingResponse getMeetingByCode(String code, Long userId) {
         Meeting meeting = meetingRepository.findByMeetingCode(code)
                 .orElseGet(() -> {
@@ -150,7 +163,7 @@ public class MeetingService {
             participantRepository.save(part);
         }
 
-        return new MeetingResponse(meeting);
+        return toResponse(meeting, userId);
     }
 
     @CacheEvict(value = "meetings", key = "#meetingId")
@@ -182,7 +195,7 @@ public class MeetingService {
         // Meeting must be scheduled
 
         if (meeting.getStatus() == MeetingStatus.LIVE) {
-            return new MeetingResponse(meeting);
+            return toResponse(meeting, currentUserId);
         }
 
         if (meeting.getStatus() != MeetingStatus.SCHEDULED) {
@@ -198,6 +211,10 @@ public class MeetingService {
         );
 
         meeting.setStartedAt(
+                LocalDateTime.now()
+        );
+
+        meeting.setEmptySince(
                 LocalDateTime.now()
         );
 
@@ -231,9 +248,7 @@ public class MeetingService {
                 )
         );
 
-        return new MeetingResponse(
-                savedMeeting
-        );
+        return toResponse(savedMeeting, currentUserId);
     }
 
     @CacheEvict(value = "meetings", key = "#meetingId")
@@ -311,11 +326,10 @@ public class MeetingService {
                 )
         );
 
-        return new MeetingResponse(
-                savedMeeting
-        );
+        return toResponse(savedMeeting, currentUserId);
     }
 
+    @Transactional(readOnly = true)
     public MeetingResponse getMeetingStatus(
             Long meetingId,
             Long userId
@@ -333,9 +347,7 @@ public class MeetingService {
 
         verifyParticipantOrHost(meeting, userId);
 
-        return new MeetingResponse(
-                meeting
-        );
+        return toResponse(meeting, userId);
     }
 
 
@@ -343,6 +355,7 @@ public class MeetingService {
     // GET ALL MEETINGS FOR USER
     // ==========================================
 
+    @Transactional(readOnly = true)
     public List<MeetingResponse> getAllMeetings(Long userId) {
         // Return only meetings where user is host or participant
         List<Long> meetingIds = participantRepository.findByUserId(userId)
@@ -352,7 +365,7 @@ public class MeetingService {
 
         return meetingRepository.findAllById(meetingIds)
                 .stream()
-                .map(MeetingResponse::new)
+                .map(m -> toResponse(m, userId))
                 .toList();
     }
 
@@ -361,7 +374,7 @@ public class MeetingService {
     // GET SINGLE MEETING
     // ==========================================
 
-    @Cacheable(value = "meetings", key = "#meetingId", unless = "#result == null")
+    @Transactional(readOnly = true)
     public MeetingResponse getMeeting(Long meetingId, Long userId) {
 
         Meeting meeting =
@@ -376,7 +389,7 @@ public class MeetingService {
         
         verifyParticipantOrHost(meeting, userId);
 
-        return new MeetingResponse(meeting);
+        return toResponse(meeting, userId);
     }
 
 
@@ -482,6 +495,51 @@ public class MeetingService {
                     HttpStatus.FORBIDDEN,
                     "User is not a participant of this meeting"
             );
+        }
+    }
+
+    @Transactional
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 15000)
+    public void autoEndEmptyMeetings() {
+        List<Meeting> liveMeetings = meetingRepository.findByStatus(MeetingStatus.LIVE);
+        LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
+        for (Meeting meeting : liveMeetings) {
+            LocalDateTime emptySince = meeting.getEmptySince();
+            long activeCount = participantRepository.countByMeetingIdAndStatus(meeting.getId(), ParticipantStatus.JOINED);
+            if (activeCount > 0) {
+                if (emptySince != null) {
+                    meeting.setEmptySince(null);
+                    meetingRepository.save(meeting);
+                }
+                continue;
+            }
+            if (emptySince == null) {
+                emptySince = meeting.getStartedAt() != null ? meeting.getStartedAt() : LocalDateTime.now();
+                meeting.setEmptySince(emptySince);
+                meetingRepository.save(meeting);
+            }
+            if (emptySince.isBefore(tenMinutesAgo)) {
+                meeting.setStatus(MeetingStatus.ENDED);
+                meeting.setEndedAt(LocalDateTime.now());
+                meetingRepository.save(meeting);
+
+                MeetingEvent event = new MeetingEvent(
+                        MeetingEventType.MEETING_ENDED,
+                        meeting.getId(),
+                        meeting.getHost().getId(),
+                        meeting.getHost().getName(),
+                        "Meeting automatically ended after 10 minutes of inactivity"
+                );
+                eventPublisher.publish(meeting.getId(), event);
+                applicationEventPublisher.publishEvent(
+                        new SpringMeetingEndedEvent(
+                                this,
+                                meeting.getId(),
+                                meeting.getHost().getId(),
+                                meeting.getHost().getName()
+                        )
+                );
+            }
         }
     }
 }

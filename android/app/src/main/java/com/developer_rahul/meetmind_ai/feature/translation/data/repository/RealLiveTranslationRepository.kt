@@ -13,7 +13,10 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 
+import com.developer_rahul.meetmind_ai.feature.translation.data.remote.TranslationApiService
+
 class RealLiveTranslationRepository(
+    private val apiService: TranslationApiService,
     private val webSocketManager: MeetingWebSocketManager
 ) : LiveTranslationRepository {
 
@@ -29,7 +32,19 @@ class RealLiveTranslationRepository(
         }
     }
 
+    override suspend fun getTranslations(meetingId: Long, targetLanguage: String?): List<Subtitle> {
+        return try {
+            val dtoList = apiService.getTranslations(meetingId, targetLanguage)
+            dtoList.map { it.toDomain() }
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+
     override suspend fun setLanguagePreference(meetingId: Long, targetLanguage: String) {
+        try {
+            apiService.setLanguagePreference(meetingId, mapOf("targetLanguage" to targetLanguage))
+        } catch (_: Exception) {}
         webSocketManager.sendLanguagePreference(meetingId, targetLanguage)
     }
 

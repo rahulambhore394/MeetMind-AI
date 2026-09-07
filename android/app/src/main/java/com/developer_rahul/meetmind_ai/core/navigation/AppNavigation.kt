@@ -59,13 +59,14 @@ fun AppNavigation(navController: NavHostController) {
             LoginScreen(
                 onLoginSuccess = { navController.navigate(Screen.Dashboard.route) { popUpTo(Screen.Welcome.route) { inclusive = true } } },
                 onBack = { navController.popBackStack() },
-                onForgotPassword = { navController.navigate(Screen.ForgotPassword.route) }
+                onForgotPassword = { navController.navigate(Screen.ForgotPassword.route) },
+                onRegister = { navController.navigate(Screen.Register.route) }
             )
         }
         
         composable(Screen.Register.route) {
             RegisterScreen(
-                onRegisterSuccess = { navController.navigate(Screen.EmailVerification.route) },
+                onRegisterSuccess = { navController.navigate(Screen.Dashboard.route) { popUpTo(0) } },
                 onBack = { navController.popBackStack() }
             )
         }
@@ -100,7 +101,26 @@ fun AppNavigation(navController: NavHostController) {
                 onProfile = { navController.navigate(Screen.Profile.route) },
                 onLogout = { navController.navigate(Screen.Welcome.route) { popUpTo(0) } },
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
-                onAddParticipant = { id -> navController.navigate(Screen.AddParticipant.createRoute(id)) }
+                onAddParticipant = { id -> navController.navigate(Screen.AddParticipant.createRoute(id)) },
+                onSummaries = { navController.navigate(Screen.MeetingSummaries.route) }
+            )
+        }
+
+        composable(Screen.MeetingSummaries.route) {
+            MeetingSummariesScreen(
+                onBack = { navController.popBackStack() },
+                onReportClick = { meetingId -> navController.navigate(Screen.ComprehensiveReport.createRoute(meetingId.toString())) }
+            )
+        }
+
+        composable(
+            Screen.ComprehensiveReport.route,
+            arguments = listOf(navArgument("meetingId") { defaultValue = "" })
+        ) { backStackEntry ->
+            val id = backStackEntry.arguments?.getString("meetingId") ?: ""
+            ComprehensiveReportScreen(
+                meetingId = id,
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -114,7 +134,11 @@ fun AppNavigation(navController: NavHostController) {
         composable(Screen.CreateMeeting.route) {
             CreateMeetingScreen(
                 onBack = { navController.popBackStack() },
-                onCreated = { navController.popBackStack() }
+                onCreated = { navController.popBackStack() },
+                onStartMeeting = { id ->
+                    navController.popBackStack()
+                    navController.navigate(Screen.PreJoinMeeting.createRoute(id))
+                }
             )
         }
 
@@ -162,9 +186,11 @@ fun AppNavigation(navController: NavHostController) {
             val id = backStackEntry.arguments?.getString("meetingId") ?: ""
             LiveMeetingScreen(
                 meetingId = id,
-                onLeaveMeeting = { navController.navigate(Screen.MeetingEnded.createRoute("45:20")) },
+                onLeaveMeeting = { navController.navigate(Screen.MeetingEnded.createRoute(id, "45:20")) },
                 onToggleChat = { navController.navigate(Screen.Chat.createRoute(id)) },
-                onToggleParticipants = { navController.navigate(Screen.Participants.createRoute(id)) }
+                onToggleParticipants = { navController.navigate(Screen.Participants.createRoute(id)) },
+                onViewTranscript = { navController.navigate(Screen.Transcript.createRoute(id)) },
+                onViewIntelligence = { navController.navigate(Screen.MeetingIntelligence.createRoute(id)) }
             )
         }
 
@@ -222,12 +248,16 @@ fun AppNavigation(navController: NavHostController) {
 
         composable(
             Screen.MeetingEnded.route,
-            arguments = listOf(navArgument("duration") { defaultValue = "00:00" })
+            arguments = listOf(
+                navArgument("meetingId") { defaultValue = "" },
+                navArgument("duration") { defaultValue = "00:00" }
+            )
         ) { backStackEntry ->
+            val meetingId = backStackEntry.arguments?.getString("meetingId") ?: ""
             val duration = backStackEntry.arguments?.getString("duration") ?: "00:00"
             MeetingEndedScreen(
                 duration = duration,
-                onViewSummary = { navController.navigate(Screen.MeetingIntelligence.createRoute("arch-123")) },
+                onViewSummary = { navController.navigate(Screen.MeetingIntelligence.createRoute(meetingId)) },
                 onBackToHome = { navController.navigate(Screen.Dashboard.route) { popUpTo(0) } }
             )
         }
@@ -315,7 +345,18 @@ fun AppNavigation(navController: NavHostController) {
         composable(Screen.Recordings.route) {
             MeetingRecordingsScreen(
                 onBack = { navController.popBackStack() },
-                onPlayRecording = { id -> navController.navigate(Screen.Recordings.route + "/$id") } // Simplified route for demo
+                onPlayRecording = { id -> navController.navigate("recording_player/$id") }
+            )
+        }
+
+        composable(
+            "recording_player/{recordingId}",
+            arguments = listOf(navArgument("recordingId") { defaultValue = "" })
+        ) { backStackEntry ->
+            val id = backStackEntry.arguments?.getString("recordingId") ?: ""
+            RecordingPlayerScreen(
+                recordingId = id,
+                onBack = { navController.popBackStack() }
             )
         }
     }

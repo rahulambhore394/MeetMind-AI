@@ -37,8 +37,8 @@ sealed class Screen(val route: String) {
     object PreJoinMeeting : Screen("pre_join/{meetingId}") {
         fun createRoute(id: String) = "pre_join/$id"
     }
-    object MeetingEnded : Screen("meeting_ended/{duration}") {
-        fun createRoute(duration: String) = "meeting_ended/$duration"
+    object MeetingEnded : Screen("meeting_ended/{meetingId}/{duration}") {
+        fun createRoute(meetingId: String, duration: String) = "meeting_ended/$meetingId/$duration"
     }
     object MeetingInvitation : Screen("meeting_invitation")
     object Participants : Screen("participants/{meetingId}") {
@@ -70,6 +70,12 @@ sealed class Screen(val route: String) {
         fun createRoute(meetingId: Long, repId: Long) = "rep_report/$meetingId/$repId"
     }
     
+    // Reports & Summaries
+    object MeetingSummaries : Screen("meeting_summaries")
+    object ComprehensiveReport : Screen("comprehensive_report/{meetingId}") {
+        fun createRoute(id: String) = "comprehensive_report/$id"
+    }
+
     // Others
     object Notifications : Screen("notifications")
     object Profile : Screen("profile")

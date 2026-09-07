@@ -2,6 +2,7 @@ package com.developer_rahul.meetmind_ai.core.network.error
 
 import com.developer_rahul.meetmind_ai.core.network.model.ErrorType
 import com.developer_rahul.meetmind_ai.core.network.model.MeetMindError
+import org.json.JSONObject
 import retrofit2.HttpException
 import java.io.IOException
 import java.net.SocketTimeoutException
@@ -20,9 +21,26 @@ object ErrorMapper {
                     in 500..599 -> ErrorType.SERVER_ERROR
                     else -> ErrorType.UNKNOWN_ERROR
                 }
-                MeetMindError(type, throwable.message(), throwable.code())
+                val errorMessage = extractErrorMessage(throwable) ?: throwable.message()
+                MeetMindError(type, errorMessage, throwable.code())
             }
-            else -> MeetMindError(ErrorType.UNKNOWN_ERROR, throwable.localizedMessage)
+            else -> MeetMindError(ErrorType.UNKNOWN_ERROR, throwable.localizedMessage ?: "An unexpected error occurred")
+        }
+    }
+
+    private fun extractErrorMessage(httpException: HttpException): String? {
+        return try {
+            val errorJson = httpException.response()?.errorBody()?.string()
+            if (!errorJson.isNullOrBlank()) {
+                val jsonObject = JSONObject(errorJson)
+                if (jsonObject.has("message")) {
+                    jsonObject.getString("message")
+                } else if (jsonObject.has("error")) {
+                    jsonObject.getString("error")
+                } else null
+            } else null
+        } catch (_: Exception) {
+            null
         }
     }
 }

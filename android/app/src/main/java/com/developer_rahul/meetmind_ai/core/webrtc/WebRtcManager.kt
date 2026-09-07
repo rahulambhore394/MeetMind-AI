@@ -138,19 +138,30 @@ class WebRtcManager(
     }
 
     fun startScreenCapture(mediaProjectionData: android.content.Intent) {
-        if (peerConnectionFactory == null) {
-            initPeerConnectionFactory(context)
-        }
-        screenVideoSource = peerConnectionFactory?.createVideoSource(true)
-        screenCapturer = ScreenCapturerAndroid(mediaProjectionData, object : android.media.projection.MediaProjection.Callback() {
-            override fun onStop() {
-                Log.d(TAG, "Screen capture stopped")
-                stopScreenCapture()
+        try {
+            if (peerConnectionFactory == null) {
+                initPeerConnectionFactory(context)
             }
-        })
-        screenCapturer?.initialize(SurfaceTextureHelper.create("ScreenCaptureThread", eglBaseContext), context, screenVideoSource?.capturerObserver)
-        screenCapturer?.startCapture(1280, 720, 15)
-        screenVideoTrack = peerConnectionFactory?.createVideoTrack("ARDAMSs0", screenVideoSource)
+            stopScreenCapture()
+            screenVideoSource = peerConnectionFactory?.createVideoSource(true)
+            screenCapturer = ScreenCapturerAndroid(mediaProjectionData, object : android.media.projection.MediaProjection.Callback() {
+                override fun onStop() {
+                    Log.d(TAG, "Screen capture stopped by system/user")
+                    stopScreenCapture()
+                }
+            })
+            val displayMetrics = context.resources.displayMetrics
+            val width = if (displayMetrics.widthPixels > 0) displayMetrics.widthPixels else 1280
+            val height = if (displayMetrics.heightPixels > 0) displayMetrics.heightPixels else 720
+
+            screenCapturer?.initialize(SurfaceTextureHelper.create("ScreenCaptureThread", eglBaseContext), context, screenVideoSource?.capturerObserver)
+            screenCapturer?.startCapture(width, height, 15)
+            screenVideoTrack = peerConnectionFactory?.createVideoTrack("ARDAMSs0", screenVideoSource)
+            Log.d(TAG, "Screen capture started successfully ($width x $height)")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error starting screen capture: ${e.message}", e)
+            stopScreenCapture()
+        }
     }
 
     fun stopScreenCapture() {
@@ -165,6 +176,11 @@ class WebRtcManager(
         screenVideoTrack = null
         screenVideoSource?.dispose()
         screenVideoSource = null
+    }
+
+    fun switchCamera() {
+        val cameraCapturer = videoCapturer as? CameraVideoCapturer
+        cameraCapturer?.switchCamera(null)
     }
 
     fun getLocalVideoTrack(): VideoTrack? = localVideoTrack

@@ -21,7 +21,9 @@ fun MeetingResponseDto.toDomain(): Meeting {
         } catch (e: Exception) {
             MeetingStatus.UNKNOWN
         },
-        meetingCode = meetingCode
+        meetingCode = meetingCode,
+        hasJoinedBefore = hasJoinedBefore ?: false,
+        userParticipantStatus = userParticipantStatus
     )
 }
 

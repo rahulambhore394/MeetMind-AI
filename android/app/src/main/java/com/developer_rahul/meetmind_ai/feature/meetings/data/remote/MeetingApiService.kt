@@ -45,4 +45,10 @@ interface MeetingApiService {
 
     @POST("api/meetings/{meetingId}/participants/leave")
     suspend fun leaveMeeting(@Path("meetingId") meetingId: Long): ParticipantResponseDto
+
+    @GET("api/meetings/reports/all")
+    suspend fun getAllMeetingReports(): List<com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.MeetingReportSummaryDto>
+
+    @GET("api/meetings/{meetingId}/comprehensive-report")
+    suspend fun getComprehensiveReport(@Path("meetingId") meetingId: Long): com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.ComprehensiveReportDto
 }

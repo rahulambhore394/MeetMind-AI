@@ -1,5 +1,6 @@
 package com.meetmind.meetmind_backend.chat;
 
+import com.meetmind.meetmind_backend.chat.dto.ChatMessageRequest;
 import com.meetmind.meetmind_backend.chat.dto.ChatMessageResponse;
 
 import org.springframework.data.domain.Page;
@@ -42,5 +43,15 @@ public class ChatController {
                 pageable,
                 authentication
         );
+    }
+
+    @PostMapping("/{meetingId}/messages")
+    public ChatMessageResponse sendMessage(
+            @PathVariable Long meetingId,
+            @RequestBody ChatMessageRequest request,
+            Authentication authentication
+    ) {
+        request.setMeetingId(meetingId);
+        return chatService.sendMessage(request, authentication);
     }
 }
