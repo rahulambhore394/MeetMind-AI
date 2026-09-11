@@ -433,8 +433,13 @@ fun LiveMeetingScreen(
             .background(Color(0xFF0A0C14)) 
     ) {
         val currentUserId = meetingViewModel.currentUserId
-        val participantsList = uiState.participants
-        val totalParticipants = participantsList.size.coerceAtLeast(1)
+        val activeParticipants = uiState.participants.filter {
+            it.status == com.developer_rahul.meetmind_ai.feature.meetings.domain.model.ParticipantStatus.JOINED ||
+            (currentUserId > 0L && it.userId == currentUserId) ||
+            callState.participants.containsKey(it.userId)
+        }
+        val participantsList = activeParticipants.ifEmpty { uiState.participants }
+        val totalParticipants = activeParticipants.size.coerceAtLeast(1)
 
         val localScreenTrack = if (callState.isScreenSharing) callState.localScreenTrack else null
         val remoteScreenTrack = callState.participants.values.mapNotNull { it.screenTrack }.firstOrNull()
@@ -660,7 +665,7 @@ fun LiveMeetingScreen(
                             Icon(Icons.Default.People, null, tint = ElectricIndigo, modifier = Modifier.size(14.dp))
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                "${uiState.participants.size.coerceAtLeast(1)}",
+                                "$totalParticipants",
                                 color = TextPrimary,
                                 style = Typography.labelMedium,
                                 fontWeight = FontWeight.Bold

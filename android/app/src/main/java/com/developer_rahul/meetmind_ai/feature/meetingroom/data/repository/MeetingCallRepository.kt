@@ -98,7 +98,7 @@ class MeetingCallRepository(
             "JOIN" -> {
                 Log.d("MeetingCallRepo", "Peer $peerId joined meeting")
                 if (!peerConnections.containsKey(peerId)) {
-                    createPeerConnection(peerId, false)
+                    createPeerConnection(peerId, true)
                 }
             }
             "OFFER" -> {

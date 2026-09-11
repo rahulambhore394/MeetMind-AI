@@ -335,23 +335,27 @@ public class ParticipantService {
         }
 
 
-        MeetingParticipant participant =
-                getParticipant(
-                        meetingId,
-                        currentUserId
-                );
+        MeetingParticipant participant = participantRepository
+                .findByMeetingIdAndUserId(meetingId, currentUserId)
+                .orElseGet(() -> {
+                    User current = userRepository.findById(currentUserId)
+                            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+                    MeetingParticipant newPart = new MeetingParticipant();
+                    newPart.setMeeting(meeting);
+                    newPart.setUser(current);
+                    newPart.setRole(meeting.getHost().getId().equals(currentUserId) ? ParticipantRole.HOST : ParticipantRole.PARTICIPANT);
+                    newPart.setStatus(ParticipantStatus.ACCEPTED);
+                    return participantRepository.save(newPart);
+                });
 
-
-        ParticipantStatus status =
-                participant.getStatus();
-
+        ParticipantStatus status = participant.getStatus();
 
         if (
                 status != ParticipantStatus.ACCEPTED
-                        &&
-                        status != ParticipantStatus.LEFT
+                        && status != ParticipantStatus.LEFT
+                        && status != ParticipantStatus.JOINED
+                        && status != ParticipantStatus.INVITED
         ) {
-
             throw new ResponseStatusException(
                     HttpStatus.BAD_REQUEST,
                     "You cannot join this meeting"

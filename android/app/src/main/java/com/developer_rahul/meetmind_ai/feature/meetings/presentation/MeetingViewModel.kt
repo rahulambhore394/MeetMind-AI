@@ -154,6 +154,10 @@ class MeetingViewModel(
                 }
             }
         }
+
+        if (event is MeetingRealtimeEvent.ParticipantJoined || event is MeetingRealtimeEvent.ParticipantLeft) {
+            loadMeetingDetails(event.meetingId.toString())
+        }
     }
 
     fun loadMeetings() {

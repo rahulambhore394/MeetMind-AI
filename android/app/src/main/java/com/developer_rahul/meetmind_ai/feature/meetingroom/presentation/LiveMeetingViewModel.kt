@@ -9,8 +9,12 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import org.webrtc.VideoTrack
 
+import com.developer_rahul.meetmind_ai.feature.meetings.data.repository.MeetingRepository
+import android.util.Log
+
 class LiveMeetingViewModel(
     private val meetingCallRepository: MeetingCallRepository,
+    private val meetingRepository: MeetingRepository,
     private val meetingId: Long
 ) : ViewModel() {
 
@@ -33,6 +37,11 @@ class LiveMeetingViewModel(
     private fun joinMeeting() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
+            try {
+                meetingRepository.joinMeeting(meetingId)
+            } catch (e: Exception) {
+                Log.e("LiveMeetingVM", "Error executing REST joinMeeting: ${e.message}")
+            }
             meetingCallRepository.joinMeeting(meetingId)
             _uiState.update { it.copy(isLoading = false) }
         }
@@ -121,7 +130,14 @@ class LiveMeetingViewModel(
     }
 
     fun leaveMeeting() {
-        meetingCallRepository.leaveMeeting()
+        viewModelScope.launch {
+            try {
+                meetingRepository.leaveMeeting(meetingId)
+            } catch (e: Exception) {
+                Log.e("LiveMeetingVM", "Error executing REST leaveMeeting: ${e.message}")
+            }
+            meetingCallRepository.leaveMeeting()
+        }
     }
 
     override fun onCleared() {

@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -27,6 +28,8 @@ public class SignalingService {
     private final ParticipantRepository participantRepository;
     private final UserRepository userRepository;
     private final StringRedisTemplate redisTemplate;
+
+    private final java.util.concurrent.ConcurrentHashMap<Long, java.util.Set<Long>> memoryPresence = new java.util.concurrent.ConcurrentHashMap<>();
 
     public SignalingService(
             MeetingRepository meetingRepository,
@@ -57,6 +60,7 @@ public class SignalingService {
     }
 
     public void registerPresence(Long meetingId, Long userId, String sessionId) {
+        memoryPresence.computeIfAbsent(meetingId, k -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(userId);
         try {
             String presenceKey = "meeting:signaling:presence:" + meetingId;
             String sessionKey = "session:signaling:meeting:" + sessionId;
@@ -70,6 +74,13 @@ public class SignalingService {
     }
 
     public void evictPresence(Long meetingId, Long userId, String sessionId) {
+        Set<Long> localSet = memoryPresence.get(meetingId);
+        if (localSet != null) {
+            localSet.remove(userId);
+            if (localSet.isEmpty()) {
+                memoryPresence.remove(meetingId);
+            }
+        }
         try {
             String presenceKey = "meeting:signaling:presence:" + meetingId;
             String sessionKey = "session:signaling:meeting:" + sessionId;
@@ -82,20 +93,44 @@ public class SignalingService {
     }
 
     public Set<Long> getActivePeers(Long meetingId, Long excludeUserId) {
+        Set<Long> result = new java.util.HashSet<>();
+        
+        // 1. Check in-memory presence
+        Set<Long> memoryPeers = memoryPresence.get(meetingId);
+        if (memoryPeers != null) {
+            result.addAll(memoryPeers);
+        }
+
+        // 2. Check Redis presence if available
         try {
             String presenceKey = "meeting:signaling:presence:" + meetingId;
             Set<String> members = redisTemplate.opsForSet().members(presenceKey);
-            if (members == null) {
-                return Collections.emptySet();
+            if (members != null) {
+                for (String m : members) {
+                    try {
+                        result.add(Long.parseLong(m));
+                    } catch (Exception ignored) {}
+                }
             }
-            return members.stream()
-                    .map(Long::parseLong)
-                    .filter(id -> !id.equals(excludeUserId))
-                    .collect(Collectors.toSet());
         } catch (Exception e) {
             log.warn("Redis error on getActivePeers for meeting {}: {}", meetingId, e.getMessage());
-            return Collections.emptySet();
         }
+
+        // 3. Fallback to DB joined participants
+        try {
+            List<com.meetmind.meetmind_backend.participant.MeetingParticipant> joined = 
+                    participantRepository.findByMeetingId(meetingId);
+            for (com.meetmind.meetmind_backend.participant.MeetingParticipant p : joined) {
+                if (p.getStatus() == com.meetmind.meetmind_backend.participant.ParticipantStatus.JOINED && p.getUser() != null) {
+                    result.add(p.getUser().getId());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("DB fallback error on getActivePeers for meeting {}: {}", meetingId, e.getMessage());
+        }
+
+        result.remove(excludeUserId);
+        return result;
     }
 
     public Map<Long, String> getPeerNames(Set<Long> peerIds) {
