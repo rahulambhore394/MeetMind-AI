@@ -15,6 +15,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.http.HttpStatus;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
@@ -110,9 +111,14 @@ public class RecordingController {
         Path filePath = recordingService.getRecordingFile(meetingId, recordingId, user);
         Resource resource = new UrlResource(filePath.toUri());
 
+        String contentType = Files.probeContentType(filePath);
+        if (contentType == null) {
+            contentType = filePath.toString().endsWith(".m4a") ? "audio/mp4" : "application/octet-stream";
+        }
+
         return ResponseEntity.ok()
-                .contentType(MediaType.parseMediaType("video/mp4"))
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + resource.getFilename() + "\"")
+                .contentType(MediaType.parseMediaType(contentType))
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.getFilename() + "\"")
                 .body(resource);
     }
 

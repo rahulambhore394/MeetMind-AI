@@ -14,7 +14,7 @@ class FallbackNetworkInterceptor : Interceptor {
             if (currentHost.contains("onrender.com")) {
                 throw e
             }
-            val fallbackHosts = listOf("127.0.0.1", "10.0.2.2")
+            val fallbackHosts = listOf("127.0.0.1", "10.70.43.145", "10.0.2.2")
                 .filter { it != currentHost }
 
             for (fallbackHost in fallbackHosts) {

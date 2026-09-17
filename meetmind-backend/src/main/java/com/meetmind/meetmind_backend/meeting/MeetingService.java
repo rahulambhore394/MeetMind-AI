@@ -34,13 +34,15 @@ public class MeetingService {
     private final MeetingRepository meetingRepository;
     private final UserRepository userRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
+    private final com.meetmind.meetmind_backend.notification.EmailService emailService;
 
     public MeetingService(
             MeetingRepository meetingRepository,
             UserRepository userRepository,
             ParticipantRepository participantRepository,
             MeetingEventPublisher eventPublisher,
-            ApplicationEventPublisher applicationEventPublisher
+            ApplicationEventPublisher applicationEventPublisher,
+            com.meetmind.meetmind_backend.notification.EmailService emailService
     ) {
 
         this.meetingRepository =
@@ -57,6 +59,9 @@ public class MeetingService {
 
         this.applicationEventPublisher =
                 applicationEventPublisher;
+
+        this.emailService =
+                emailService;
     }
 
 
@@ -115,10 +120,12 @@ public class MeetingService {
         participantRepository.save(hostParticipant);
 
         // Process invited email participants if any
-        if (request.getInvitedEmails() != null) {
+        if (request.getInvitedEmails() != null && !request.getInvitedEmails().isEmpty()) {
+            java.util.List<String> cleanEmails = new java.util.ArrayList<>();
             for (String email : request.getInvitedEmails()) {
-                String cleanEmail = email.trim();
-                if (!cleanEmail.isEmpty()) {
+                if (email != null && !email.trim().isEmpty()) {
+                    String cleanEmail = email.trim();
+                    cleanEmails.add(cleanEmail);
                     userRepository.findByEmail(cleanEmail).ifPresent(invitedUser -> {
                         if (!invitedUser.getId().equals(host.getId())) {
                             MeetingParticipant invitedPart = new MeetingParticipant();
@@ -130,6 +137,18 @@ public class MeetingService {
                         }
                     });
                 }
+            }
+
+            if (!cleanEmails.isEmpty()) {
+                emailService.sendBatchMeetingInvitationEmailsAsync(
+                        cleanEmails,
+                        host.getName(),
+                        savedMeeting.getTitle(),
+                        savedMeeting.getDescription(),
+                        savedMeeting.getMeetingCode(),
+                        savedMeeting.getScheduledAt(),
+                        email -> userRepository.findByEmail(email).isPresent()
+                );
             }
         }
 

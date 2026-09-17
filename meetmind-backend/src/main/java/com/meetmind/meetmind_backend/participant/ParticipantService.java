@@ -4,6 +4,8 @@ package com.meetmind.meetmind_backend.participant;
 import com.meetmind.meetmind_backend.meeting.Meeting;
 import com.meetmind.meetmind_backend.meeting.MeetingRepository;
 import com.meetmind.meetmind_backend.meeting.MeetingStatus;
+import com.meetmind.meetmind_backend.participant.dto.BatchInviteRequest;
+import com.meetmind.meetmind_backend.participant.dto.BatchInviteResponse;
 import com.meetmind.meetmind_backend.participant.dto.InviteParticipantRequest;
 import com.meetmind.meetmind_backend.participant.dto.ParticipantResponse;
 import com.meetmind.meetmind_backend.user.User;
@@ -100,39 +102,41 @@ public class ParticipantService {
                 userRepository.findByEmail(email);
 
         boolean isRegistered = optionalUser.isPresent();
-        User user = optionalUser.orElse(null);
-
-        // Don't allow current user to invite themselves
-
-        if (isRegistered && user.getId().equals(currentUserId)) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "You cannot invite yourself"
-            );
-        }
-
-        MeetingParticipant participant = null;
-
+        User user;
         if (isRegistered) {
-            // Check duplicate or reuse
-            java.util.Optional<MeetingParticipant> existingOpt =
-                    participantRepository.findByMeetingIdAndUserId(meetingId, user.getId());
-            if (existingOpt.isPresent()) {
-                participant = existingOpt.get();
-            } else {
-                participant = new MeetingParticipant();
-                participant.setMeeting(meeting);
-                participant.setUser(user);
-                participant.setRole(ParticipantRole.PARTICIPANT);
-                participant.setStatus(ParticipantStatus.INVITED);
-                participant = participantRepository.save(participant);
-
-                applicationEventPublisher.publishEvent(
-                    new SpringMeetingInvitationEvent(
-                        this, meetingId, user.getId(), meeting.getTitle(), meeting.getHost().getName()
-                    )
+            user = optionalUser.get();
+            if (user.getId().equals(currentUserId)) {
+                throw new ResponseStatusException(
+                        HttpStatus.BAD_REQUEST,
+                        "You cannot invite yourself"
                 );
             }
+        } else {
+            user = new User();
+            user.setName(email.contains("@") ? email.substring(0, email.indexOf('@')) : email);
+            user.setEmail(email);
+            user.setPassword("INVITED_PLACEHOLDER_" + java.util.UUID.randomUUID());
+            user = userRepository.save(user);
+        }
+
+        MeetingParticipant participant;
+        java.util.Optional<MeetingParticipant> existingOpt =
+                participantRepository.findByMeetingIdAndUserId(meetingId, user.getId());
+        if (existingOpt.isPresent()) {
+            participant = existingOpt.get();
+        } else {
+            participant = new MeetingParticipant();
+            participant.setMeeting(meeting);
+            participant.setUser(user);
+            participant.setRole(ParticipantRole.PARTICIPANT);
+            participant.setStatus(ParticipantStatus.INVITED);
+            participant = participantRepository.save(participant);
+
+            applicationEventPublisher.publishEvent(
+                new SpringMeetingInvitationEvent(
+                    this, meetingId, user.getId(), meeting.getTitle(), meeting.getHost().getName()
+                )
+            );
         }
 
         if (meeting != null && meeting.getHost() != null) {
@@ -153,11 +157,89 @@ public class ParticipantService {
                 isRegistered
         );
 
-        if (participant != null) {
-            return new ParticipantResponse(participant);
-        } else {
-            return new ParticipantResponse(email, "PARTICIPANT", "INVITED");
+        return new ParticipantResponse(participant);
+    }
+
+    @Transactional
+    public BatchInviteResponse inviteParticipantsBatch(
+            Long meetingId,
+            BatchInviteRequest request,
+            Long currentUserId
+    ) {
+        Meeting meeting = getMeeting(meetingId);
+        verifyParticipantOrHost(meeting, currentUserId);
+
+        if (request == null || request.getEmails() == null || request.getEmails().isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "At least one email is required");
         }
+
+        java.util.List<String> processedEmails = new java.util.ArrayList<>();
+        int successCount = 0;
+
+        for (String rawEmail : request.getEmails()) {
+            if (rawEmail == null) continue;
+            String email = rawEmail.trim();
+            if (email.isEmpty()) continue;
+
+            java.util.Optional<User> optionalUser = userRepository.findByEmail(email);
+            boolean isRegistered = optionalUser.isPresent();
+            User user;
+
+            if (isRegistered) {
+                user = optionalUser.get();
+                if (user.getId().equals(currentUserId)) {
+                    // Skip self invitation in batch
+                    continue;
+                }
+            } else {
+                user = new User();
+                user.setName(email.contains("@") ? email.substring(0, email.indexOf('@')) : email);
+                user.setEmail(email);
+                user.setPassword("INVITED_PLACEHOLDER_" + java.util.UUID.randomUUID());
+                user = userRepository.save(user);
+            }
+
+            java.util.Optional<MeetingParticipant> existingOpt =
+                    participantRepository.findByMeetingIdAndUserId(meetingId, user.getId());
+            if (existingOpt.isEmpty()) {
+                MeetingParticipant participant = new MeetingParticipant();
+                participant.setMeeting(meeting);
+                participant.setUser(user);
+                participant.setRole(ParticipantRole.PARTICIPANT);
+                participant.setStatus(ParticipantStatus.INVITED);
+                participantRepository.save(participant);
+
+                applicationEventPublisher.publishEvent(
+                    new SpringMeetingInvitationEvent(
+                        this, meetingId, user.getId(), meeting.getTitle(), meeting.getHost().getName()
+                    )
+                );
+            }
+            processedEmails.add(email);
+            successCount++;
+        }
+
+        if (meeting != null && meeting.getHost() != null) {
+            org.hibernate.Hibernate.initialize(meeting.getHost());
+        }
+
+        // Asynchronously broadcast invitation emails to all processed recipients
+        emailService.sendBatchMeetingInvitationEmailsAsync(
+                processedEmails,
+                meeting.getHost().getName(),
+                meeting.getTitle(),
+                meeting.getDescription(),
+                meeting.getMeetingCode(),
+                meeting.getScheduledAt(),
+                email -> userRepository.findByEmail(email).isPresent()
+        );
+
+        return new BatchInviteResponse(
+                request.getEmails().size(),
+                successCount,
+                processedEmails,
+                "Batch invitations queued successfully"
+        );
     }
 
 

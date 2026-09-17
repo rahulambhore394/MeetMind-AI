@@ -94,10 +94,14 @@ class WebRtcManager(
         }
 
         val rtcIceServers = iceServers.map {
-            PeerConnection.IceServer.builder(it.urls)
-                .setUsername(it.username)
-                .setPassword(it.credential)
-                .createIceServer()
+            val builder = PeerConnection.IceServer.builder(it.urls)
+            if (!it.username.isNullOrBlank()) {
+                builder.setUsername(it.username)
+            }
+            if (!it.credential.isNullOrBlank()) {
+                builder.setPassword(it.credential)
+            }
+            builder.createIceServer()
         }
 
         val rtcConfig = PeerConnection.RTCConfiguration(rtcIceServers)

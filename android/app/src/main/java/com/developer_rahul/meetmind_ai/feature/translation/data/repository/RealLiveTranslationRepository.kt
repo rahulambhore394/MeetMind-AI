@@ -21,7 +21,7 @@ class RealLiveTranslationRepository(
 ) : LiveTranslationRepository {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val _subtitles = MutableSharedFlow<Subtitle>()
+    private val _subtitles = MutableSharedFlow<Subtitle>(replay = 1, extraBufferCapacity = 64)
     override val subtitles: SharedFlow<Subtitle> = _subtitles.asSharedFlow()
 
     init {

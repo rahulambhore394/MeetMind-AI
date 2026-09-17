@@ -2,9 +2,12 @@ package com.developer_rahul.meetmind_ai.feature.meetingroom.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.developer_rahul.meetmind_ai.core.media.tts.TextToSpeechManager
+import com.developer_rahul.meetmind_ai.core.network.websocket.MeetingWebSocketManager
 import com.developer_rahul.meetmind_ai.feature.meetingroom.data.repository.MeetingCallRepository
 import com.developer_rahul.meetmind_ai.feature.meetingroom.domain.model.MeetingCallEvent
 import com.developer_rahul.meetmind_ai.feature.meetingroom.domain.model.ParticipantMediaState
+import com.developer_rahul.meetmind_ai.feature.representative.data.remote.dto.AiProxySpeechDto
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import org.webrtc.VideoTrack
@@ -15,6 +18,8 @@ import android.util.Log
 class LiveMeetingViewModel(
     private val meetingCallRepository: MeetingCallRepository,
     private val meetingRepository: MeetingRepository,
+    private val meetingWebSocketManager: MeetingWebSocketManager,
+    private val textToSpeechManager: TextToSpeechManager,
     private val meetingId: Long
 ) : ViewModel() {
 
@@ -23,6 +28,7 @@ class LiveMeetingViewModel(
 
     init {
         observeEvents()
+        observeAiProxySpeech()
         joinMeeting()
     }
 
@@ -30,6 +36,34 @@ class LiveMeetingViewModel(
         viewModelScope.launch {
             meetingCallRepository.events.collect { event ->
                 handleEvent(event)
+            }
+        }
+    }
+
+    private fun observeAiProxySpeech() {
+        viewModelScope.launch {
+            meetingWebSocketManager.aiProxySpeech.collect { dto ->
+                if (dto.meetingId == meetingId) {
+                    Log.d("LiveMeetingVM", "AI Proxy Speech received: ${dto.spokenText} for owner ${dto.ownerName}")
+                    _uiState.update { it.copy(activeAiSpeech = dto) }
+
+                    // Synthesize spoken voice in real time through in-call audio
+                    textToSpeechManager.speak(dto.spokenText, dto.language)
+
+                    // Animate AI Representative speaking state
+                    updateParticipantState(dto.ownerId) { it.copy(isSpeaking = true) }
+
+                    // Auto-dismiss speaking indicator after estimated speech duration
+                    val words = dto.spokenText.split("\\s+".toRegex()).size
+                    val durationMs = ((words / 2.5) * 1000L).toLong().coerceIn(3500L, 20000L)
+                    launch {
+                        kotlinx.coroutines.delay(durationMs)
+                        _uiState.update { current ->
+                            if (current.activeAiSpeech == dto) current.copy(activeAiSpeech = null) else current
+                        }
+                        updateParticipantState(dto.ownerId) { it.copy(isSpeaking = false) }
+                    }
+                }
             }
         }
     }
@@ -42,6 +76,7 @@ class LiveMeetingViewModel(
             } catch (e: Exception) {
                 Log.e("LiveMeetingVM", "Error executing REST joinMeeting: ${e.message}")
             }
+            meetingWebSocketManager.subscribeToAiProxySpeech(meetingId)
             meetingCallRepository.joinMeeting(meetingId)
             _uiState.update { it.copy(isLoading = false) }
         }
@@ -136,12 +171,16 @@ class LiveMeetingViewModel(
             } catch (e: Exception) {
                 Log.e("LiveMeetingVM", "Error executing REST leaveMeeting: ${e.message}")
             }
+            meetingWebSocketManager.unsubscribeFromAiProxySpeech(meetingId)
+            textToSpeechManager.stop()
             meetingCallRepository.leaveMeeting()
         }
     }
 
     override fun onCleared() {
         super.onCleared()
+        meetingWebSocketManager.unsubscribeFromAiProxySpeech(meetingId)
+        textToSpeechManager.stop()
         meetingCallRepository.leaveMeeting()
     }
 }
@@ -152,5 +191,6 @@ data class LiveMeetingUiState(
     val localScreenTrack: VideoTrack? = null,
     val participants: Map<Long, ParticipantMediaState> = emptyMap(),
     val isScreenSharing: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val activeAiSpeech: AiProxySpeechDto? = null
 )

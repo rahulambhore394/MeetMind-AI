@@ -56,6 +56,20 @@ fun MeetingsScreen(
         "History (${uiState.pastMeetings.size})"
     )
 
+    LaunchedEffect(Unit) {
+        viewModel.loadMeetings()
+    }
+
+    LaunchedEffect(uiState.joinSuccess) {
+        if (uiState.joinSuccess) {
+            val selected = uiState.selectedMeeting
+            viewModel.resetJoinState()
+            if (selected != null) {
+                onMeetingClick(selected.id.toString())
+            }
+        }
+    }
+
     if (showFilterSheet) {
         FilterMeetingsSheet(
             onDismiss = { showFilterSheet = false },

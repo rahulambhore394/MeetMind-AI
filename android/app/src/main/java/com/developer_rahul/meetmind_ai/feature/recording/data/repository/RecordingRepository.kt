@@ -15,6 +15,11 @@ interface RecordingRepository {
         fileUri: String,
         onProgress: (Int) -> Unit
     ): NetworkResult<RecordingResponseDto>
+    suspend fun downloadRecording(
+        meetingId: Long,
+        recordingId: Long,
+        destinationFile: java.io.File
+    ): NetworkResult<java.io.File>
     fun subscribeToRecordingEvents(meetingId: Long)
     fun unsubscribeFromRecordingEvents(meetingId: Long)
 }

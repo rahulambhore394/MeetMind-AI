@@ -34,6 +34,9 @@ fun MeetingDetailsScreen(
     onBack: () -> Unit,
     onJoin: () -> Unit,
     onConfigureRep: () -> Unit,
+    onPlayRecording: (String, String) -> Unit = { _, _ -> },
+    onViewIntelligence: (String) -> Unit = { _ -> },
+    onViewReport: (String) -> Unit = { _ -> },
     viewModel: MeetingViewModel = viewModel(factory = ViewModelFactory)
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -304,6 +307,159 @@ fun MeetingDetailsScreen(
                     }
                 }
 
+                // AI Intelligence Hero Card
+                Spacer(modifier = Modifier.height(28.dp))
+                SectionHeader(title = "AI Meeting Intelligence")
+                
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    color = CardSurface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = ElectricIndigo.copy(alpha = 0.2f),
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = ElectricIndigo, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Text("AI Insights & Summary", style = Typography.titleMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                    Text(
+                                        if (uiState.intelligenceSummary != null) "Analysis Ready ⚡" else "Automated Intelligence Active", 
+                                        style = Typography.labelSmall, 
+                                        color = if (uiState.intelligenceSummary != null) EmeraldGreen else NeonCyan
+                                    )
+                                }
+                            }
+                        }
+
+                        // Metrics Pill Badges if Intelligence is Loaded
+                        val intel = uiState.intelligenceSummary
+                        if (intel != null) {
+                            Spacer(Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                if (intel.actionItems.isNotEmpty()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = EmeraldGreen.copy(alpha = 0.12f),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, EmeraldGreen.copy(alpha = 0.25f))
+                                    ) {
+                                        Text(
+                                            "✓ ${intel.actionItems.size} Tasks",
+                                            style = Typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = EmeraldGreen,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                                if (intel.decisions.isNotEmpty()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = ElectricIndigo.copy(alpha = 0.12f),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, ElectricIndigo.copy(alpha = 0.25f))
+                                    ) {
+                                        Text(
+                                            "⚖ ${intel.decisions.size} Decisions",
+                                            style = Typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = ElectricIndigo,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                                if (intel.topics.isNotEmpty()) {
+                                    Surface(
+                                        shape = RoundedCornerShape(8.dp),
+                                        color = NeonCyan.copy(alpha = 0.12f),
+                                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.25f))
+                                    ) {
+                                        Text(
+                                            "🏷 ${intel.topics.size} Topics",
+                                            style = Typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = NeonCyan,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(14.dp))
+
+                        val summaryText = intel?.summary
+                        Text(
+                            text = summaryText ?: "Meeting intelligence automatically synthesizes discussions, isolates key decisions, extracts action items with deadlines, and computes speaker analytics.",
+                            style = Typography.bodyMedium,
+                            color = TextSecondary,
+                            lineHeight = 20.sp,
+                            maxLines = 4
+                        )
+
+                        // If key discussion points exist, show top 2 bullets
+                        if (intel != null && intel.keyPoints.isNotEmpty()) {
+                            Spacer(Modifier.height(12.dp))
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                intel.keyPoints.take(2).forEach { point ->
+                                    Row(
+                                        verticalAlignment = Alignment.Top,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text("•", color = NeonCyan, fontWeight = FontWeight.Bold, style = Typography.bodySmall)
+                                        Spacer(Modifier.width(6.dp))
+                                        Text(point, color = TextPrimary, style = Typography.bodySmall, maxLines = 2)
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(16.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Button(
+                                onClick = { onViewIntelligence(meetingId) },
+                                modifier = Modifier.weight(1f).height(46.dp),
+                                shape = MaterialTheme.shapes.medium,
+                                colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo)
+                            ) {
+                                Icon(Icons.Default.Psychology, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("AI Studio", style = Typography.labelMedium, fontWeight = FontWeight.Bold)
+                            }
+
+                            OutlinedButton(
+                                onClick = { onViewReport(meetingId) },
+                                modifier = Modifier.weight(1f).height(46.dp),
+                                shape = MaterialTheme.shapes.medium,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor)
+                            ) {
+                                Icon(Icons.Default.Assessment, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(18.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("Full Report", style = Typography.labelMedium, color = TextPrimary)
+                            }
+                        }
+                    }
+                }
+
                 if (uiState.recordings.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(28.dp))
                     SectionHeader(title = "Recordings")
@@ -314,7 +470,9 @@ fun MeetingDetailsScreen(
                                 date = recording.createdAt.take(10),
                                 duration = recording.duration?.let { "${it / 60}:${String.format("%02d", it % 60)}" } ?: "Processing",
                                 status = recording.status,
-                                onClick = { /* Navigate to player if ready */ }
+                                onClick = {
+                                    onPlayRecording(recording.id.toString(), meetingId)
+                                }
                             )
                         }
                     }
@@ -385,6 +543,8 @@ fun ParticipantRow(name: String, status: String, isOnline: Boolean = false, isHo
             }
             if (isHost) {
                 StatusChip(text = "Host 👑", color = AmberGold)
+            } else if (status.equals("INVITED", ignoreCase = true)) {
+                StatusChip(text = "INVITED", color = Color(0xFFD97706))
             } else {
                 StatusChip(text = "Participant", color = TextSecondary)
             }

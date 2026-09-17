@@ -35,9 +35,10 @@ data class StompFrame(
                     headers[headerParts[0].trim()] = headerParts[1].trim()
                 }
             }
-            val body = if (bodyIndex < lines.size) {
+            val bodyContent = if (bodyIndex < lines.size) {
                 lines.subList(bodyIndex, lines.size).joinToString("\n").replace("\u0000", "").trim()
             } else null
+            val body = if (bodyContent.isNullOrEmpty()) null else bodyContent
             
             return StompFrame(command, headers, body)
         }

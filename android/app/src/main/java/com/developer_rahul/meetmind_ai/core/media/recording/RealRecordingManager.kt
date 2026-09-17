@@ -41,20 +41,37 @@ class RealRecordingManager(
     private val projectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 
     override fun startRecording(meetingId: Long, projectionData: Intent) {
-        if (_state.value.status != RecordingStatus.IDLE) return
+        if (_state.value.status == RecordingStatus.RECORDING || _state.value.status == RecordingStatus.STARTING) return
 
-        _state.update { it.copy(status = RecordingStatus.STARTING, meetingId = meetingId) }
+        timerJob?.cancel()
+        _state.value = RecordingState(
+            status = RecordingStatus.STARTING,
+            meetingId = meetingId,
+            durationMs = 0L
+        )
 
         try {
             val file = File(context.cacheDir, "recording_${meetingId}_${System.currentTimeMillis()}.mp4")
             
-            mediaRecorder = createMediaRecorder(file)
-            mediaProjection = projectionManager.getMediaProjection(-1, projectionData)
-            
             val metrics = context.resources.displayMetrics
-            val width = metrics.widthPixels
-            val height = metrics.heightPixels
+            var width = metrics.widthPixels
+            var height = metrics.heightPixels
+            if (width % 2 != 0) width -= 1
+            if (height % 2 != 0) height -= 1
             val density = metrics.densityDpi
+
+            mediaRecorder = createMediaRecorder(file, width, height)
+
+            // Android Q+ requires the MediaProjection foreground service to be running BEFORE creating virtual display
+            RecordingService.startService(context, isAudioOnly = false)
+
+            mediaProjection = projectionManager.getMediaProjection(-1, projectionData)
+            mediaProjection?.registerCallback(object : MediaProjection.Callback() {
+                override fun onStop() {
+                    Log.d(TAG, "MediaProjection stopped by system")
+                    stopRecording()
+                }
+            }, null)
 
             virtualDisplay = mediaProjection?.createVirtualDisplay(
                 "MeetingRecording",
@@ -66,24 +83,81 @@ class RealRecordingManager(
 
             mediaRecorder?.start()
             
-            RecordingService.startService(context)
-            
+            val now = System.currentTimeMillis()
             _state.update { it.copy(
                 status = RecordingStatus.RECORDING,
                 localUri = file.absolutePath,
-                startTime = System.currentTimeMillis()
+                startTime = now,
+                durationMs = 0L
             ) }
             
-            startTimer()
+            startTimer(now)
             
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start recording", e)
+            Log.e(TAG, "Failed to start screen recording", e)
             _state.update { it.copy(status = RecordingStatus.FAILED, error = e.message) }
             cleanup()
         }
     }
 
-    private fun createMediaRecorder(file: File): MediaRecorder {
+    override fun startAudioOnlyRecording(meetingId: Long) {
+        if (_state.value.status == RecordingStatus.RECORDING || _state.value.status == RecordingStatus.STARTING) return
+
+        timerJob?.cancel()
+        _state.value = RecordingState(
+            status = RecordingStatus.STARTING,
+            meetingId = meetingId,
+            durationMs = 0L
+        )
+
+        scope.launch {
+            try {
+                val file = File(context.cacheDir, "recording_audio_${meetingId}_${System.currentTimeMillis()}.m4a")
+
+                // Android 12+ requires FOREGROUND_SERVICE_TYPE_MICROPHONE to be running
+                // BEFORE audio capture begins
+                RecordingService.startService(context, isAudioOnly = true)
+                // Give the service a moment to start foreground
+                delay(300)
+
+                val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                    MediaRecorder(context)
+                } else {
+                    @Suppress("DEPRECATION")
+                    MediaRecorder()
+                }
+
+                recorder.setAudioSource(MediaRecorder.AudioSource.MIC)
+                recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                recorder.setAudioEncodingBitRate(128000)
+                recorder.setAudioSamplingRate(44100)
+                recorder.setOutputFile(file.absolutePath)
+                recorder.prepare()
+                recorder.start()
+                mediaRecorder = recorder
+
+                val now = System.currentTimeMillis()
+                _state.update { it.copy(
+                    status = RecordingStatus.RECORDING,
+                    localUri = file.absolutePath,
+                    startTime = now,
+                    durationMs = 0L
+                ) }
+
+                startTimer(now)
+                Log.d(TAG, "Audio-only recording started: ${file.absolutePath}")
+
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to start audio-only recording", e)
+                RecordingService.stopService(context)
+                _state.update { it.copy(status = RecordingStatus.FAILED, error = e.message) }
+                cleanup()
+            }
+        }
+    }
+
+    private fun createMediaRecorder(file: File, width: Int, height: Int): MediaRecorder {
         val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             MediaRecorder(context)
         } else {
@@ -95,7 +169,7 @@ class RealRecordingManager(
         recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
         recorder.setVideoEncoder(MediaRecorder.VideoEncoder.H264)
         recorder.setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-        recorder.setVideoSize(1280, 720)
+        recorder.setVideoSize(width, height)
         recorder.setVideoFrameRate(30)
         recorder.setVideoEncodingBitRate(3 * 1024 * 1024)
         recorder.setOutputFile(file.absolutePath)
@@ -107,18 +181,22 @@ class RealRecordingManager(
     override fun stopRecording() {
         if (_state.value.status != RecordingStatus.RECORDING && _state.value.status != RecordingStatus.PAUSED) return
 
+        // Capture URI before any cleanup so ViewModel can snapshot it
+        val capturedUri = _state.value.localUri
         _state.update { it.copy(status = RecordingStatus.STOPPING) }
-        
+        timerJob?.cancel()
+
         try {
             mediaRecorder?.stop()
+            Log.d(TAG, "MediaRecorder stopped. File: $capturedUri (${java.io.File(capturedUri ?: "").length()} bytes)")
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping MediaRecorder", e)
         }
-        
+
         RecordingService.stopService(context)
-        
-        timerJob?.cancel()
-        _state.update { it.copy(status = RecordingStatus.COMPLETED) }
+
+        // Keep localUri in COMPLETED state so ViewModel can read it before cleanup
+        _state.update { it.copy(status = RecordingStatus.COMPLETED, localUri = capturedUri) }
         cleanup()
     }
 
@@ -138,7 +216,8 @@ class RealRecordingManager(
         if (_state.value.status == RecordingStatus.PAUSED) {
             try {
                 mediaRecorder?.resume()
-                startTimer()
+                val baseTime = _state.value.startTime ?: System.currentTimeMillis()
+                startTimer(baseTime)
                 _state.update { it.copy(status = RecordingStatus.RECORDING) }
             } catch (e: Exception) {
                 Log.e(TAG, "Failed to resume", e)
@@ -146,13 +225,13 @@ class RealRecordingManager(
         }
     }
 
-    private fun startTimer() {
+    private fun startTimer(baseTime: Long) {
         timerJob?.cancel()
         timerJob = scope.launch {
-            val baseTime = _state.value.startTime ?: System.currentTimeMillis()
             while (true) {
                 delay(1000)
-                _state.update { it.copy(durationMs = System.currentTimeMillis() - baseTime) }
+                val elapsed = System.currentTimeMillis() - baseTime
+                _state.update { it.copy(durationMs = elapsed) }
             }
         }
     }
@@ -167,7 +246,15 @@ class RealRecordingManager(
         mediaRecorder = null
     }
 
+    override fun reset() {
+        timerJob?.cancel()
+        timerJob = null
+        cleanup()
+        _state.value = RecordingState()
+    }
+
     override fun release() {
         stopRecording()
+        reset()
     }
 }

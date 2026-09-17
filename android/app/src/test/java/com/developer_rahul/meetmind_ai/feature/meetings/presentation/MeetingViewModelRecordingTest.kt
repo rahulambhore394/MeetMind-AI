@@ -31,6 +31,8 @@ class MeetingViewModelRecordingTest {
     private val recordingRepository: RecordingRepository = mockk(relaxed = true)
     private val intelligenceRepository: IntelligenceRepository = mockk(relaxed = true)
     private val recordingManager: RecordingManager = mockk(relaxed = true)
+    private val recordingUploadManager: com.developer_rahul.meetmind_ai.core.media.recording.RecordingUploadManager = mockk(relaxed = true)
+    private val tokenProvider: com.developer_rahul.meetmind_ai.core.network.token.TokenProvider = mockk(relaxed = true)
 
     private lateinit var viewModel: MeetingViewModel
     private val testDispatcher = StandardTestDispatcher()
@@ -39,13 +41,18 @@ class MeetingViewModelRecordingTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         every { recordingManager.state } returns MutableStateFlow(RecordingState())
+        every { webSocketManager.events } returns kotlinx.coroutines.flow.MutableSharedFlow<com.developer_rahul.meetmind_ai.feature.meetings.domain.model.MeetingRealtimeEvent>()
+        every { presenceRepository.onlineParticipantIds } returns MutableStateFlow<Set<Long>>(emptySet())
+        every { recordingRepository.recordingEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<Map<String, String>>()
         viewModel = MeetingViewModel(
             meetingRepository,
             webSocketManager,
             presenceRepository,
             recordingRepository,
             intelligenceRepository,
-            recordingManager
+            recordingManager,
+            recordingUploadManager,
+            tokenProvider
         )
     }
 

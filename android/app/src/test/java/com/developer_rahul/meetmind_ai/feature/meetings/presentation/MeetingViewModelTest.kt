@@ -22,6 +22,9 @@ class MeetingViewModelTest {
     private val presenceRepository = mockk<com.developer_rahul.meetmind_ai.feature.meetings.data.repository.PresenceRepository>(relaxed = true)
     private val recordingRepository = mockk<com.developer_rahul.meetmind_ai.feature.recording.data.repository.RecordingRepository>(relaxed = true)
     private val intelligenceRepository = mockk<com.developer_rahul.meetmind_ai.feature.intelligence.data.repository.IntelligenceRepository>(relaxed = true)
+    private val recordingManager = mockk<com.developer_rahul.meetmind_ai.core.media.recording.RecordingManager>(relaxed = true)
+    private val recordingUploadManager = mockk<com.developer_rahul.meetmind_ai.core.media.recording.RecordingUploadManager>(relaxed = true)
+    private val tokenProvider = mockk<com.developer_rahul.meetmind_ai.core.network.token.TokenProvider>(relaxed = true)
     private lateinit var viewModel: MeetingViewModel
     private val testDispatcher = UnconfinedTestDispatcher()
 
@@ -35,7 +38,10 @@ class MeetingViewModelTest {
             webSocketManager, 
             presenceRepository, 
             recordingRepository, 
-            intelligenceRepository
+            intelligenceRepository,
+            recordingManager,
+            recordingUploadManager,
+            tokenProvider
         )
     }
 

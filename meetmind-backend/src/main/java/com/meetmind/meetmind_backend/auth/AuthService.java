@@ -31,7 +31,14 @@ public class AuthService {
 
     public User register(RegisterRequest request) {
 
-        if (userRepository.existsByEmail(request.getEmail())) {
+        java.util.Optional<User> existingUserOpt = userRepository.findByEmail(request.getEmail());
+        if (existingUserOpt.isPresent()) {
+            User existingUser = existingUserOpt.get();
+            if (existingUser.getPassword() != null && existingUser.getPassword().startsWith("INVITED_PLACEHOLDER_")) {
+                existingUser.setName(request.getName());
+                existingUser.setPassword(passwordEncoder.encode(request.getPassword()));
+                return userRepository.save(existingUser);
+            }
             throw new ResponseStatusException(
                     HttpStatus.CONFLICT,
                     "Email already registered"

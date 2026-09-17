@@ -5,6 +5,8 @@ import com.developer_rahul.meetmind_ai.core.webrtc.WebRtcManager
 import com.developer_rahul.meetmind_ai.core.webrtc.data.remote.WebRtcApiService
 import io.mockk.mockk
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.MutableSharedFlow
+import io.mockk.every
 import org.junit.Before
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -17,6 +19,7 @@ class MeetingCallRepositoryTest {
 
     @Before
     fun setup() {
+        every { webSocketManager.signalingMessages } returns MutableSharedFlow()
         repository = MeetingCallRepository(apiService, webSocketManager, webRtcManager)
     }
 

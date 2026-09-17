@@ -204,6 +204,13 @@ class StandaloneMeetingRepository : MeetingRepository {
         return NetworkResult.Success(participant)
     }
 
+    override suspend fun batchInviteParticipants(
+        meetingId: Long,
+        emails: List<String>
+    ): NetworkResult<Unit> {
+        return NetworkResult.Success(Unit)
+    }
+
     override suspend fun getAllMeetingReports(): NetworkResult<List<com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.MeetingReportSummaryDto>> {
         return NetworkResult.Success(emptyList())
     }

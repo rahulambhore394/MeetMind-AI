@@ -1,5 +1,6 @@
 package com.developer_rahul.meetmind_ai.feature.meetings.data.remote
 
+import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.BatchInviteRequestDto
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.CreateMeetingRequestDto
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.InviteParticipantRequestDto
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.MeetingResponseDto
@@ -39,6 +40,12 @@ interface MeetingApiService {
         @Path("meetingId") meetingId: Long,
         @Body request: InviteParticipantRequestDto
     ): ParticipantResponseDto
+
+    @POST("api/meetings/{meetingId}/participants/batch")
+    suspend fun batchInviteParticipants(
+        @Path("meetingId") meetingId: Long,
+        @Body request: BatchInviteRequestDto
+    ): com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.BatchInviteResponseDto
 
     @POST("api/meetings/{meetingId}/participants/join")
     suspend fun joinMeeting(@Path("meetingId") meetingId: Long): ParticipantResponseDto

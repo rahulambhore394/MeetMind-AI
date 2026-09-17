@@ -15,6 +15,7 @@
     <!-- Required for screen recording or persistent background meeting tasks -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
     <!-- Features -->
     <!-- Declaring camera hardware requirements as optional to support devices without cameras -->
@@ -43,7 +44,7 @@
             android:name=".core.media.recording.RecordingService"
             android:enabled="true"
             android:exported="false"
-            android:foregroundServiceType="mediaProjection" />
+            android:foregroundServiceType="mediaProjection|microphone" />
 
         <!-- Service for handling Firebase Cloud Messaging (FCM) notifications -->
         <service

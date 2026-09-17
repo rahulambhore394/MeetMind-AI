@@ -50,3 +50,6 @@ yarn-error.log*
 *.env
 application-local.yml
 application-secrets.yml
+
+# Scratch
+scratch/

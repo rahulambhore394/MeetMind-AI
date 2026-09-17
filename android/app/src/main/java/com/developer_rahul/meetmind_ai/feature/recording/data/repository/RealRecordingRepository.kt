@@ -56,11 +56,30 @@ class RealRecordingRepository(
     ): NetworkResult<RecordingResponseDto> = withContext(Dispatchers.IO) {
         try {
             val file = File(fileUri)
-            val requestFile = ProgressRequestBody(file, "video/mp4".toMediaTypeOrNull(), onProgress)
+            val mime = if (file.name.endsWith(".m4a")) "audio/mp4" else "video/mp4"
+            val requestFile = ProgressRequestBody(file, mime.toMediaTypeOrNull(), onProgress)
             val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
             
             val response = recordingApiService.uploadRecordingFile(meetingId, recordingId, body)
             NetworkResult.Success(response)
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun downloadRecording(
+        meetingId: Long,
+        recordingId: Long,
+        destinationFile: File
+    ): NetworkResult<File> = withContext(Dispatchers.IO) {
+        try {
+            val body = recordingApiService.downloadRecordingFile(meetingId, recordingId)
+            body.byteStream().use { input ->
+                destinationFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            }
+            NetworkResult.Success(destinationFile)
         } catch (e: Exception) {
             NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
         }

@@ -3,6 +3,7 @@ package com.developer_rahul.meetmind_ai.feature.meetings.data.repository
 import com.developer_rahul.meetmind_ai.core.network.error.ErrorMapper
 import com.developer_rahul.meetmind_ai.core.network.model.NetworkResult
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.MeetingApiService
+import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.BatchInviteRequestDto
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.ComprehensiveReportDto
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.CreateMeetingRequestDto
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.InviteParticipantRequestDto
@@ -118,6 +119,18 @@ class RealMeetingRepository(
         return try {
             val response = meetingApiService.inviteParticipant(meetingId, InviteParticipantRequestDto(email))
             NetworkResult.Success(response.toDomain())
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun batchInviteParticipants(
+        meetingId: Long,
+        emails: List<String>
+    ): NetworkResult<Unit> {
+        return try {
+            meetingApiService.batchInviteParticipants(meetingId, BatchInviteRequestDto(emails))
+            NetworkResult.Success(Unit)
         } catch (e: Exception) {
             NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
         }

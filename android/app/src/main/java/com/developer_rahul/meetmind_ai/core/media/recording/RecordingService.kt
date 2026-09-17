@@ -25,9 +25,15 @@ class RecordingService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val notification = createNotification()
+        val isAudioOnly = intent?.getBooleanExtra(EXTRA_AUDIO_ONLY, false) ?: false
         
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION)
+            val type = if (isAudioOnly && Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            } else {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
+            }
+            startForeground(NOTIFICATION_ID, notification, type)
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
@@ -58,8 +64,12 @@ class RecordingService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     companion object {
-        fun startService(context: Context) {
-            val startIntent = Intent(context, RecordingService::class.java)
+        const val EXTRA_AUDIO_ONLY = "extra_audio_only"
+
+        fun startService(context: Context, isAudioOnly: Boolean = false) {
+            val startIntent = Intent(context, RecordingService::class.java).apply {
+                putExtra(EXTRA_AUDIO_ONLY, isAudioOnly)
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(startIntent)
             } else {

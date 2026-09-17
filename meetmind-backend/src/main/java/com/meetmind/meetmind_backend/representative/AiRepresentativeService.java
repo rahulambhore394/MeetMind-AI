@@ -219,6 +219,19 @@ public class AiRepresentativeService {
         return representativeRepository.save(rep);
     }
 
+    public List<AiRepresentative> getActiveRepresentativesForMeeting(Long meetingId) {
+        return representativeRepository.findByMeetingIdAndStatus(meetingId, RepresentativeStatus.ACTIVE);
+    }
+
+    public List<String> fromJsonList(String json) {
+        if (json == null || json.isBlank()) return new ArrayList<>();
+        try {
+            return objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {});
+        } catch (JsonProcessingException e) {
+            return new ArrayList<>();
+        }
+    }
+
     public AiRepresentative getRepresentativeForMeeting(Long meetingId, User user) {
         verifyMeetingAccess(meetingId, user.getId());
         return representativeRepository.findByMeetingIdAndOwnerId(meetingId, user.getId())

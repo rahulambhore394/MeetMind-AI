@@ -81,22 +81,33 @@ public class MeetingIntelligenceController {
     @PostMapping("/api/meetings/{meetingId}/intelligence/generate")
     public ResponseEntity<MeetingIntelligenceService.SummaryDetailView> triggerAnalysis(
             @PathVariable Long meetingId,
-            @RequestBody(required = false) Map<String, Long> requestBody,
+            @RequestBody(required = false) Map<String, Object> requestBody,
             Authentication authentication
     ) {
         User user = extractUser(authentication);
-        Long transcriptId = (requestBody != null) ? requestBody.get("transcriptId") : null;
-
-        if (transcriptId == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "transcriptId is required in request body");
+        Long transcriptId = null;
+        if (requestBody != null && requestBody.containsKey("transcriptId")) {
+            Object raw = requestBody.get("transcriptId");
+            if (raw instanceof Number n) {
+                transcriptId = n.longValue();
+            } else if (raw != null) {
+                try {
+                    transcriptId = Long.parseLong(raw.toString());
+                } catch (NumberFormatException ignored) {}
+            }
         }
 
-        try {
-            MeetingIntelligenceService.SummaryDetailView summary = intelligenceService.triggerAnalysis(meetingId, transcriptId, user);
-            return ResponseEntity.ok(summary);
-        } catch (IntelligenceException e) {
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "AI Intelligence analysis failed: " + e.getMessage());
+        if (transcriptId != null) {
+            try {
+                MeetingIntelligenceService.SummaryDetailView summary = intelligenceService.triggerAnalysis(meetingId, transcriptId, user);
+                return ResponseEntity.ok(summary);
+            } catch (Exception e) {
+                // fallback to auto-generation
+            }
         }
+
+        intelligenceService.autoGenerateSummaryOnMeetingEnd(meetingId);
+        return ResponseEntity.ok(intelligenceService.getSummaryDetail(meetingId, user));
     }
 
     private User extractUser(Authentication authentication) {

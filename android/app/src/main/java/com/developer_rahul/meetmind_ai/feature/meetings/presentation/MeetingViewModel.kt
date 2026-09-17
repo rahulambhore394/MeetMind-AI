@@ -165,12 +165,13 @@ class MeetingViewModel(
             _uiState.update { it.copy(isLoading = true, error = null) }
             when (val result = meetingRepository.getAllMeetings()) {
                 is NetworkResult.Success -> {
+                    val sorted = result.data.sortedByDescending { it.id }
                     _uiState.update { it.copy(
                         isLoading = false,
-                        meetings = result.data,
-                        upcomingMeetings = result.data.filter { m -> m.status == MeetingStatus.SCHEDULED },
-                        liveMeetings = result.data.filter { m -> m.status == MeetingStatus.LIVE },
-                        pastMeetings = result.data.filter { m -> m.status == MeetingStatus.ENDED }
+                        meetings = sorted,
+                        upcomingMeetings = sorted.filter { m -> m.status == MeetingStatus.SCHEDULED },
+                        liveMeetings = sorted.filter { m -> m.status == MeetingStatus.LIVE },
+                        pastMeetings = sorted.filter { m -> m.status == MeetingStatus.ENDED }
                     ) }
                 }
                 is NetworkResult.Error -> {
@@ -236,9 +237,13 @@ class MeetingViewModel(
 
                 when (recordingsResult) {
                     is NetworkResult.Success -> {
+                        // isRecording is true only when backend says STARTED *and* local recording is active.
+                        // This prevents ghost REC 00:00 badge appearing on re-join from a stale backend recording.
+                        val backendRecording = recordingsResult.data.any { it.status == "STARTED" }
+                        val locallyRecording = recordingManager.state.value.status == RecordingStatus.RECORDING
                         newState = newState.copy(
                             recordings = recordingsResult.data,
-                            isRecording = recordingsResult.data.any { it.status == "STARTED" }
+                            isRecording = backendRecording && locallyRecording
                         )
                     }
                     else -> {}
@@ -273,8 +278,15 @@ class MeetingViewModel(
             _uiState.update { it.copy(actionInProgress = true) }
             when (val result = recordingRepository.startRecording(meetingId)) {
                 is NetworkResult.Success -> {
+                    val recording = result.data
+                    _uiState.update { state ->
+                        state.copy(
+                            actionInProgress = false,
+                            isRecording = true,
+                            recordings = state.recordings.filter { it.id != recording.id } + recording
+                        )
+                    }
                     recordingManager.startRecording(meetingId, projectionData)
-                    _uiState.update { it.copy(actionInProgress = false) }
                 }
                 is NetworkResult.Error -> {
                     _uiState.update { it.copy(actionInProgress = false, error = result.error.message) }
@@ -286,18 +298,75 @@ class MeetingViewModel(
         }
     }
 
-    fun stopRecording(meetingId: Long, recordingId: Long) {
+    fun startAudioOnlyRecording(meetingId: Long) {
         viewModelScope.launch {
             _uiState.update { it.copy(actionInProgress = true) }
-            val localUri = recordingManager.state.value.localUri
-            recordingManager.stopRecording()
-            
-            when (val result = recordingRepository.stopRecording(meetingId, recordingId)) {
+            when (val result = recordingRepository.startRecording(meetingId)) {
                 is NetworkResult.Success -> {
+                    val recording = result.data
+                    _uiState.update { state ->
+                        state.copy(
+                            actionInProgress = false,
+                            isRecording = true,
+                            recordings = state.recordings.filter { it.id != recording.id } + recording
+                        )
+                    }
+                    recordingManager.startAudioOnlyRecording(meetingId)
+                }
+                is NetworkResult.Error -> {
+                    _uiState.update { it.copy(actionInProgress = false, error = result.error.message) }
+                }
+                else -> {
                     _uiState.update { it.copy(actionInProgress = false) }
+                }
+            }
+        }
+    }
+
+    fun stopRecording(meetingId: Long, recordingId: Long? = null) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(actionInProgress = true, isRecording = false) }
+
+            // Snapshot localUri BEFORE stopping — the manager preserves it in COMPLETED state
+            val localUriBeforeStop = recordingManager.state.value.localUri
+            recordingManager.stopRecording()
+            // After stop, localUri is also kept in COMPLETED state as a safety net
+            val localUri = localUriBeforeStop ?: recordingManager.state.value.localUri
+
+            android.util.Log.d("MeetingViewModel", "stopRecording: localUri=$localUri")
+
+            val targetRecordingId = recordingId
+                ?: _uiState.value.recordings.find { it.status == "STARTED" }?.id
+                ?: _uiState.value.recordings.lastOrNull()?.id
+
+            if (targetRecordingId == null || targetRecordingId <= 0L) {
+                _uiState.update { it.copy(actionInProgress = false) }
+                android.util.Log.w("MeetingViewModel", "No target recording ID found; skipping backend stop")
+                return@launch
+            }
+
+            when (val result = recordingRepository.stopRecording(meetingId, targetRecordingId)) {
+                is NetworkResult.Success -> {
+                    val updatedRecording = result.data
+                    _uiState.update { state ->
+                        state.copy(
+                            actionInProgress = false,
+                            recordings = state.recordings.map {
+                                if (it.id == targetRecordingId) updatedRecording else it
+                            }
+                        )
+                    }
                     if (localUri != null) {
-                        recordingUploadManager.startUpload(meetingId, recordingId, localUri)
-                        observeUploadProgress(recordingId)
+                        val file = java.io.File(localUri)
+                        if (file.exists() && file.length() > 0) {
+                            android.util.Log.d("MeetingViewModel", "Enqueuing upload: $localUri (${file.length()} bytes)")
+                            recordingUploadManager.startUpload(meetingId, targetRecordingId, localUri)
+                            observeUploadProgress(targetRecordingId)
+                        } else {
+                            android.util.Log.e("MeetingViewModel", "Recording file missing or empty: $localUri")
+                        }
+                    } else {
+                        android.util.Log.e("MeetingViewModel", "localUri is null — recording was not captured locally")
                     }
                 }
                 is NetworkResult.Error -> {
@@ -319,8 +388,19 @@ class MeetingViewModel(
         viewModelScope.launch {
             recordingUploadManager.getUploadStatus(recordingId).collect { status ->
                 _uiState.update { it.copy(uploadStatus = status?.name) }
+                if (status == androidx.work.WorkInfo.State.SUCCEEDED) {
+                    recordingManager.reset()
+                    _uiState.value.selectedMeeting?.id?.let { mId ->
+                        loadMeetingDetails(mId.toString())
+                    }
+                }
             }
         }
+    }
+
+    fun resetRecordingState() {
+        recordingManager.reset()
+        _uiState.update { it.copy(isRecording = false, localRecordingState = com.developer_rahul.meetmind_ai.feature.recording.domain.model.RecordingState()) }
     }
 
     fun createMeeting(title: String, description: String, scheduledAt: String, invitedEmails: List<String>? = null) {
@@ -422,6 +502,42 @@ class MeetingViewModel(
         }
     }
 
+    fun batchInviteParticipants(meetingId: Long, rawEmailInput: String, onResult: ((Boolean, String?) -> Unit)? = null) {
+        val emailList = rawEmailInput.split(",", "\n", " ", ";")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .distinct()
+
+        if (emailList.isEmpty()) {
+            onResult?.invoke(false, "Please enter at least one valid email address.")
+            return
+        }
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(actionInProgress = true, error = null) }
+            val result = meetingRepository.batchInviteParticipants(meetingId, emailList)
+
+            when (result) {
+                is NetworkResult.Success -> {
+                    _uiState.update { it.copy(actionInProgress = false) }
+                    loadMeetingDetails(meetingId.toString())
+                    val msg = if (emailList.size == 1) "Invitation sent to ${emailList.first()}"
+                    else "Broadcast invitations sent to ${emailList.size} recipients!"
+                    onResult?.invoke(true, msg)
+                }
+                is NetworkResult.Error -> {
+                    val errMsg = result.error.message ?: "Failed to send invitations"
+                    _uiState.update { it.copy(actionInProgress = false, error = errMsg) }
+                    onResult?.invoke(false, errMsg)
+                }
+                else -> {
+                    _uiState.update { it.copy(actionInProgress = false) }
+                    onResult?.invoke(false, "Unknown error")
+                }
+            }
+        }
+    }
+
     fun joinMeeting(meetingId: Long) {
         viewModelScope.launch {
             _uiState.update { it.copy(actionInProgress = true) }
@@ -439,19 +555,7 @@ class MeetingViewModel(
     }
 
     fun inviteParticipant(meetingId: Long, email: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(actionInProgress = true, error = null) }
-            when (val result = meetingRepository.inviteParticipant(meetingId, email)) {
-                is NetworkResult.Success -> {
-                    _uiState.update { it.copy(actionInProgress = false) }
-                    loadMeetingDetails(meetingId.toString())
-                }
-                is NetworkResult.Error -> {
-                    _uiState.update { it.copy(actionInProgress = false, error = result.error.message) }
-                }
-                else -> _uiState.update { it.copy(actionInProgress = false) }
-            }
-        }
+        batchInviteParticipants(meetingId, email)
     }
     
     fun leaveMeeting(meetingId: Long) {

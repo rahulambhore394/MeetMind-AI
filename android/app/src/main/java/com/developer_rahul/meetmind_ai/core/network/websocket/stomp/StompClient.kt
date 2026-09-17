@@ -62,8 +62,10 @@ class StompClient(
         sendFrame(frame)
     }
 
+    private val subIdCounter = java.util.concurrent.atomic.AtomicLong(0)
+
     fun subscribe(destination: String): String {
-        val id = "sub-${System.currentTimeMillis()}"
+        val id = "sub-${subIdCounter.incrementAndGet()}"
         subscriptions[destination] = id
         val frame = StompFrame("SUBSCRIBE", mapOf("id" to id, "destination" to destination))
         sendFrame(frame)

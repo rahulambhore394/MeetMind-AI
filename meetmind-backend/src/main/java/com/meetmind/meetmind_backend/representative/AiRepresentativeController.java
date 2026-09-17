@@ -16,13 +16,16 @@ public class AiRepresentativeController {
 
     private final AiRepresentativeService representativeService;
     private final RepresentativeReportService reportService;
+    private final AiProxySpeechService speechService;
 
     public AiRepresentativeController(
             AiRepresentativeService representativeService,
-            RepresentativeReportService reportService
+            RepresentativeReportService reportService,
+            AiProxySpeechService speechService
     ) {
         this.representativeService = representativeService;
         this.reportService = reportService;
+        this.speechService = speechService;
     }
 
     @PostMapping
@@ -87,6 +90,21 @@ public class AiRepresentativeController {
         verifyAuthenticated(user);
         RepresentativeReport report = reportService.getReport(meetingId, id, user);
         return ResponseEntity.ok(report);
+    }
+
+    @PostMapping("/{id}/speak")
+    public ResponseEntity<com.meetmind.meetmind_backend.representative.dto.AiProxySpeechMessage> triggerSpeech(
+            @PathVariable Long meetingId,
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, String> body,
+            @AuthenticationPrincipal User user
+    ) {
+        verifyAuthenticated(user);
+        String query = (body != null && body.containsKey("query")) ? body.get("query") : "What is the status?";
+        String language = (body != null && body.containsKey("language")) ? body.get("language") : "en";
+        com.meetmind.meetmind_backend.representative.dto.AiProxySpeechMessage response =
+                speechService.directQueryRepresentative(meetingId, id, query, language);
+        return ResponseEntity.ok(response);
     }
 
     private void verifyAuthenticated(User user) {

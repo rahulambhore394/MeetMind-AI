@@ -9,8 +9,10 @@ interface RecordingManager {
     val state: StateFlow<RecordingState>
     
     fun startRecording(meetingId: Long, projectionData: Intent)
+    fun startAudioOnlyRecording(meetingId: Long)
     fun stopRecording()
     fun pauseRecording()
     fun resumeRecording()
+    fun reset()
     fun release()
 }

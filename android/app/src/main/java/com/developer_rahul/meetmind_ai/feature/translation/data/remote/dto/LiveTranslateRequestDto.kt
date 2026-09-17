@@ -7,7 +7,9 @@ data class LiveTranslateRequestDto(
     val sourceText: String,
     val sourceLanguage: String,
     val targetLanguage: String,
-    val timestamp: Long
+    val timestamp: Long,
+    val segmentId: Long? = null,
+    val speaker: String? = null
 )
 
 @Serializable

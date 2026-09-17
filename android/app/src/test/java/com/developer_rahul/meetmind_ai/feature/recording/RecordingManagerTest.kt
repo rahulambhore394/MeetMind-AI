@@ -22,6 +22,8 @@ class RecordingManagerTest {
     @Before
     fun setup() {
         context = mockk(relaxed = true)
+        val mockProjectionManager = mockk<android.media.projection.MediaProjectionManager>(relaxed = true)
+        every { context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) } returns mockProjectionManager
         recordingManager = RealRecordingManager(context)
     }
 

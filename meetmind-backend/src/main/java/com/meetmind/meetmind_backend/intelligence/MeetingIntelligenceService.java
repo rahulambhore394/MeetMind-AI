@@ -400,7 +400,14 @@ public class MeetingIntelligenceService {
         verifyAccess(meetingId, user.getId());
 
         MeetingSummary summary = summaryRepository.findByMeetingId(meetingId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Intelligence summary not found for meeting: " + meetingId));
+                .orElseGet(() -> {
+                    try {
+                        return autoGenerateSummaryOnMeetingEnd(meetingId);
+                    } catch (Exception e) {
+                        log.warn("Auto-generate summary on demand failed for meeting {}: {}", meetingId, e.getMessage());
+                        throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Intelligence summary not found for meeting: " + meetingId);
+                    }
+                });
 
         List<ActionItem> actionItems = actionItemRepository.findByMeetingSummaryId(summary.getId());
 

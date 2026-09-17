@@ -111,4 +111,56 @@ public class ParticipantServiceTest {
         assertEquals("Host User", participants.get(0).getName());
         assertEquals("User B", participants.get(1).getName());
     }
+
+    @Test
+    void testInviteParticipant_UnregisteredUser_DispatchesEmailAndReturnsValidResponse() {
+        String inviteeEmail = "rahulambhore@gmail.com";
+        com.meetmind.meetmind_backend.participant.dto.InviteParticipantRequest req = new com.meetmind.meetmind_backend.participant.dto.InviteParticipantRequest();
+        req.setEmail(inviteeEmail);
+
+        MeetingParticipant hostPart = new MeetingParticipant();
+        hostPart.setMeeting(liveMeeting);
+        hostPart.setUser(host);
+        hostPart.setRole(ParticipantRole.HOST);
+
+        when(meetingRepository.findById(100L)).thenReturn(Optional.of(liveMeeting));
+        when(userRepository.findByEmail(inviteeEmail)).thenReturn(Optional.empty());
+
+        ParticipantResponse response = participantService.inviteParticipant(100L, req, 1L);
+
+        assertNotNull(response);
+        assertNull(response.getId());
+        assertNull(response.getUserId());
+        assertEquals(inviteeEmail, response.getName());
+        assertEquals(inviteeEmail, response.getEmail());
+        assertEquals("INVITED", response.getStatus());
+
+        verify(emailService, times(1)).sendMeetingInvitationEmail(
+                eq(inviteeEmail),
+                eq("Host User"),
+                eq("Test Multi-User Meeting"),
+                any(),
+                eq("mm-100-test"),
+                any(),
+                eq(false)
+        );
+    }
+
+    @Test
+    void testParticipantResponseSerialization_ValidJacksonJson() throws Exception {
+        ParticipantResponse response = new ParticipantResponse("rahulambhore@gmail.com", "PARTICIPANT", "INVITED");
+
+        com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        String jsonStr = mapper.writeValueAsString(response);
+
+        assertNotNull(jsonStr);
+        assertTrue(jsonStr.contains("\"name\":\"rahulambhore@gmail.com\""));
+        assertTrue(jsonStr.contains("\"email\":\"rahulambhore@gmail.com\""));
+        assertTrue(jsonStr.contains("\"id\":null"));
+
+        com.fasterxml.jackson.databind.JsonNode node = mapper.readTree(jsonStr);
+        assertEquals("rahulambhore@gmail.com", node.get("name").asText());
+        assertEquals("rahulambhore@gmail.com", node.get("email").asText());
+        assertTrue(node.get("id").isNull());
+    }
 }

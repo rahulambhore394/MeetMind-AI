@@ -1,5 +1,6 @@
 package com.developer_rahul.meetmind_ai.core.ui.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -117,15 +118,86 @@ fun HostLeaveOrEndDialog(
 @Composable
 fun RecordingConsentDialog(
     onDismiss: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirmScreenAndAudio: () -> Unit,
+    onConfirmAudioOnly: () -> Unit
 ) {
-    MeetMindAlertDialog(
+    AlertDialog(
         onDismissRequest = onDismiss,
-        onConfirm = onConfirm,
-        title = "Record Meeting",
-        text = "By starting a recording, you consent to capturing the audio and video of this meeting. Participants will be notified that the meeting is being recorded. This recording will be processed by MeetMind AI to generate summaries and insights.",
-        confirmLabel = "Start Recording",
-        confirmButtonColor = ElectricIndigo
+        title = { 
+            Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(RoseRed.copy(alpha = 0.2f), androidx.compose.foundation.shape.CircleShape),
+                    contentAlignment = androidx.compose.ui.Alignment.Center
+                ) {
+                    Icon(Icons.Default.Videocam, contentDescription = null, tint = RoseRed, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(12.dp))
+                Text("Record Meeting", style = Typography.titleLarge, fontWeight = FontWeight.Bold, color = TextPrimary)
+            }
+        },
+        text = {
+            Column {
+                Text(
+                    "Choose your preferred recording format. MeetMind AI will automatically transcribe and summarize the discussion.",
+                    style = Typography.bodyMedium,
+                    color = TextSecondary
+                )
+                Spacer(Modifier.height(16.dp))
+                
+                Surface(
+                    onClick = onConfirmScreenAndAudio,
+                    color = CardSurface,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.ScreenShare, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Screen & Audio", style = Typography.titleSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text("Records meeting video, shared screens, and audio", style = Typography.bodySmall, color = TextSecondary)
+                        }
+                    }
+                }
+                
+                Spacer(Modifier.height(10.dp))
+                
+                Surface(
+                    onClick = onConfirmAudioOnly,
+                    color = CardSurface,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.Mic, contentDescription = null, tint = ElectricIndigo, modifier = Modifier.size(24.dp))
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Audio Only (Recommended)", style = Typography.titleSmall, fontWeight = FontWeight.Bold, color = TextPrimary)
+                            Text("Captures speech with zero setup and minimal battery", style = Typography.bodySmall, color = TextSecondary)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextSecondary)
+            }
+        },
+        containerColor = BackgroundSurface,
+        titleContentColor = TextPrimary,
+        textContentColor = TextSecondary
     )
 }
 

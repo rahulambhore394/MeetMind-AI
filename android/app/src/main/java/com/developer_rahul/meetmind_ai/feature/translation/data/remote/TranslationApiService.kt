@@ -20,6 +20,6 @@ interface TranslationApiService {
     @POST("api/meetings/{meetingId}/translations/live")
     suspend fun translateLive(
         @Path("meetingId") meetingId: Long,
-        @Body body: Map<String, Any?>
-    ): LiveTranslationDto
+        @Body body: com.developer_rahul.meetmind_ai.feature.translation.data.remote.dto.LiveTranslateRequestDto
+    ): List<LiveTranslationDto>
 }

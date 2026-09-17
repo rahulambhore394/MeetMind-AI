@@ -1,8 +1,8 @@
 package com.developer_rahul.meetmind_ai.feature.meetings.domain.model
 
 data class Participant(
-    val id: Long,
-    val userId: Long,
+    val id: Long? = null,
+    val userId: Long? = null,
     val name: String,
     val email: String,
     val role: ParticipantRole,
@@ -15,6 +15,7 @@ data class Participant(
 enum class ParticipantRole {
     HOST,
     PARTICIPANT,
+    AUTOMATED_AGENT,
     AI_REPRESENTATIVE,
     UNKNOWN
 }

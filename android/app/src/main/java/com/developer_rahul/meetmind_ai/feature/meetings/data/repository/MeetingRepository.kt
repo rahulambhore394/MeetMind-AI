@@ -18,6 +18,7 @@ interface MeetingRepository {
     suspend fun joinMeeting(meetingId: Long): NetworkResult<Participant>
     suspend fun leaveMeeting(meetingId: Long): NetworkResult<Participant>
     suspend fun inviteParticipant(meetingId: Long, email: String): NetworkResult<Participant>
+    suspend fun batchInviteParticipants(meetingId: Long, emails: List<String>): NetworkResult<Unit>
 
     suspend fun getAllMeetingReports(): NetworkResult<List<MeetingReportSummaryDto>>
     suspend fun getComprehensiveReport(meetingId: Long): NetworkResult<ComprehensiveReportDto>

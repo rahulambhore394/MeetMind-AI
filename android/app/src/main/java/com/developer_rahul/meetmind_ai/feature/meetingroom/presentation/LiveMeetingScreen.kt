@@ -56,6 +56,7 @@ import com.developer_rahul.meetmind_ai.core.ui.provideLiveMeetingViewModelFactor
 import com.developer_rahul.meetmind_ai.core.ui.provideLiveTranslationViewModelFactory
 import com.developer_rahul.meetmind_ai.feature.chat.presentation.ChatBubble
 import com.developer_rahul.meetmind_ai.feature.chat.presentation.ChatViewModel
+import com.developer_rahul.meetmind_ai.core.media.recording.RecordingService
 import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.ParticipantRole
 import com.developer_rahul.meetmind_ai.feature.meetings.presentation.MeetingViewModel
 import com.developer_rahul.meetmind_ai.feature.translation.domain.model.Subtitle
@@ -135,10 +136,14 @@ fun LiveMeetingScreen(
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val data = result.data
-            val id = meetingId.toLongOrNull()
-            if (data != null && id != null) {
+            val id = meetingId.toLongOrNull() ?: meeting?.id
+            if (data != null && id != null && id > 0L) {
                 meetingViewModel.startRecording(id, data)
+            } else {
+                RecordingService.stopService(context)
             }
+        } else {
+            RecordingService.stopService(context)
         }
     }
 
@@ -229,9 +234,10 @@ fun LiveMeetingScreen(
                     OutlinedTextField(
                         value = inviteEmailInput,
                         onValueChange = { inviteEmailInput = it },
-                        label = { Text("Invite via Email") },
-                        placeholder = { Text("colleague@example.com") },
-                        singleLine = true,
+                        label = { Text("Invite via Email Broadcast") },
+                        placeholder = { Text("user1@example.com, user2@example.com") },
+                        singleLine = false,
+                        maxLines = 3,
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp),
                         colors = OutlinedTextFieldDefaults.colors(
@@ -242,7 +248,12 @@ fun LiveMeetingScreen(
 
                     if (inviteMessage != null) {
                         Spacer(Modifier.height(8.dp))
-                        Text(inviteMessage!!, style = Typography.bodySmall, color = EmeraldGreen, fontWeight = FontWeight.Medium)
+                        Text(
+                            inviteMessage!!, 
+                            style = Typography.bodySmall, 
+                            color = if (inviteMessage!!.startsWith("Failed") || inviteMessage!!.startsWith("Please")) RoseRed else EmeraldGreen, 
+                            fontWeight = FontWeight.Medium
+                        )
                     }
                 }
             },
@@ -250,17 +261,22 @@ fun LiveMeetingScreen(
                 TextButton(
                     onClick = {
                         if (inviteEmailInput.isNotBlank()) {
-                            val id = meetingId.toLongOrNull()
-                            if (id != null) {
-                                meetingViewModel.inviteParticipant(id, inviteEmailInput.trim()) { _, msg ->
+                            val id = meetingId.toLongOrNull() ?: meeting.id
+                            if (id > 0L) {
+                                meetingViewModel.batchInviteParticipants(id, inviteEmailInput) { success, msg ->
                                     inviteMessage = msg
+                                    if (success) {
+                                        inviteEmailInput = ""
+                                    }
                                 }
+                            } else {
+                                inviteMessage = "Failed: Invalid meeting ID"
                             }
                         }
                     },
                     modifier = Modifier.bounceClick()
                 ) {
-                    Text("Send Invite", color = NeonCyan, fontWeight = FontWeight.Bold)
+                    Text("Send Broadcast", color = NeonCyan, fontWeight = FontWeight.Bold)
                 }
             },
             dismissButton = {
@@ -319,12 +335,23 @@ fun LiveMeetingScreen(
     }
 
     if (showRecordingConsent) {
+        val id = meetingId.toLongOrNull() ?: meeting?.id
         RecordingConsentDialog(
             onDismiss = { showRecordingConsent = false },
-            onConfirm = {
+            onConfirmScreenAndAudio = {
                 showRecordingConsent = false
+                RecordingService.startService(context, isAudioOnly = false)
                 val mediaProjectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                 recordingLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
+            },
+            onConfirmAudioOnly = {
+                showRecordingConsent = false
+                if (id != null && id > 0L) {
+                    meetingViewModel.startAudioOnlyRecording(id)
+                    Toast.makeText(context, "Audio-only recording started", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Meeting not ready yet", Toast.LENGTH_SHORT).show()
+                }
             }
         )
     }
@@ -340,16 +367,16 @@ fun LiveMeetingScreen(
                 isRecording = isRecording,
                 isSharing = callState.isScreenSharing,
                 onToggleRecording = { 
-                    val id = meetingId.toLongOrNull()
-                    if (id != null) {
+                    val id = meetingId.toLongOrNull() ?: meeting?.id
+                    if (id != null && id > 0L) {
                         if (isRecording) {
-                            val activeRecording = uiState.recordings.find { it.status == "STARTED" }
-                            if (activeRecording != null) {
-                                meetingViewModel.stopRecording(id, activeRecording.id)
-                            }
+                            meetingViewModel.stopRecording(id)
+                            Toast.makeText(context, "Stopping recording & uploading...", Toast.LENGTH_SHORT).show()
                         } else {
                             showRecordingConsent = true
                         }
+                    } else {
+                        Toast.makeText(context, "Meeting not ready yet", Toast.LENGTH_SHORT).show()
                     }
                     showMoreSheet = false 
                 },
@@ -506,16 +533,20 @@ fun LiveMeetingScreen(
                     val effectiveVideoTrack = if (isLocalUser) localVideo else mediaState?.videoTrack
                     val effectiveScreenTrack = if (isLocalUser) (if (callState.isScreenSharing) callState.localScreenTrack else null) else mediaState?.screenTrack
 
+                    val isAiAgent = participant.role == ParticipantRole.AI_REPRESENTATIVE || participant.role == ParticipantRole.AUTOMATED_AGENT
+                    val currentAiSpeech = callState.activeAiSpeech
+                    val isAiCurrentlySpeaking = isAiAgent && currentAiSpeech != null && (currentAiSpeech.ownerId == participant.userId || participant.name.contains(currentAiSpeech.ownerName, ignoreCase = true))
+
                     val uiParticipant = Participant(
                         id = participant.id.toString(),
                         name = if (isLocalUser && !participant.name.contains("(You)")) "${participant.name} (You)" else participant.name,
-                        isAiRep = participant.role == ParticipantRole.AI_REPRESENTATIVE,
+                        isAiRep = isAiAgent,
                         isHost = participant.role == ParticipantRole.HOST,
                         isOnline = true,
                         videoTrack = effectiveVideoTrack,
                         isMicOn = if (isLocalUser) !isMuted else (mediaState?.audioEnabled ?: true),
                         isVideoOn = if (isLocalUser) !isVideoOff else (mediaState?.videoEnabled ?: (mediaState?.videoTrack != null)),
-                        isActiveSpeaker = if (isLocalUser) (!isMuted) else (mediaState?.isSpeaking ?: false),
+                        isActiveSpeaker = if (isLocalUser) (!isMuted) else (isAiCurrentlySpeaking || (mediaState?.isSpeaking ?: false)),
                         screenTrack = effectiveScreenTrack
                     )
                     ParticipantVideoTile(uiParticipant)
@@ -612,8 +643,16 @@ fun LiveMeetingScreen(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (isRecording) {
                         Surface(
+                            onClick = {
+                                val id = meetingId.toLongOrNull() ?: meeting?.id
+                                if (id != null && id > 0L) {
+                                    meetingViewModel.stopRecording(id)
+                                    Toast.makeText(context, "Stopping recording & uploading...", Toast.LENGTH_SHORT).show()
+                                }
+                            },
                             color = RoseRed.copy(alpha = 0.85f),
-                            shape = CircleShape
+                            shape = CircleShape,
+                            modifier = Modifier.bounceClick()
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
@@ -671,6 +710,63 @@ fun LiveMeetingScreen(
                                 fontWeight = FontWeight.Bold
                             )
                         }
+                    }
+                }
+            }
+        }
+
+        // Animated AI Representative Speaking Banner
+        val activeSpeech = callState.activeAiSpeech
+        if (activeSpeech != null) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = 68.dp, start = 16.dp, end = 16.dp)
+                    .fillMaxWidth()
+                    .shadow(16.dp, RoundedCornerShape(16.dp)),
+                shape = RoundedCornerShape(16.dp),
+                color = Color(0xFF0D1117).copy(alpha = 0.95f),
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, NeonCyan)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .background(NeonCyan.copy(alpha = 0.15f), CircleShape)
+                            .pulse(color = NeonCyan),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.GraphicEq,
+                            contentDescription = "Speaking",
+                            tint = NeonCyan,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(
+                                "AI Proxy for ${activeSpeech.ownerName}",
+                                style = Typography.labelMedium,
+                                color = NeonCyan,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            StatusChip(text = "SPEAKING", color = EmeraldGreen)
+                        }
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            "\"${activeSpeech.spokenText}\"",
+                            style = Typography.bodySmall,
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
@@ -957,7 +1053,10 @@ fun ParticipantVideoTile(participant: Participant) {
             .background(CardSurface)
             .then(
                 if (participant.isActiveSpeaker && participant.isOnline) {
-                    Modifier.border(2.5.dp, EmeraldGreen, RoundedCornerShape(20.dp))
+                    val speakerBorderColor = if (participant.isAiRep) NeonCyan else EmeraldGreen
+                    Modifier.border(2.5.dp, speakerBorderColor, RoundedCornerShape(20.dp))
+                } else if (participant.isAiRep) {
+                    Modifier.border(1.5.dp, NeonCyan.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
                 } else {
                     Modifier.border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
                 }
@@ -1017,14 +1116,20 @@ fun ParticipantVideoTile(participant: Participant) {
         }
         
         if (participant.isActiveSpeaker && participant.isOnline) {
+            val speakerColor = if (participant.isAiRep) NeonCyan else EmeraldGreen
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(10.dp)
-                    .background(EmeraldGreen.copy(alpha = 0.2f), CircleShape)
+                    .background(speakerColor.copy(alpha = 0.2f), CircleShape)
                     .padding(6.dp)
             ) {
-                Icon(Icons.Default.VolumeUp, null, tint = EmeraldGreen, modifier = Modifier.size(16.dp))
+                Icon(
+                    if (participant.isAiRep) Icons.Default.GraphicEq else Icons.Default.VolumeUp,
+                    null,
+                    tint = speakerColor,
+                    modifier = Modifier.size(16.dp)
+                )
             }
         }
     }

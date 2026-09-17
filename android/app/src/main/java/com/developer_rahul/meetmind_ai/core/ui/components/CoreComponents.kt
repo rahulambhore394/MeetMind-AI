@@ -89,6 +89,9 @@ fun MeetMindTextField(
     trailingIcon: @Composable (() -> Unit)? = null,
     error: String? = null,
     enabled: Boolean = true,
+    singleLine: Boolean = true,
+    maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
+    minLines: Int = 1,
     visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
     keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default
 ) {
@@ -115,7 +118,9 @@ fun MeetMindTextField(
             leadingIcon = leadingIcon?.let { { Icon(it, contentDescription = null, tint = TextSecondary) } },
             trailingIcon = trailingIcon,
             isError = error != null,
-            singleLine = true,
+            singleLine = singleLine,
+            maxLines = maxLines,
+            minLines = minLines,
             visualTransformation = visualTransformation,
             keyboardOptions = keyboardOptions
         )

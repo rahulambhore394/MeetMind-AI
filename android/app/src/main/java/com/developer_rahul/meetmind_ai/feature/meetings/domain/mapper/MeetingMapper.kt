@@ -34,7 +34,9 @@ fun ParticipantResponseDto.toDomain(): Participant {
         name = name,
         email = email,
         role = try {
-            ParticipantRole.valueOf(role.uppercase())
+            val upperRole = role.uppercase()
+            if (upperRole == "AUTOMATED_AGENT") ParticipantRole.AI_REPRESENTATIVE
+            else ParticipantRole.valueOf(upperRole)
         } catch (e: Exception) {
             ParticipantRole.UNKNOWN
         },

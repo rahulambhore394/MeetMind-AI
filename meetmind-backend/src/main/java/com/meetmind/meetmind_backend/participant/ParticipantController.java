@@ -2,6 +2,8 @@ package com.meetmind.meetmind_backend.participant;
 
 
 
+import com.meetmind.meetmind_backend.participant.dto.BatchInviteRequest;
+import com.meetmind.meetmind_backend.participant.dto.BatchInviteResponse;
 import com.meetmind.meetmind_backend.participant.dto.InviteParticipantRequest;
 import com.meetmind.meetmind_backend.participant.dto.ParticipantResponse;
 import com.meetmind.meetmind_backend.user.User;
@@ -63,6 +65,24 @@ public class ParticipantController {
                         currentUser.getId()
                 );
 
+
+        return ResponseEntity
+                .status(HttpStatus.CREATED)
+                .body(response);
+    }
+
+    @PostMapping("/batch")
+    public ResponseEntity<BatchInviteResponse> inviteParticipantsBatch(
+            @PathVariable Long meetingId,
+            @Valid @RequestBody BatchInviteRequest request,
+            Authentication authentication
+    ) {
+        User currentUser = (User) authentication.getPrincipal();
+        BatchInviteResponse response = participantService.inviteParticipantsBatch(
+                meetingId,
+                request,
+                currentUser.getId()
+        );
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)

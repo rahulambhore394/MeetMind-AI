@@ -12,42 +12,49 @@ import com.developer_rahul.meetmind_ai.feature.translation.data.remote.dto.Langu
 import com.developer_rahul.meetmind_ai.core.network.websocket.stomp.StompClient
 import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.MeetingRealtimeEvent
 import com.developer_rahul.meetmind_ai.feature.notifications.data.remote.dto.NotificationDto
+import com.developer_rahul.meetmind_ai.feature.representative.data.remote.dto.AiProxySpeechDto
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 
 class MeetingWebSocketManager(
     private val okHttpClient: OkHttpClient,
-    private val tokenProvider: TokenProvider
+    private val tokenProvider: TokenProvider,
+    private val customWsUrl: String? = null
 ) {
     private var stompClient: StompClient? = null
     private val json = Json { ignoreUnknownKeys = true }
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var reconnectJob: Job? = null
 
-    private val _events = MutableSharedFlow<MeetingRealtimeEvent>()
+    private val _events = MutableSharedFlow<MeetingRealtimeEvent>(extraBufferCapacity = 64)
     val events: SharedFlow<MeetingRealtimeEvent> = _events.asSharedFlow()
 
-    private val _chatMessages = MutableSharedFlow<ChatMessageResponseDto>()
+    private val _chatMessages = MutableSharedFlow<ChatMessageResponseDto>(replay = 1, extraBufferCapacity = 64)
     val chatMessages: SharedFlow<ChatMessageResponseDto> = _chatMessages.asSharedFlow()
 
-    private val _signalingMessages = MutableSharedFlow<SignalingMessageDto>()
+    private val _signalingMessages = MutableSharedFlow<SignalingMessageDto>(extraBufferCapacity = 64)
     val signalingMessages: SharedFlow<SignalingMessageDto> = _signalingMessages.asSharedFlow()
 
-    private val _recordingEvents = MutableSharedFlow<Map<String, String>>()
+    private val _recordingEvents = MutableSharedFlow<Map<String, String>>(extraBufferCapacity = 64)
     val recordingEvents: SharedFlow<Map<String, String>> = _recordingEvents.asSharedFlow()
 
-    private val _translations = MutableSharedFlow<LiveTranslationDto>()
+    private val _translations = MutableSharedFlow<LiveTranslationDto>(replay = 1, extraBufferCapacity = 64)
     val translations: SharedFlow<LiveTranslationDto> = _translations.asSharedFlow()
 
-    private val _intelligenceEvents = MutableSharedFlow<Map<String, String>>()
+    private val _intelligenceEvents = MutableSharedFlow<Map<String, String>>(extraBufferCapacity = 64)
     val intelligenceEvents: SharedFlow<Map<String, String>> = _intelligenceEvents.asSharedFlow()
 
-    private val _notifications = MutableSharedFlow<NotificationDto>()
+    private val _notifications = MutableSharedFlow<NotificationDto>(extraBufferCapacity = 64)
     val notifications: SharedFlow<NotificationDto> = _notifications.asSharedFlow()
+
+    private val _aiProxySpeech = MutableSharedFlow<AiProxySpeechDto>(replay = 1, extraBufferCapacity = 64)
+    val aiProxySpeech: SharedFlow<AiProxySpeechDto> = _aiProxySpeech.asSharedFlow()
 
     private val meetingSubscriptions = mutableSetOf<Long>()
     private val chatSubscriptions = mutableSetOf<Long>()
@@ -56,6 +63,7 @@ class MeetingWebSocketManager(
     private val translationSubscriptions = mutableSetOf<String>()
     private val intelligenceSubscriptions = mutableSetOf<Long>()
     private val userSubscriptions = mutableSetOf<Long>()
+    private val aiProxySubscriptions = mutableSetOf<Long>()
 
     private var reconnectAttempt = 0
     private val maxReconnectDelay = 30000L // 30 seconds
@@ -68,7 +76,15 @@ class MeetingWebSocketManager(
 
     private fun doConnect() {
         val token = tokenProvider.getToken() ?: return
-        val wsUrl = BuildConfig.BASE_URL.replace("http", "ws") + "ws"
+        val wsUrl = if (customWsUrl != null) {
+            customWsUrl
+        } else if (BuildConfig.BASE_URL.contains("onrender.com")) {
+            BuildConfig.BASE_URL.replace("http", "ws") + "ws"
+        } else {
+            val candidateHosts = listOf("127.0.0.1:8080", "10.70.43.145:8080", "10.0.2.2:8080")
+            val chosenHost = candidateHosts[reconnectAttempt % candidateHosts.size]
+            "ws://$chosenHost/ws"
+        }
         
         Log.d("MeetingWS", "Connecting to $wsUrl (Attempt ${reconnectAttempt + 1})")
         
@@ -93,6 +109,7 @@ class MeetingWebSocketManager(
                         recordingSubscriptions.toList().forEach { subscribeToRecordings(it) }
                         intelligenceSubscriptions.toList().forEach { subscribeToIntelligence(it) }
                         userSubscriptions.toList().forEach { subscribeToUserNotifications(it) }
+                        aiProxySubscriptions.toList().forEach { subscribeToAiProxySpeech(it) }
                         translationSubscriptions.toList().forEach { sub ->
                             val parts = sub.split(":")
                             if (parts.size == 2) {
@@ -125,6 +142,8 @@ class MeetingWebSocketManager(
                                 parseAndEmitTranslation(body)
                             } else if (destination?.contains("/notifications") == true) {
                                 parseAndEmitNotification(body)
+                            } else if (destination?.contains("/ai-proxy/speech") == true) {
+                                parseAndEmitAiProxySpeech(body)
                             } else {
                                 parseAndEmitEvent(body)
                             }
@@ -138,7 +157,7 @@ class MeetingWebSocketManager(
     private fun scheduleReconnect() {
         if (reconnectJob != null) return
         reconnectJob = scope.launch {
-            val delayMs = (Math.pow(2.0, reconnectAttempt.toDouble()).toLong() * 1000L).coerceAtMost(maxReconnectDelay)
+            val delayMs = if (reconnectAttempt < 3) 1000L else (Math.pow(2.0, (reconnectAttempt - 2).toDouble()).toLong() * 1000L).coerceAtMost(maxReconnectDelay)
             reconnectAttempt++
             
             Log.d("MeetingWS", "Attempting to reconnect in ${delayMs}ms (Attempt $reconnectAttempt)...")
@@ -203,10 +222,14 @@ class MeetingWebSocketManager(
 
     private fun parseAndEmitRecordingEvent(body: String) {
         try {
-            val event = json.decodeFromString<Map<String, String>>(body)
+            // Backend sends numeric fields (ownerId, recordingId, meetingId, timestamp) as Long.
+            // Deserialize as JsonObject first, then convert each entry to String.
+            val jsonObj = json.parseToJsonElement(body).jsonObject
+            val event = jsonObj.entries.associate { (k, v) -> k to v.jsonPrimitive.content }
             _recordingEvents.tryEmit(event)
         } catch (e: Exception) {
             Log.e("MeetingWS", "Failed to parse recording event: ${e.message}")
+            Log.e("MeetingWS", "JSON input: $body")
         }
     }
 
@@ -234,6 +257,15 @@ class MeetingWebSocketManager(
             _notifications.tryEmit(dto)
         } catch (e: Exception) {
             Log.e("MeetingWS", "Failed to parse notification: ${e.message}")
+        }
+    }
+
+    private fun parseAndEmitAiProxySpeech(body: String) {
+        try {
+            val dto = json.decodeFromString<AiProxySpeechDto>(body)
+            _aiProxySpeech.tryEmit(dto)
+        } catch (e: Exception) {
+            Log.e("MeetingWS", "Failed to parse AI proxy speech: ${e.message}")
         }
     }
 
@@ -332,6 +364,21 @@ class MeetingWebSocketManager(
         stompClient?.send("/app/chat.send", body)
     }
 
+    fun subscribeToAiProxySpeech(meetingId: Long) {
+        aiProxySubscriptions.add(meetingId)
+        stompClient?.subscribe("/topic/meetings/$meetingId/ai-proxy/speech")
+    }
+
+    fun unsubscribeFromAiProxySpeech(meetingId: Long) {
+        aiProxySubscriptions.remove(meetingId)
+        stompClient?.unsubscribe("/topic/meetings/$meetingId/ai-proxy/speech")
+    }
+
+    fun sendAiProxyQuery(meetingId: Long, representativeId: Long, query: String, language: String = "en") {
+        val body = "{\"representativeId\":$representativeId,\"query\":\"$query\",\"language\":\"$language\"}"
+        stompClient?.send("/app/meetings/$meetingId/ai-proxy/ask", body)
+    }
+
     fun disconnect() {
         stompClient?.disconnect()
         stompClient = null
@@ -341,5 +388,6 @@ class MeetingWebSocketManager(
         recordingSubscriptions.clear()
         translationSubscriptions.clear()
         intelligenceSubscriptions.clear()
+        aiProxySubscriptions.clear()
     }
 }

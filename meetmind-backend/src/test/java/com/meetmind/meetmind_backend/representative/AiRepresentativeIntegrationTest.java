@@ -65,6 +65,7 @@ public class AiRepresentativeIntegrationTest {
     @Autowired private RepresentativeReportService reportService;
     @Autowired private RepresentativeMeetingEventListener meetingEventListener;
     @Autowired private JwtService jwtService;
+    @Autowired private AiProxySpeechService speechService;
 
     private User host;
     private User participant;
@@ -354,5 +355,58 @@ public class AiRepresentativeIntegrationTest {
                 eq("/topic/meetings/" + meeting.getId() + "/chat"),
                 any(Object.class)
         );
+    }
+
+    @Test
+    @Order(11)
+    void testAiRepresentative_RealTimeVoiceGeneration_WhenMentionedOrTopicMatched() {
+        reset(messagingTemplate);
+
+        AiRepresentative rep = representativeService.createRepresentative(
+                meeting.getId(), participant, List.of("budget", "timeline"), List.of("What is the deadline?"), List.of("Rep Host"), null, null
+        );
+
+        representativeService.activateForMeeting(meeting.getId());
+
+        // Simulate participant in meeting asking a question mentioning participant's name and monitored topic
+        List<com.meetmind.meetmind_backend.representative.dto.AiProxySpeechMessage> responses =
+                speechService.handleIncomingChatMessage(meeting.getId(), host.getId(), host.getName(), "Hey @Rep Participant what is the budget status?");
+
+        assertThat(responses).isNotEmpty();
+        com.meetmind.meetmind_backend.representative.dto.AiProxySpeechMessage speech = responses.get(0);
+        assertThat(speech.meetingId()).isEqualTo(meeting.getId());
+        assertThat(speech.ownerId()).isEqualTo(participant.getId());
+        assertThat(speech.spokenText()).contains("budget");
+        assertThat(speech.spokenText()).contains("Rep Participant");
+
+        // Verify broadcast to the AI Proxy speech STOMP topic
+        verify(messagingTemplate).convertAndSend(
+                eq("/topic/meetings/" + meeting.getId() + "/ai-proxy/speech"),
+                eq(speech)
+        );
+    }
+
+    @Test
+    @Order(12)
+    void testAiRepresentative_DirectQuerySpeechEndpoint() {
+        AiRepresentative rep = representativeService.createRepresentative(
+                meeting.getId(), participant, List.of("architecture"), List.of(), List.of(), null, null
+        );
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(hostToken);
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        HttpEntity<Map<String, String>> request = new HttpEntity<>(Map.of("query", "Where is the participant?"), headers);
+
+        ResponseEntity<com.meetmind.meetmind_backend.representative.dto.AiProxySpeechMessage> response = restTemplate.postForEntity(
+                "http://localhost:" + port + "/api/meetings/" + meeting.getId() + "/representatives/" + rep.getId() + "/speak",
+                request,
+                com.meetmind.meetmind_backend.representative.dto.AiProxySpeechMessage.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody().spokenText()).contains("Rep Participant");
     }
 }

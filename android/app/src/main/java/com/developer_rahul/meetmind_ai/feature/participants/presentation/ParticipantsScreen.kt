@@ -87,7 +87,8 @@ fun ParticipantsScreen(
                         ParticipantItem(
                             name = host.name,
                             role = host.role.name,
-                            isOnline = host.isOnline
+                            isOnline = host.isOnline,
+                            status = host.status
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                     }
@@ -102,7 +103,8 @@ fun ParticipantsScreen(
                             name = participant.name,
                             role = participant.role.name,
                             isOnline = participant.isOnline,
-                            isAi = participant.role == ParticipantRole.AI_REPRESENTATIVE
+                            isAi = participant.role == ParticipantRole.AI_REPRESENTATIVE,
+                            status = participant.status
                         )
                     }
                 }
@@ -124,7 +126,8 @@ fun ParticipantItem(
     name: String,
     role: String,
     isOnline: Boolean,
-    isAi: Boolean = false
+    isAi: Boolean = false,
+    status: ParticipantStatus? = null
 ) {
     MeetMindCard(isAiCard = isAi) {
         Row(
@@ -153,6 +156,10 @@ fun ParticipantItem(
                     if (isOnline) {
                         Spacer(modifier = Modifier.width(8.dp))
                         Box(modifier = Modifier.size(8.dp).background(EmeraldGreen, CircleShape))
+                    }
+                    if (status == ParticipantStatus.INVITED) {
+                        Spacer(modifier = Modifier.width(8.dp))
+                        StatusChip(text = "INVITED", color = Color(0xFFD97706))
                     }
                 }
                 Text(role, style = Typography.bodySmall, color = TextSecondary)

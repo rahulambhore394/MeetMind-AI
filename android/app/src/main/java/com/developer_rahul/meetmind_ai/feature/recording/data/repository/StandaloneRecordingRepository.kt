@@ -47,6 +47,14 @@ class StandaloneRecordingRepository : RecordingRepository {
         return NetworkResult.Success(sampleRecording.copy(meetingId = meetingId, id = recordingId))
     }
 
+    override suspend fun downloadRecording(
+        meetingId: Long,
+        recordingId: Long,
+        destinationFile: java.io.File
+    ): NetworkResult<java.io.File> {
+        return NetworkResult.Success(destinationFile)
+    }
+
     override fun subscribeToRecordingEvents(meetingId: Long) {
         // No-op for standalone offline mode
     }

@@ -4,26 +4,26 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class SummaryDetailResponseDto(
-    val id: Long,
-    val meetingId: Long,
-    val transcriptId: Long,
-    val summary: String,
-    val keyPoints: List<String>,
-    val decisions: List<String>,
-    val topics: List<String>,
-    val questions: List<String>,
-    val analysisMetrics: Map<String, kotlinx.serialization.json.JsonElement>,
+    val id: Long = 0L,
+    val meetingId: Long = 0L,
+    val transcriptId: Long? = null,
+    val summary: String = "",
+    val keyPoints: List<String> = emptyList(),
+    val decisions: List<String> = emptyList(),
+    val topics: List<String> = emptyList(),
+    val questions: List<String> = emptyList(),
+    val analysisMetrics: Map<String, kotlinx.serialization.json.JsonElement> = emptyMap(),
     val actionItems: List<ActionItemResponseDto> = emptyList(),
-    val status: String,
-    val createdAt: String
+    val status: String = "COMPLETED",
+    val createdAt: String? = null
 )
 
 @Serializable
 data class ActionItemResponseDto(
-    val id: Long,
-    val description: String,
+    val id: Long = 0L,
+    val description: String = "",
     val assignedUser: String? = null,
     val dueDate: String? = null,
-    val confidence: Double,
-    val status: String
+    val confidence: Double = 0.0,
+    val status: String = "OPEN"
 )

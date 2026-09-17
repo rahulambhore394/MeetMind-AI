@@ -54,7 +54,13 @@ class BaseViewModelFactory(
                 ChatViewModel(container.chatRepository, meetingId ?: -1L) as T
             }
             modelClass.isAssignableFrom(LiveMeetingViewModel::class.java) -> {
-                LiveMeetingViewModel(container.meetingCallRepository, container.meetingRepository, meetingId ?: -1L) as T
+                LiveMeetingViewModel(
+                    container.meetingCallRepository,
+                    container.meetingRepository,
+                    container.meetingWebSocketManager,
+                    container.textToSpeechManager,
+                    meetingId ?: -1L
+                ) as T
             }
             modelClass.isAssignableFrom(TranscriptViewModel::class.java) -> {
                 TranscriptViewModel(

@@ -163,7 +163,16 @@ fun AppNavigation(navController: NavHostController) {
                 meetingId = id,
                 onBack = { navController.popBackStack() },
                 onJoin = { navController.navigate(Screen.PreJoinMeeting.createRoute(id)) },
-                onConfigureRep = { navController.navigate(Screen.AiRepresentativeConfig.createRoute(id)) }
+                onConfigureRep = { navController.navigate(Screen.AiRepresentativeConfig.createRoute(id)) },
+                onPlayRecording = { recId, meetId ->
+                    navController.navigate(Screen.RecordingPlayer.createRoute(meetId, recId))
+                },
+                onViewIntelligence = { mId ->
+                    navController.navigate(Screen.MeetingIntelligence.createRoute(mId))
+                },
+                onViewReport = { mId ->
+                    navController.navigate(Screen.ComprehensiveReport.createRoute(mId))
+                }
             )
         }
 
@@ -342,10 +351,42 @@ fun AppNavigation(navController: NavHostController) {
             )
         }
 
+        composable(
+            Screen.ComprehensiveReport.route,
+            arguments = listOf(navArgument("meetingId") { defaultValue = "" })
+        ) { backStackEntry ->
+            val id = backStackEntry.arguments?.getString("meetingId") ?: ""
+            ComprehensiveReportScreen(
+                meetingId = id,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
         composable(Screen.Recordings.route) {
             MeetingRecordingsScreen(
                 onBack = { navController.popBackStack() },
-                onPlayRecording = { id -> navController.navigate("recording_player/$id") }
+                onPlayRecording = { id -> navController.navigate("recording_player/0/$id") }
+            )
+        }
+
+        composable(
+            Screen.RecordingPlayer.route,
+            arguments = listOf(
+                navArgument("meetingId") { defaultValue = "" },
+                navArgument("recordingId") { defaultValue = "" }
+            )
+        ) { backStackEntry ->
+            val mId = backStackEntry.arguments?.getString("meetingId") ?: ""
+            val rId = backStackEntry.arguments?.getString("recordingId") ?: ""
+            RecordingPlayerScreen(
+                recordingId = rId,
+                meetingId = mId,
+                onBack = { navController.popBackStack() },
+                onViewSummary = {
+                    if (mId.isNotBlank() && mId != "0") {
+                        navController.navigate(Screen.MeetingIntelligence.createRoute(mId))
+                    }
+                }
             )
         }
 
@@ -356,6 +397,7 @@ fun AppNavigation(navController: NavHostController) {
             val id = backStackEntry.arguments?.getString("recordingId") ?: ""
             RecordingPlayerScreen(
                 recordingId = id,
+                meetingId = "",
                 onBack = { navController.popBackStack() }
             )
         }

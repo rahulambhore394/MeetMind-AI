@@ -4,8 +4,8 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 data class ParticipantResponseDto(
-    val id: Long,
-    val userId: Long,
+    val id: Long? = null,
+    val userId: Long? = null,
     val name: String,
     val email: String,
     val role: String,

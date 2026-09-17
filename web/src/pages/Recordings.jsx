@@ -7,6 +7,48 @@ export default function Recordings() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
 
+  const [activePlaybackUrl, setActivePlaybackUrl] = useState(null);
+  const [playingRec, setPlayingRec] = useState(null);
+  const [downloadingId, setDownloadingId] = useState(null);
+
+  const handlePlay = async (rec) => {
+    try {
+      setDownloadingId(rec.id);
+      const response = await api.get(`/meetings/${rec.meetingId}/recordings/${rec.id}/download`, {
+        responseType: 'blob'
+      });
+      const blob = new Blob([response.data], { type: 'video/mp4' });
+      const url = window.URL.createObjectURL(blob);
+      setActivePlaybackUrl(url);
+      setPlayingRec(rec);
+    } catch (err) {
+      alert('Playback load error: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
+  const handleDownload = async (rec) => {
+    try {
+      setDownloadingId(rec.id);
+      const response = await api.get(`/meetings/${rec.meetingId}/recordings/${rec.id}/download`, {
+        responseType: 'blob'
+      });
+      const blob = new Blob([response.data]);
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `recording_${rec.meetingId}_${rec.id}.mp4`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      alert('Download failed: ' + (err.response?.data?.message || err.message));
+    } finally {
+      setDownloadingId(null);
+    }
+  };
+
   const fetchRecordings = async () => {
     try {
       setLoading(true);
@@ -93,31 +135,87 @@ export default function Recordings() {
                     <h3 className="font-bold text-white text-base">{rec.meetingTitle}</h3>
                     <p className="text-xs text-slate-400">Recording ID: #{rec.id} • Meeting #{rec.meetingId}</p>
                   </div>
-                  <span className="text-[10px] px-2.5 py-1 rounded-md bg-cyan-500/10 text-cyan-300 font-mono border border-cyan-500/20">
-                    {rec.format || 'MP4 / WAV'}
+                  <span className={`text-[10px] px-2.5 py-1 rounded-md font-mono border ${
+                    rec.status === 'COMPLETED' 
+                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20' 
+                      : rec.status === 'PROCESSING' 
+                      ? 'bg-cyan-500/10 text-cyan-300 border-cyan-500/20 animate-pulse'
+                      : 'bg-rose-500/10 text-rose-300 border-rose-500/20'
+                  }`}>
+                    {rec.status || 'SAVED'}
                   </span>
                 </div>
 
-                <div className="p-3 rounded-xl bg-slate-950/80 border border-white/5 space-y-2">
+                <div className="p-3.5 rounded-xl bg-slate-950/80 border border-white/5 space-y-3">
                   <div className="flex justify-between text-xs text-slate-400">
-                    <span>Playback Stream</span>
-                    <span>Duration: {rec.durationSeconds || 0}s</span>
+                    <span>Started: {rec.startedAt ? new Date(rec.startedAt).toLocaleTimeString() : 'Recently'}</span>
+                    <span>Duration: {rec.duration ? `${rec.duration}s` : 'Recorded'}</span>
                   </div>
-                  {rec.fileUrl ? (
-                    <audio controls className="w-full">
-                      <source src={rec.fileUrl} type="audio/wav" />
-                    </audio>
-                  ) : (
-                    <div className="py-4 text-center text-xs text-slate-500 italic">
-                      Audio file stream active in Spring Boot media storage
-                    </div>
-                  )}
+
+                  <div className="flex items-center gap-2 pt-1">
+                    <button
+                      onClick={() => handlePlay(rec)}
+                      disabled={downloadingId === rec.id}
+                      className="flex-1 py-2 px-3 rounded-xl bg-cyan-600/20 hover:bg-cyan-600/30 text-cyan-300 border border-cyan-500/30 text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                    >
+                      {downloadingId === rec.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Play className="w-3.5 h-3.5" />
+                      )}
+                      <span>Play Media</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleDownload(rec)}
+                      disabled={downloadingId === rec.id}
+                      className="py-2 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                      title="Download Recording File"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Download</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Playback Modal */}
+      {activePlaybackUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in">
+          <div className="w-full max-w-xl bg-slate-900 border border-white/10 rounded-2xl p-6 space-y-4 shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 pb-3">
+              <div>
+                <h3 className="font-bold text-white text-base">Replaying Recording #{playingRec?.id}</h3>
+                <p className="text-xs text-slate-400">{playingRec?.meetingTitle}</p>
+              </div>
+              <button
+                onClick={() => {
+                  setActivePlaybackUrl(null);
+                  setPlayingRec(null);
+                }}
+                className="text-slate-400 hover:text-white text-sm font-bold px-2 py-1 cursor-pointer"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <div className="bg-black rounded-xl overflow-hidden flex items-center justify-center min-h-[200px]">
+              <video
+                controls
+                autoPlay
+                src={activePlaybackUrl}
+                className="w-full max-h-[360px] object-contain"
+              >
+                Your browser does not support video playback.
+              </video>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

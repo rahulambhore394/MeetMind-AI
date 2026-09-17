@@ -24,4 +24,11 @@ interface RecordingApiService {
 
     @GET("api/meetings/{meetingId}/recordings")
     suspend fun listRecordings(@Path("meetingId") meetingId: Long): List<RecordingResponseDto>
+
+    @Streaming
+    @GET("api/meetings/{meetingId}/recordings/{recordingId}/download")
+    suspend fun downloadRecordingFile(
+        @Path("meetingId") meetingId: Long,
+        @Path("recordingId") recordingId: Long
+    ): okhttp3.ResponseBody
 }

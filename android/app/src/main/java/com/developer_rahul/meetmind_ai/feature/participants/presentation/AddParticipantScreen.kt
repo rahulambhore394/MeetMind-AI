@@ -41,15 +41,18 @@ fun AddParticipantScreen(
     
     // For MVP, we'll just invite one by one using email
     
-    LaunchedEffect(uiState.actionInProgress) {
-        // If we wanted to navigate back only on success:
-        // if (!uiState.actionInProgress && uiState.error == null && emailWasSubmitted) onInviteSent()
+    LaunchedEffect(meetingId) {
+        if (meetingId.isNotBlank()) {
+            viewModel.loadMeetingDetails(meetingId)
+        }
     }
+
+    var statusMessage by remember { mutableStateOf<String?>(null) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Add Participant", style = Typography.titleLarge, color = TextPrimary) },
+                title = { Text("Invite Participants", style = Typography.titleLarge, color = TextPrimary) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = TextPrimary)
@@ -62,12 +65,18 @@ fun AddParticipantScreen(
         bottomBar = {
             Box(modifier = Modifier.padding(24.dp).navigationBarsPadding()) {
                 MeetMindButton(
-                    text = "Send Invite",
+                    text = "Send Broadcast Invitation",
                     onClick = {
-                        val id = meetingId.toLongOrNull()
-                        if (id != null && email.isNotBlank()) {
-                            viewModel.inviteParticipant(id, email)
-                            email = "" // Reset after sending
+                        val targetId = meetingId.toLongOrNull() ?: uiState.selectedMeeting?.id
+                        if (targetId != null && email.isNotBlank()) {
+                            viewModel.batchInviteParticipants(targetId, email) { success, msg ->
+                                statusMessage = msg
+                                if (success) {
+                                    email = "" // Reset after sending
+                                }
+                            }
+                        } else {
+                            statusMessage = if (email.isBlank()) "Please enter at least one email address." else "Unable to resolve meeting ID."
                         }
                     },
                     isLoading = uiState.actionInProgress,
@@ -83,13 +92,13 @@ fun AddParticipantScreen(
                 .padding(20.dp)
         ) {
             Text(
-                "Invite by Email",
+                "Invite via Email Broadcast",
                 style = Typography.titleMedium,
                 color = TextPrimary
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "The person will receive an invitation to join this intelligent meeting.",
+                "Invite one or multiple people simultaneously. Enter email addresses separated by commas, spaces, or lines.",
                 style = Typography.bodyMedium,
                 color = TextSecondary
             )
@@ -99,11 +108,22 @@ fun AddParticipantScreen(
             MeetMindTextField(
                 value = email,
                 onValueChange = { email = it },
-                label = "Email Address",
-                leadingIcon = Icons.Default.Email
+                label = "Email Address(es)",
+                leadingIcon = Icons.Default.Email,
+                singleLine = false,
+                minLines = 3,
+                maxLines = 6,
+                modifier = Modifier.fillMaxWidth()
             )
             
-            if (uiState.error != null) {
+            if (statusMessage != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Text(
+                    statusMessage!!, 
+                    color = if (statusMessage!!.startsWith("Failed") || statusMessage!!.startsWith("Please")) RoseRed else EmeraldGreen, 
+                    style = Typography.bodySmall
+                )
+            } else if (uiState.error != null) {
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(uiState.error!!, color = RoseRed, style = Typography.bodySmall)
             }

@@ -17,10 +17,11 @@ class RecordingUploadTest {
 
     private lateinit var repository: RealRecordingRepository
     private val apiService: RecordingApiService = mockk()
-    private val webSocketManager: MeetingWebSocketManager = mockk()
+    private val webSocketManager: MeetingWebSocketManager = mockk(relaxed = true)
 
     @Before
     fun setup() {
+        io.mockk.every { webSocketManager.recordingEvents } returns kotlinx.coroutines.flow.MutableSharedFlow()
         repository = RealRecordingRepository(apiService, webSocketManager)
     }
 
