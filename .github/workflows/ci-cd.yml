@@ -71,7 +71,7 @@ jobs:
       - name: Accept Licenses & Install Android 37 SDK
         run: |
           yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-37.0" "platforms;android-37" "build-tools;36.0.0" || true
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platforms;android-37.0" "build-tools;36.0.0" || true
 
       - name: Build Android Debug APK
         run: |
