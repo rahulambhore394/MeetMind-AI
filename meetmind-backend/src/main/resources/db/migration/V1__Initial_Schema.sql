@@ -44,23 +44,47 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 );
 
 -- Recordings
-CREATE TABLE IF NOT EXISTS recordings (
+CREATE TABLE IF NOT EXISTS meeting_recordings (
     id BIGSERIAL PRIMARY KEY,
     meeting_id BIGINT NOT NULL REFERENCES meetings(id),
-    storage_path VARCHAR(500),
-    status VARCHAR(30) NOT NULL,
+    owner_id BIGINT NOT NULL REFERENCES users(id),
+    started_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    ended_at TIMESTAMP,
     duration BIGINT,
-    language VARCHAR(10),
-    owner_id BIGINT REFERENCES users(id),
+    storage_path VARCHAR(500),
+    status VARCHAR(50) NOT NULL,
+    media_format VARCHAR(20),
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Recording Chunks
+CREATE TABLE IF NOT EXISTS recording_chunks (
+    id BIGSERIAL PRIMARY KEY,
+    recording_id BIGINT NOT NULL REFERENCES meeting_recordings(id),
+    chunk_index INTEGER NOT NULL,
+    start_ms BIGINT NOT NULL,
+    end_ms BIGINT NOT NULL,
+    storage_path VARCHAR(500),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Audio Metadata
+CREATE TABLE IF NOT EXISTS audio_metadata (
+    recording_id BIGINT PRIMARY KEY REFERENCES meeting_recordings(id),
+    codec VARCHAR(50),
+    sample_rate INTEGER,
+    channels INTEGER,
+    bit_rate BIGINT,
+    duration_ms BIGINT,
+    format VARCHAR(20)
 );
 
 -- Transcripts
 CREATE TABLE IF NOT EXISTS transcripts (
     id BIGSERIAL PRIMARY KEY,
     meeting_id BIGINT NOT NULL REFERENCES meetings(id),
-    recording_id BIGINT REFERENCES recordings(id),
+    recording_id BIGINT REFERENCES meeting_recordings(id),
     full_text TEXT,
     status VARCHAR(30) NOT NULL,
     language VARCHAR(10),
@@ -82,7 +106,7 @@ CREATE TABLE IF NOT EXISTS transcript_segments (
 CREATE TABLE IF NOT EXISTS meeting_summaries (
     id BIGSERIAL PRIMARY KEY,
     meeting_id BIGINT NOT NULL REFERENCES meetings(id),
-    transcript_id BIGINT NOT NULL REFERENCES transcripts(id),
+    transcript_id BIGINT REFERENCES transcripts(id),
     summary TEXT,
     key_points_json TEXT,
     decisions_json TEXT,
@@ -96,7 +120,7 @@ CREATE TABLE IF NOT EXISTS meeting_summaries (
 );
 
 -- Action Items
-CREATE TABLE IF NOT EXISTS action_items (
+CREATE TABLE IF NOT EXISTS meeting_action_items (
     id BIGSERIAL PRIMARY KEY,
     meeting_id BIGINT NOT NULL REFERENCES meetings(id),
     meeting_summary_id BIGINT REFERENCES meeting_summaries(id),
@@ -177,13 +201,31 @@ CREATE TABLE IF NOT EXISTS notification_preferences (
     push_enabled BOOLEAN NOT NULL DEFAULT TRUE
 );
 
+-- Live Translations
+CREATE TABLE IF NOT EXISTS live_translations (
+    id BIGSERIAL PRIMARY KEY,
+    meeting_id BIGINT NOT NULL REFERENCES meetings(id),
+    transcript_segment_id BIGINT REFERENCES transcript_segments(id),
+    original_text TEXT NOT NULL,
+    translated_text TEXT NOT NULL,
+    source_language VARCHAR(10) NOT NULL,
+    target_language VARCHAR(10) NOT NULL,
+    speaker_id BIGINT REFERENCES users(id),
+    speaker_name VARCHAR(100),
+    is_final BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Indexes for performance
-CREATE INDEX idx_meetings_host_id ON meetings(host_id);
-CREATE INDEX idx_participants_meeting_id ON meeting_participants(meeting_id);
-CREATE INDEX idx_participants_user_id ON meeting_participants(user_id);
-CREATE INDEX idx_chat_messages_meeting_id ON chat_messages(meeting_id);
-CREATE INDEX idx_recordings_meeting_id ON recordings(meeting_id);
-CREATE INDEX idx_transcripts_meeting_id ON transcripts(meeting_id);
-CREATE INDEX idx_segments_transcript_id ON transcript_segments(transcript_id);
-CREATE INDEX idx_notifications_user_id ON notifications(user_id);
-CREATE INDEX idx_user_devices_user_id ON user_devices(user_id);
+CREATE INDEX IF NOT EXISTS idx_meetings_host_id ON meetings(host_id);
+CREATE INDEX IF NOT EXISTS idx_participants_meeting_id ON meeting_participants(meeting_id);
+CREATE INDEX IF NOT EXISTS idx_participants_user_id ON meeting_participants(user_id);
+CREATE INDEX IF NOT EXISTS idx_chat_messages_meeting_id ON chat_messages(meeting_id);
+CREATE INDEX IF NOT EXISTS idx_recordings_meeting_id ON meeting_recordings(meeting_id);
+CREATE INDEX IF NOT EXISTS idx_recording_chunks_recording_id ON recording_chunks(recording_id);
+CREATE INDEX IF NOT EXISTS idx_transcripts_meeting_id ON transcripts(meeting_id);
+CREATE INDEX IF NOT EXISTS idx_segments_transcript_id ON transcript_segments(transcript_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_devices_user_id ON user_devices(user_id);
+CREATE INDEX IF NOT EXISTS idx_lt_meeting_target_lang ON live_translations(meeting_id, target_language);
+CREATE INDEX IF NOT EXISTS idx_lt_segment_target_lang ON live_translations(transcript_segment_id, target_language);

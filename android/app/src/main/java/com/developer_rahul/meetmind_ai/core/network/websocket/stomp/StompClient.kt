@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import okhttp3.*
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.ConcurrentLinkedQueue
 
 class StompClient(
     private val client: OkHttpClient,
@@ -21,8 +21,11 @@ class StompClient(
     val connectionState: SharedFlow<ConnectionState> = _connectionState.asSharedFlow()
 
     private val subscriptions = mutableMapOf<String, String>() // destination to id
+    private val pendingFrames = ConcurrentLinkedQueue<StompFrame>()
+    @Volatile private var isConnected = false
 
     fun connect() {
+        _connectionState.tryEmit(ConnectionState.Connecting)
         val request = Request.Builder()
             .url(url)
             .build()
@@ -41,11 +44,15 @@ class StompClient(
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d("StompClient", "WebSocket Closing: $reason")
+                isConnected = false
+                pendingFrames.clear()
                 _connectionState.tryEmit(ConnectionState.Disconnected)
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e("StompClient", "WebSocket Failure: ${t.message}")
+                isConnected = false
+                pendingFrames.clear()
                 _connectionState.tryEmit(ConnectionState.Error(t.message ?: "Unknown error"))
             }
         })
@@ -59,12 +66,16 @@ class StompClient(
         connectHeaders.putAll(headers)
         
         val frame = StompFrame("CONNECT", connectHeaders)
-        sendFrame(frame)
+        sendRawFrame(frame)
     }
 
     private val subIdCounter = java.util.concurrent.atomic.AtomicLong(0)
 
     fun subscribe(destination: String): String {
+        val existingId = subscriptions[destination]
+        if (existingId != null) {
+            return existingId
+        }
         val id = "sub-${subIdCounter.incrementAndGet()}"
         subscriptions[destination] = id
         val frame = StompFrame("SUBSCRIBE", mapOf("id" to id, "destination" to destination))
@@ -79,24 +90,52 @@ class StompClient(
     }
 
     fun send(destination: String, body: String) {
-        val frame = StompFrame("SEND", mapOf("destination" to destination), body)
+        val headers = mapOf(
+            "destination" to destination,
+            "content-type" to "application/json;charset=UTF-8"
+        )
+        val frame = StompFrame("SEND", headers, body)
         sendFrame(frame)
     }
 
     private fun sendFrame(frame: StompFrame) {
+        if (!isConnected) {
+            Log.d("StompClient", "Queueing frame before CONNECTED: ${frame.command} to ${frame.headers["destination"]}")
+            pendingFrames.add(frame)
+            return
+        }
+        sendRawFrame(frame)
+    }
+
+    private fun sendRawFrame(frame: StompFrame) {
         Log.v("StompClient", "Sending: $frame")
         webSocket?.send(frame.toString())
     }
 
     private fun handleFrame(frame: StompFrame) {
         when (frame.command) {
-            "CONNECTED" -> _connectionState.tryEmit(ConnectionState.Connected)
+            "CONNECTED" -> {
+                Log.d("StompClient", "STOMP Connected successfully")
+                isConnected = true
+                _connectionState.tryEmit(ConnectionState.Connected)
+                flushPendingFrames()
+            }
             "MESSAGE" -> _events.tryEmit(frame)
             "ERROR" -> Log.e("StompClient", "STOMP Error: ${frame.body}")
         }
     }
 
+    private fun flushPendingFrames() {
+        while (pendingFrames.isNotEmpty()) {
+            val frame = pendingFrames.poll() ?: break
+            Log.v("StompClient", "Flushing queued frame: ${frame.command} to ${frame.headers["destination"]}")
+            sendRawFrame(frame)
+        }
+    }
+
     fun disconnect() {
+        isConnected = false
+        pendingFrames.clear()
         webSocket?.close(1000, "User logout")
         webSocket = null
         subscriptions.clear()

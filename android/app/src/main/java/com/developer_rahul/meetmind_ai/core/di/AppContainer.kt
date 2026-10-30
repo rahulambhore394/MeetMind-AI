@@ -174,6 +174,6 @@ class AppContainer(context: Context) {
     }
 
     val meetingCallRepository: MeetingCallRepository by lazy {
-        MeetingCallRepository(webRtcApiService, meetingWebSocketManager, webRtcManager)
+        MeetingCallRepository(webRtcApiService, meetingWebSocketManager, webRtcManager, tokenProvider)
     }
 }

@@ -2,7 +2,9 @@ package com.developer_rahul.meetmind_ai.feature.meetings.presentation
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
@@ -20,48 +22,53 @@ import com.developer_rahul.meetmind_ai.core.ui.components.*
 
 @Composable
 fun MeetingEndedScreen(
-    duration: String = "45:22",
+    duration: String = "00:00",
     onViewSummary: () -> Unit,
+    onViewReport: () -> Unit = {},
     onBackToHome: () -> Unit
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundSurface)
-            .padding(24.dp),
+            .padding(24.dp)
+            .verticalScroll(rememberScrollState()),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Spacer(modifier = Modifier.height(32.dp))
+
         Surface(
-            modifier = Modifier.size(120.dp),
+            modifier = Modifier.size(110.dp),
             shape = CircleShape,
             color = EmeraldGreen.copy(alpha = 0.1f),
             border = androidx.compose.foundation.BorderStroke(2.dp, EmeraldGreen.copy(alpha = 0.4f))
         ) {
             Box(contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(64.dp), tint = EmeraldGreen)
+                Icon(Icons.Default.CheckCircle, null, modifier = Modifier.size(60.dp), tint = EmeraldGreen)
             }
         }
         
-        Spacer(modifier = Modifier.height(32.dp))
+        Spacer(modifier = Modifier.height(28.dp))
         
         Text(
-            "Meeting Ended",
+            "Meeting Concluded",
             style = Typography.displaySmall,
             color = TextPrimary,
             fontWeight = FontWeight.Black
         )
         
-        Spacer(modifier = Modifier.height(12.dp))
+        Spacer(modifier = Modifier.height(10.dp))
         
         Text(
-            "The session has successfully concluded.",
-            style = Typography.bodyLarge,
+            "The meeting session has ended. AI processing is synthesizing comprehensive reports and saving recordings.",
+            style = Typography.bodyMedium,
             color = TextSecondary,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
+            lineHeight = 20.sp
         )
         
-        Spacer(modifier = Modifier.height(48.dp))
+        Spacer(modifier = Modifier.height(36.dp))
         
         MeetMindCard {
             Row(
@@ -71,35 +78,52 @@ fun MeetingEndedScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text("Duration", style = Typography.labelSmall, color = TextSecondary)
-                    Text(duration, style = Typography.titleLarge, color = TextPrimary)
+                    Text(duration, style = Typography.titleLarge, color = TextPrimary, fontWeight = FontWeight.Bold)
                 }
                 Box(modifier = Modifier.width(1.dp).height(40.dp).background(BorderColor))
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("AI Insights", style = Typography.labelSmall, color = TextSecondary)
-                    Text("Ready", style = Typography.titleLarge, color = NeonCyan)
+                    Text("AI Intelligence", style = Typography.labelSmall, color = TextSecondary)
+                    Text("Generated ⚡", style = Typography.titleLarge, color = NeonCyan, fontWeight = FontWeight.Bold)
                 }
             }
         }
         
-        Spacer(modifier = Modifier.height(64.dp))
+        Spacer(modifier = Modifier.height(48.dp))
         
         MeetMindButton(
-            text = "View AI Summary",
-            onClick = onViewSummary,
+            text = "View Comprehensive Report 📊",
+            onClick = onViewReport,
             isAiAction = true
         )
         
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedButton(
+            onClick = onViewSummary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = MaterialTheme.shapes.medium,
+            border = androidx.compose.foundation.BorderStroke(1.5.dp, ElectricIndigo)
+        ) {
+            Icon(Icons.Default.AutoAwesome, null, tint = ElectricIndigo, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("View AI Studio Insights", color = ElectricIndigo, style = Typography.labelLarge)
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
         
         OutlinedButton(
             onClick = onBackToHome,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp),
+                .height(52.dp),
             shape = MaterialTheme.shapes.medium,
-            border = androidx.compose.foundation.BorderStroke(1.5.dp, GlassWhite)
+            border = androidx.compose.foundation.BorderStroke(1.dp, GlassWhite)
         ) {
             Text("Back to Dashboard", color = TextPrimary, style = Typography.labelLarge)
         }
+
+        Spacer(modifier = Modifier.height(32.dp))
     }
 }

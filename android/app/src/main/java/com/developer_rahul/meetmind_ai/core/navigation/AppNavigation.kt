@@ -195,7 +195,7 @@ fun AppNavigation(navController: NavHostController) {
             val id = backStackEntry.arguments?.getString("meetingId") ?: ""
             LiveMeetingScreen(
                 meetingId = id,
-                onLeaveMeeting = { navController.navigate(Screen.MeetingEnded.createRoute(id, "45:20")) },
+                onLeaveMeeting = { duration -> navController.navigate(Screen.MeetingEnded.createRoute(id, duration)) },
                 onToggleChat = { navController.navigate(Screen.Chat.createRoute(id)) },
                 onToggleParticipants = { navController.navigate(Screen.Participants.createRoute(id)) },
                 onViewTranscript = { navController.navigate(Screen.Transcript.createRoute(id)) },
@@ -267,6 +267,7 @@ fun AppNavigation(navController: NavHostController) {
             MeetingEndedScreen(
                 duration = duration,
                 onViewSummary = { navController.navigate(Screen.MeetingIntelligence.createRoute(meetingId)) },
+                onViewReport = { navController.navigate(Screen.ComprehensiveReport.createRoute(meetingId)) },
                 onBackToHome = { navController.navigate(Screen.Dashboard.route) { popUpTo(0) } }
             )
         }

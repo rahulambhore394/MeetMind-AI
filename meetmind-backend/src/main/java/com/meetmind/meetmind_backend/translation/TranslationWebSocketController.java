@@ -37,9 +37,10 @@ public class TranslationWebSocketController {
             @Payload LiveTranslateMessage message,
             Principal principal
     ) {
+        User currentUser = extractUser(principal);
         String speaker = message.speaker();
-        if (speaker == null && principal instanceof UsernamePasswordAuthenticationToken auth && auth.getPrincipal() instanceof User user) {
-            speaker = user.getName();
+        if (speaker == null && currentUser != null) {
+            speaker = currentUser.getName();
         }
 
         try {
@@ -79,11 +80,27 @@ public class TranslationWebSocketController {
             @Payload LanguagePreferenceMessage message,
             Principal principal
     ) {
-        if (principal instanceof UsernamePasswordAuthenticationToken auth && auth.getPrincipal() instanceof User user) {
-            preferenceService.setUserLanguagePreference(meetingId, user.getId(), message.targetLanguage());
+        User currentUser = extractUser(principal);
+        if (currentUser != null && message.targetLanguage() != null && !message.targetLanguage().isBlank()) {
+            preferenceService.setUserLanguagePreference(meetingId, currentUser.getId(), message.targetLanguage());
             log.info("TranslationWebSocketController: Set language preference '{}' for user {} in meeting {}",
-                    message.targetLanguage(), user.getId(), meetingId);
+                    message.targetLanguage(), currentUser.getId(), meetingId);
         }
+    }
+
+    private User extractUser(Principal principal) {
+        if (principal instanceof UsernamePasswordAuthenticationToken auth) {
+            if (auth.getPrincipal() instanceof com.meetmind.meetmind_backend.auth.UserPrincipal up) {
+                return up.getUser();
+            }
+            if (auth.getPrincipal() instanceof User user) {
+                return user;
+            }
+        }
+        if (principal instanceof com.meetmind.meetmind_backend.auth.UserPrincipal up) {
+            return up.getUser();
+        }
+        return null;
     }
 
     public record LiveTranslateMessage(

@@ -311,12 +311,12 @@ public class ParticipantService {
                 );
         MeetingEvent event =
                 new MeetingEvent(
-                        MeetingEventType.PARTICIPANT_LEFT,
+                        MeetingEventType.PARTICIPANT_ACCEPTED,
                         meetingId,
                         currentUserId,
                         participant.getUser().getName(),
                         participant.getUser().getName()
-                                + " left the meeting"
+                                + " accepted the invitation"
                 );
 
 

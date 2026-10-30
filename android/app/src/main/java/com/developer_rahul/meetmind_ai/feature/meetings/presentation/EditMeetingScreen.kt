@@ -43,9 +43,10 @@ fun EditMeetingScreen(
         }
     }
 
+    val context = androidx.compose.ui.platform.LocalContext.current
     if (showDeleteConfirm) {
         AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
+            onDismissRequest = { if (!uiState.actionInProgress) showDeleteConfirm = false },
             containerColor = BackgroundSurface,
             title = { Text("Delete Meeting?", style = Typography.titleMedium, color = TextPrimary) },
             text = { Text("Are you sure you want to delete this meeting? This action cannot be undone.", color = TextSecondary) },
@@ -54,19 +55,35 @@ fun EditMeetingScreen(
                     onClick = {
                         val id = meetingId.toLongOrNull()
                         if (id != null) {
-                            viewModel.deleteMeeting(id) {
-                                showDeleteConfirm = false
-                                onSave()
-                            }
+                            viewModel.deleteMeeting(
+                                meetingId = id,
+                                onSuccess = {
+                                    showDeleteConfirm = false
+                                    android.widget.Toast.makeText(context, "Meeting removed", android.widget.Toast.LENGTH_SHORT).show()
+                                    onSave()
+                                },
+                                onError = { err ->
+                                    showDeleteConfirm = false
+                                    android.widget.Toast.makeText(context, err, android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            )
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = RoseRed)
+                    colors = ButtonDefaults.buttonColors(containerColor = RoseRed),
+                    enabled = !uiState.actionInProgress
                 ) {
-                    Text("Delete", color = Color.White)
+                    if (uiState.actionInProgress) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                    } else {
+                        Text("Delete", color = Color.White)
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
+                TextButton(
+                    onClick = { showDeleteConfirm = false },
+                    enabled = !uiState.actionInProgress
+                ) {
                     Text("Cancel", color = TextSecondary)
                 }
             }

@@ -67,7 +67,7 @@ fun AiRepRecordingScreen(
                 border = androidx.compose.foundation.BorderStroke(2.dp, if (isRecording) RoseRed else GlassWhite)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    // Mock camera feed
+                    // Camera preview silhouette
                     Icon(Icons.Default.Person, null, modifier = Modifier.size(140.dp), tint = Color.White.copy(alpha = 0.05f))
                     
                     if (isRecording) {

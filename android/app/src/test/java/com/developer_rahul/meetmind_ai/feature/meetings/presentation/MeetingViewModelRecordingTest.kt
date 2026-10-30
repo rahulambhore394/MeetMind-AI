@@ -44,6 +44,7 @@ class MeetingViewModelRecordingTest {
         every { webSocketManager.events } returns kotlinx.coroutines.flow.MutableSharedFlow<com.developer_rahul.meetmind_ai.feature.meetings.domain.model.MeetingRealtimeEvent>()
         every { presenceRepository.onlineParticipantIds } returns MutableStateFlow<Set<Long>>(emptySet())
         every { recordingRepository.recordingEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<Map<String, String>>()
+        every { intelligenceRepository.intelligenceEvents } returns kotlinx.coroutines.flow.MutableSharedFlow<Map<String, String>>()
         viewModel = MeetingViewModel(
             meetingRepository,
             webSocketManager,

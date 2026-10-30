@@ -17,9 +17,9 @@ class ChatViewModel(
     val uiState = _uiState.asStateFlow()
 
     init {
+        chatRepository.subscribeToChat(meetingId)
         loadHistory()
         observeMessages()
-        chatRepository.subscribeToChat(meetingId)
     }
 
     private fun loadHistory() {
@@ -27,7 +27,12 @@ class ChatViewModel(
             _uiState.update { it.copy(isLoading = true) }
             when (val result = chatRepository.getMessages(meetingId)) {
                 is NetworkResult.Success -> {
-                    _uiState.update { it.copy(isLoading = false, messages = result.data.reversed()) }
+                    _uiState.update { state ->
+                        val historyMessages = result.data.reversed()
+                        val merged = (state.messages + historyMessages)
+                            .distinctBy { if (it.id > 0L) it.id else it.text.hashCode().toLong() }
+                        state.copy(isLoading = false, messages = merged)
+                    }
                 }
                 is NetworkResult.Error -> {
                     _uiState.update { it.copy(isLoading = false, error = result.error.message) }
@@ -43,9 +48,17 @@ class ChatViewModel(
                 .filter { it.meetingId == meetingId }
                 .collect { message ->
                     _uiState.update { state ->
-                        // Deduplicate and insert at the beginning (since UI is reverseLayout = true)
-                        if (state.messages.any { it.id == message.id }) state
-                        else state.copy(messages = listOf(message) + state.messages)
+                        // Deduplicate: replace optimistic local message or insert incoming
+                        val existingIndex = state.messages.indexOfFirst {
+                            it.id == message.id || (it.isMe && it.text == message.text)
+                        }
+                        if (existingIndex >= 0) {
+                            val updated = state.messages.toMutableList()
+                            updated[existingIndex] = message
+                            state.copy(messages = updated)
+                        } else {
+                            state.copy(messages = listOf(message) + state.messages)
+                        }
                     }
                 }
         }
@@ -56,11 +69,27 @@ class ChatViewModel(
     }
 
     fun sendMessage() {
-        val content = _uiState.value.pendingMessage
+        val content = _uiState.value.pendingMessage.trim()
         if (content.isBlank()) return
 
+        val optimisticMessage = ChatMessage(
+            id = System.currentTimeMillis(),
+            meetingId = meetingId,
+            senderId = -1L,
+            senderName = "You",
+            text = content,
+            timestamp = "Just now",
+            isMe = true
+        )
+
+        _uiState.update { state ->
+            state.copy(
+                pendingMessage = "",
+                messages = listOf(optimisticMessage) + state.messages
+            )
+        }
+
         chatRepository.sendMessage(meetingId, content)
-        _uiState.update { it.copy(pendingMessage = "") }
     }
 
     override fun onCleared() {

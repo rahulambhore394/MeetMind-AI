@@ -40,6 +40,29 @@ object AudioDeviceManager {
         val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
         audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            val commDevices = audioManager.availableCommunicationDevices
+            val targetType = when (deviceName) {
+                "Speaker" -> AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+                "Earpiece" -> AudioDeviceInfo.TYPE_BUILTIN_EARPIECE
+                "Bluetooth" -> AudioDeviceInfo.TYPE_BLUETOOTH_SCO
+                "Headset" -> AudioDeviceInfo.TYPE_WIRED_HEADSET
+                else -> AudioDeviceInfo.TYPE_BUILTIN_SPEAKER
+            }
+
+            val matchingDevice = commDevices.find { it.type == targetType }
+                ?: (if (deviceName == "Bluetooth") commDevices.find { it.type == AudioDeviceInfo.TYPE_BLE_HEADSET } else null)
+                ?: (if (deviceName == "Headset") commDevices.find { it.type == AudioDeviceInfo.TYPE_USB_HEADSET || it.type == AudioDeviceInfo.TYPE_WIRED_HEADPHONES } else null)
+
+            if (matchingDevice != null) {
+                val success = audioManager.setCommunicationDevice(matchingDevice)
+                if (success) {
+                    return
+                }
+            }
+        }
+
+        // Fallback for API < 31 or if setCommunicationDevice returns false
         when (deviceName) {
             "Speaker" -> {
                 audioManager.isSpeakerphoneOn = true
@@ -67,6 +90,23 @@ object AudioDeviceManager {
                     audioManager.isBluetoothScoOn = false
                 }
             }
+        }
+    }
+
+    fun resetToNormalMode(context: Context) {
+        try {
+            val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                audioManager.clearCommunicationDevice()
+            }
+            if (audioManager.isBluetoothScoOn) {
+                audioManager.stopBluetoothSco()
+                audioManager.isBluetoothScoOn = false
+            }
+            audioManager.isSpeakerphoneOn = false
+            audioManager.mode = AudioManager.MODE_NORMAL
+        } catch (e: Exception) {
+            // Ignored
         }
     }
 }

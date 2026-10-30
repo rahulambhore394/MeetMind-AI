@@ -2,6 +2,7 @@ package com.developer_rahul.meetmind_ai.feature.meetingroom.presentation
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.developer_rahul.meetmind_ai.core.media.audio.AudioDeviceManager
 import com.developer_rahul.meetmind_ai.core.media.tts.TextToSpeechManager
 import com.developer_rahul.meetmind_ai.core.network.websocket.MeetingWebSocketManager
 import com.developer_rahul.meetmind_ai.feature.meetingroom.data.repository.MeetingCallRepository
@@ -30,6 +31,10 @@ class LiveMeetingViewModel(
         observeEvents()
         observeAiProxySpeech()
         joinMeeting()
+    }
+
+    fun initAudioRouting(context: android.content.Context) {
+        selectAudioDevice(context, _uiState.value.selectedAudioDevice)
     }
 
     private fun observeEvents() {
@@ -145,6 +150,11 @@ class LiveMeetingViewModel(
         meetingCallRepository.setVideoEnabled(enabled)
     }
 
+    fun selectAudioDevice(context: android.content.Context, deviceName: String) {
+        AudioDeviceManager.selectAudioDevice(context, deviceName)
+        _uiState.update { it.copy(selectedAudioDevice = deviceName) }
+    }
+
     fun switchCamera() {
         meetingCallRepository.switchCamera()
     }
@@ -192,5 +202,6 @@ data class LiveMeetingUiState(
     val participants: Map<Long, ParticipantMediaState> = emptyMap(),
     val isScreenSharing: Boolean = false,
     val error: String? = null,
-    val activeAiSpeech: AiProxySpeechDto? = null
+    val activeAiSpeech: AiProxySpeechDto? = null,
+    val selectedAudioDevice: String = "Speaker"
 )

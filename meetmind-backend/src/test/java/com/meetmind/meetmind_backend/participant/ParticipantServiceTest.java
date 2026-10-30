@@ -21,6 +21,7 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -118,20 +119,35 @@ public class ParticipantServiceTest {
         com.meetmind.meetmind_backend.participant.dto.InviteParticipantRequest req = new com.meetmind.meetmind_backend.participant.dto.InviteParticipantRequest();
         req.setEmail(inviteeEmail);
 
-        MeetingParticipant hostPart = new MeetingParticipant();
-        hostPart.setMeeting(liveMeeting);
-        hostPart.setUser(host);
-        hostPart.setRole(ParticipantRole.HOST);
-
+        // Stub host as a participant or host so verifyParticipantOrHost passes (host.id = 1L == currentUserId 1L)
         when(meetingRepository.findById(100L)).thenReturn(Optional.of(liveMeeting));
         when(userRepository.findByEmail(inviteeEmail)).thenReturn(Optional.empty());
+
+        // Unregistered user -> service calls userRepository.save(). Return a saved user with an ID.
+        User savedInvitee = new User();
+        savedInvitee.setId(99L);
+        savedInvitee.setName("rahulambhore");
+        savedInvitee.setEmail(inviteeEmail);
+        savedInvitee.setPassword("INVITED_PLACEHOLDER_xxx");
+        when(userRepository.save(any(User.class))).thenReturn(savedInvitee);
+
+        // Service then checks if participant already exists, then saves a new participant
+        when(participantRepository.findByMeetingIdAndUserId(100L, 99L)).thenReturn(Optional.empty());
+
+        // Use Mockito mock because MeetingParticipant has no setId() (JPA-managed ID)
+        MeetingParticipant savedParticipant = mock(MeetingParticipant.class);
+        when(savedParticipant.getId()).thenReturn(50L);
+        when(savedParticipant.getUser()).thenReturn(savedInvitee);
+        when(savedParticipant.getRole()).thenReturn(ParticipantRole.PARTICIPANT);
+        when(savedParticipant.getStatus()).thenReturn(ParticipantStatus.INVITED);
+        when(participantRepository.save(any(MeetingParticipant.class))).thenReturn(savedParticipant);
 
         ParticipantResponse response = participantService.inviteParticipant(100L, req, 1L);
 
         assertNotNull(response);
-        assertNull(response.getId());
-        assertNull(response.getUserId());
-        assertEquals(inviteeEmail, response.getName());
+        assertEquals(50L, response.getId());
+        assertEquals(99L, response.getUserId());
+        assertEquals("rahulambhore", response.getName());
         assertEquals(inviteeEmail, response.getEmail());
         assertEquals("INVITED", response.getStatus());
 

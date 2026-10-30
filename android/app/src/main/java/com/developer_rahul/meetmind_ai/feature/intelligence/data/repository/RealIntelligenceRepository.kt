@@ -45,6 +45,81 @@ class RealIntelligenceRepository(
         }
     }
 
+    override suspend fun getDecisions(meetingId: Long): NetworkResult<List<String>> {
+        return try {
+            val response = intelligenceApiService.getDecisions(meetingId)
+            NetworkResult.Success(response)
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun addDecision(meetingId: Long, decision: String): NetworkResult<List<String>> {
+        return try {
+            val response = intelligenceApiService.addDecision(meetingId, mapOf("decision" to decision))
+            NetworkResult.Success(response)
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun deleteDecision(meetingId: Long, index: Int): NetworkResult<List<String>> {
+        return try {
+            val response = intelligenceApiService.deleteDecision(meetingId, index)
+            NetworkResult.Success(response)
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun getChapters(meetingId: Long): NetworkResult<List<com.developer_rahul.meetmind_ai.feature.intelligence.data.remote.dto.TopicChapterDto>> {
+        return try {
+            val response = intelligenceApiService.getChapters(meetingId)
+            NetworkResult.Success(response)
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun getParkingLot(meetingId: Long): NetworkResult<List<com.developer_rahul.meetmind_ai.feature.intelligence.data.remote.dto.ParkingQuestionDto>> {
+        return try {
+            val response = intelligenceApiService.getParkingLot(meetingId)
+            NetworkResult.Success(response)
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun addParkingQuestion(meetingId: Long, question: String, askedBy: String, status: String): NetworkResult<List<com.developer_rahul.meetmind_ai.feature.intelligence.data.remote.dto.ParkingQuestionDto>> {
+        return try {
+            val body = mapOf("question" to question, "askedBy" to askedBy, "status" to status)
+            val response = intelligenceApiService.addParkingQuestion(meetingId, body)
+            NetworkResult.Success(response)
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun updateParkingQuestionStatus(meetingId: Long, index: Int, status: String, notes: String?): NetworkResult<List<com.developer_rahul.meetmind_ai.feature.intelligence.data.remote.dto.ParkingQuestionDto>> {
+        return try {
+            val body = mutableMapOf("status" to status)
+            if (notes != null) body["notes"] = notes
+            val response = intelligenceApiService.updateParkingQuestion(meetingId, index, body)
+            NetworkResult.Success(response)
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun deleteParkingQuestion(meetingId: Long, index: Int): NetworkResult<List<com.developer_rahul.meetmind_ai.feature.intelligence.data.remote.dto.ParkingQuestionDto>> {
+        return try {
+            val response = intelligenceApiService.deleteParkingQuestion(meetingId, index)
+            NetworkResult.Success(response)
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
     override fun subscribeToIntelligence(meetingId: Long) {
         webSocketManager.subscribeToIntelligence(meetingId)
     }

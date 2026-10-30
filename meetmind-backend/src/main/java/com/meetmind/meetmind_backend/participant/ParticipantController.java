@@ -2,6 +2,7 @@ package com.meetmind.meetmind_backend.participant;
 
 
 
+import com.meetmind.meetmind_backend.common.SecurityUtils;
 import com.meetmind.meetmind_backend.participant.dto.BatchInviteRequest;
 import com.meetmind.meetmind_backend.participant.dto.BatchInviteResponse;
 import com.meetmind.meetmind_backend.participant.dto.InviteParticipantRequest;
@@ -52,7 +53,7 @@ public class ParticipantController {
     ) {
 
         User currentUser =
-                (User) authentication.getPrincipal();
+                SecurityUtils.extractUser(authentication);
 
 
         ParticipantResponse response =
@@ -77,7 +78,7 @@ public class ParticipantController {
             @Valid @RequestBody BatchInviteRequest request,
             Authentication authentication
     ) {
-        User currentUser = (User) authentication.getPrincipal();
+        User currentUser = SecurityUtils.extractUser(authentication);
         BatchInviteResponse response = participantService.inviteParticipantsBatch(
                 meetingId,
                 request,
@@ -104,7 +105,7 @@ public class ParticipantController {
     ) {
 
         User currentUser =
-                (User) authentication.getPrincipal();
+                SecurityUtils.extractUser(authentication);
 
 
         return ResponseEntity.ok(
@@ -135,7 +136,7 @@ public class ParticipantController {
     ) {
 
         User currentUser =
-                (User) authentication.getPrincipal();
+                SecurityUtils.extractUser(authentication);
 
 
         // Security:
@@ -182,7 +183,7 @@ public class ParticipantController {
     ) {
 
         User currentUser =
-                (User) authentication.getPrincipal();
+                SecurityUtils.extractUser(authentication);
 
 
         if (
@@ -224,7 +225,7 @@ public class ParticipantController {
     ) {
 
         User currentUser =
-                (User) authentication.getPrincipal();
+                SecurityUtils.extractUser(authentication);
 
 
         return ResponseEntity.ok(
@@ -253,7 +254,7 @@ public class ParticipantController {
     ) {
 
         User currentUser =
-                (User) authentication.getPrincipal();
+                SecurityUtils.extractUser(authentication);
 
 
         return ResponseEntity.ok(

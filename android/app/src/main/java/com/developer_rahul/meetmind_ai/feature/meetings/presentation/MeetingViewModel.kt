@@ -15,6 +15,8 @@ import com.developer_rahul.meetmind_ai.core.network.token.TokenProvider
 import com.developer_rahul.meetmind_ai.feature.recording.domain.model.RecordingStatus
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 
 class MeetingViewModel(
     private val meetingRepository: MeetingRepository,
@@ -38,6 +40,7 @@ class MeetingViewModel(
         observeRealtimeEvents()
         observePresence()
         observeRecordingEvents()
+        observeIntelligenceEvents()
         observeLocalRecordingState()
         webSocketManager.connect()
     }
@@ -82,6 +85,20 @@ class MeetingViewModel(
         }
     }
 
+    private fun observeIntelligenceEvents() {
+        viewModelScope.launch {
+            intelligenceRepository.intelligenceEvents.collect { event ->
+                val type = event["type"]
+                val meetingId = event["meetingId"]?.toLongOrNull()
+                if (meetingId != null && meetingId == _uiState.value.selectedMeeting?.id) {
+                    if (type == "AI_SUMMARY_READY" || type == "ACTION_ITEMS_EXTRACTED") {
+                        loadIntelligenceSummary(meetingId)
+                    }
+                }
+            }
+        }
+    }
+
     private fun observePresence() {
         viewModelScope.launch {
             presenceRepository.onlineParticipantIds.collect { onlineIds ->
@@ -98,6 +115,24 @@ class MeetingViewModel(
     }
 
     private fun observeRealtimeEvents() {
+        viewModelScope.launch {
+            // existing code ... (unchanged)
+        }
+    }
+
+    // Refresh participants list for a meeting
+    fun refreshMeetingParticipants(meetingId: Long) {
+        viewModelScope.launch {
+            when (val result = meetingRepository.getParticipants(meetingId)) {
+                is NetworkResult.Success -> {
+                    _uiState.update { it.copy(participants = result.data) }
+                }
+                is NetworkResult.Error -> {
+                    // Optionally handle error, e.g., log or show toast
+                }
+            }
+        }
+    }
         viewModelScope.launch {
             webSocketManager.events.collect { event ->
                 handleRealtimeEvent(event)
@@ -156,13 +191,19 @@ class MeetingViewModel(
         }
 
         if (event is MeetingRealtimeEvent.ParticipantJoined || event is MeetingRealtimeEvent.ParticipantLeft) {
-            loadMeetingDetails(event.meetingId.toString())
+            viewModelScope.launch {
+                val result = meetingRepository.getParticipants(event.meetingId)
+                if (result is NetworkResult.Success) {
+                    _uiState.update { it.copy(participants = result.data) }
+                }
+            }
         }
     }
 
     fun loadMeetings() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, error = null) }
+            // Only show full loading spinner if there is no meeting data yet
+            _uiState.update { it.copy(isLoading = it.meetings.isEmpty(), error = null) }
             when (val result = meetingRepository.getAllMeetings()) {
                 is NetworkResult.Success -> {
                     val sorted = result.data.sortedByDescending { it.id }
@@ -188,72 +229,92 @@ class MeetingViewModel(
         val numericId = meetingIdOrCode.toLongOrNull()
         
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingDetails = true, detailsError = null) }
+            // Immediate warm cache: if this meeting is already in the list, display it right away!
+            val cachedMeeting = _uiState.value.meetings.firstOrNull { it.id == numericId || it.meetingCode == meetingIdOrCode }
+            if (cachedMeeting != null) {
+                _uiState.update { it.copy(selectedMeeting = cachedMeeting) }
+            }
+            _uiState.update { it.copy(isLoadingDetails = it.selectedMeeting == null, detailsError = null) }
             
-            val meetingResult = if (numericId != null) {
-                webSocketManager.subscribeToMeeting(numericId)
-                presenceRepository.subscribeToPresence(numericId)
-                recordingRepository.subscribeToRecordingEvents(numericId)
-                meetingRepository.getMeeting(numericId)
-            } else {
-                meetingRepository.getMeetingByCode(meetingIdOrCode)
-            }
-
-            val fetchedId = when (meetingResult) {
-                is NetworkResult.Success -> {
-                    val m = meetingResult.data
-                    if (numericId == null) {
-                        webSocketManager.subscribeToMeeting(m.id)
-                        presenceRepository.subscribeToPresence(m.id)
-                        recordingRepository.subscribeToRecordingEvents(m.id)
+            coroutineScope {
+                val meetingDeferred = async {
+                    if (numericId != null) {
+                        webSocketManager.subscribeToMeeting(numericId)
+                        presenceRepository.subscribeToPresence(numericId)
+                        recordingRepository.subscribeToRecordingEvents(numericId)
+                        intelligenceRepository.subscribeToIntelligence(numericId)
+                        meetingRepository.getMeeting(numericId)
+                    } else {
+                        meetingRepository.getMeetingByCode(meetingIdOrCode)
                     }
-                    m.id
                 }
-                else -> numericId
-            }
 
-            val participantsResult = if (fetchedId != null) meetingRepository.getParticipants(fetchedId) else NetworkResult.Error(com.developer_rahul.meetmind_ai.core.network.model.MeetMindError(type = com.developer_rahul.meetmind_ai.core.network.model.ErrorType.NOT_FOUND, message = "Invalid ID"))
-            val recordingsResult = if (fetchedId != null) recordingRepository.listRecordings(fetchedId) else NetworkResult.Error(com.developer_rahul.meetmind_ai.core.network.model.MeetMindError(type = com.developer_rahul.meetmind_ai.core.network.model.ErrorType.NOT_FOUND, message = "Invalid ID"))
+                val participantsDeferred = if (numericId != null) {
+                    async { meetingRepository.getParticipants(numericId) }
+                } else null
 
-            _uiState.update { state ->
-                var newState = state.copy(isLoadingDetails = false)
+                val recordingsDeferred = if (numericId != null) {
+                    async { recordingRepository.listRecordings(numericId) }
+                } else null
+
+                val meetingResult = meetingDeferred.await()
+                val fetchedId = when (meetingResult) {
+                    is NetworkResult.Success -> {
+                        val m = meetingResult.data
+                        if (numericId == null) {
+                            webSocketManager.subscribeToMeeting(m.id)
+                            presenceRepository.subscribeToPresence(m.id)
+                            recordingRepository.subscribeToRecordingEvents(m.id)
+                            intelligenceRepository.subscribeToIntelligence(m.id)
+                        }
+                        m.id
+                    }
+                    else -> numericId
+                }
+
+                val participantsResult = participantsDeferred?.await()
+                    ?: if (fetchedId != null) meetingRepository.getParticipants(fetchedId) else NetworkResult.Error(com.developer_rahul.meetmind_ai.core.network.model.MeetMindError(type = com.developer_rahul.meetmind_ai.core.network.model.ErrorType.NOT_FOUND, message = "Invalid ID"))
+                val recordingsResult = recordingsDeferred?.await()
+                    ?: if (fetchedId != null) recordingRepository.listRecordings(fetchedId) else NetworkResult.Error(com.developer_rahul.meetmind_ai.core.network.model.MeetMindError(type = com.developer_rahul.meetmind_ai.core.network.model.ErrorType.NOT_FOUND, message = "Invalid ID"))
+
+                _uiState.update { state ->
+                    var newState = state.copy(isLoadingDetails = false)
+                    
+                    when (meetingResult) {
+                        is NetworkResult.Success -> {
+                            newState = newState.copy(selectedMeeting = meetingResult.data)
+                        }
+                        is NetworkResult.Error -> {
+                            newState = newState.copy(detailsError = meetingResult.error.message)
+                        }
+                        else -> {}
+                    }
+
+                    when (participantsResult) {
+                        is NetworkResult.Success -> {
+                            newState = newState.copy(participants = participantsResult.data)
+                        }
+                        else -> {}
+                    }
+
+                    when (recordingsResult) {
+                        is NetworkResult.Success -> {
+                            val backendRecording = recordingsResult.data.any { it.status == "STARTED" }
+                            val locallyRecording = recordingManager.state.value.status == RecordingStatus.RECORDING
+                            newState = newState.copy(
+                                recordings = recordingsResult.data,
+                                isRecording = backendRecording && locallyRecording
+                            )
+                        }
+                        else -> {}
+                    }
+                    
+                    newState
+                }
                 
-                when (meetingResult) {
-                    is NetworkResult.Success -> {
-                        newState = newState.copy(selectedMeeting = meetingResult.data)
-                    }
-                    is NetworkResult.Error -> {
-                        newState = newState.copy(detailsError = meetingResult.error.message)
-                    }
-                    else -> {}
+                if (fetchedId != null) {
+                    loadIntelligenceSummary(fetchedId)
                 }
-
-                when (participantsResult) {
-                    is NetworkResult.Success -> {
-                        newState = newState.copy(participants = participantsResult.data)
-                    }
-                    else -> {}
-                }
-
-                when (recordingsResult) {
-                    is NetworkResult.Success -> {
-                        // isRecording is true only when backend says STARTED *and* local recording is active.
-                        // This prevents ghost REC 00:00 badge appearing on re-join from a stale backend recording.
-                        val backendRecording = recordingsResult.data.any { it.status == "STARTED" }
-                        val locallyRecording = recordingManager.state.value.status == RecordingStatus.RECORDING
-                        newState = newState.copy(
-                            recordings = recordingsResult.data,
-                            isRecording = backendRecording && locallyRecording
-                        )
-                    }
-                    else -> {}
-                }
-                
-                newState
-            }
-            
-            if (fetchedId != null) {
-                loadIntelligenceSummary(fetchedId)
             }
         }
     }
@@ -470,17 +531,23 @@ class MeetingViewModel(
         }
     }
 
-    fun deleteMeeting(meetingId: Long, onSuccess: () -> Unit) {
+    fun deleteMeeting(meetingId: Long, onSuccess: () -> Unit, onError: ((String) -> Unit)? = null) {
         viewModelScope.launch {
             _uiState.update { it.copy(actionInProgress = true) }
             when (val result = meetingRepository.deleteMeeting(meetingId)) {
                 is NetworkResult.Success -> {
-                    _uiState.update { it.copy(actionInProgress = false) }
+                    _uiState.update { it.copy(
+                        actionInProgress = false,
+                        meetings = it.meetings.filter { m -> m.id != meetingId },
+                        selectedMeeting = if (it.selectedMeeting?.id == meetingId) null else it.selectedMeeting
+                    ) }
                     loadMeetings()
                     onSuccess()
                 }
                 is NetworkResult.Error -> {
-                    _uiState.update { it.copy(actionInProgress = false, error = result.error.message ?: "Failed to delete meeting") }
+                    val msg = result.error.message ?: "Failed to delete meeting"
+                    _uiState.update { it.copy(actionInProgress = false, error = msg) }
+                    onError?.invoke(msg)
                 }
                 else -> _uiState.update { it.copy(actionInProgress = false) }
             }
@@ -502,27 +569,58 @@ class MeetingViewModel(
         }
     }
 
+    fun getParticipants(meetingId: Long) {
+        viewModelScope.launch {
+            when (val result = meetingRepository.getParticipants(meetingId)) {
+                is NetworkResult.Success -> {
+                    _uiState.update { it.copy(participants = result.data) }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    private val emailRegex = Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$")
+
     fun batchInviteParticipants(meetingId: Long, rawEmailInput: String, onResult: ((Boolean, String?) -> Unit)? = null) {
-        val emailList = rawEmailInput.split(",", "\n", " ", ";")
+        val parsedTokens = rawEmailInput.split(",", "\n", " ", ";")
             .map { it.trim() }
             .filter { it.isNotBlank() }
             .distinct()
 
-        if (emailList.isEmpty()) {
-            onResult?.invoke(false, "Please enter at least one valid email address.")
+        if (parsedTokens.isEmpty()) {
+            onResult?.invoke(false, "Please enter at least one email address.")
             return
         }
 
+        val invalidEmails = parsedTokens.filter { !emailRegex.matches(it) }
+        if (invalidEmails.isNotEmpty()) {
+            val invalidStr = invalidEmails.take(3).joinToString(", ")
+            onResult?.invoke(false, "Invalid email format: $invalidStr. Please check and try again.")
+            return
+        }
+
+        val validEmails = parsedTokens
+
         viewModelScope.launch {
             _uiState.update { it.copy(actionInProgress = true, error = null) }
-            val result = meetingRepository.batchInviteParticipants(meetingId, emailList)
+            val result = meetingRepository.batchInviteParticipants(meetingId, validEmails)
 
             when (result) {
                 is NetworkResult.Success -> {
+                    val batchResponse = result.data
                     _uiState.update { it.copy(actionInProgress = false) }
+                    getParticipants(meetingId)
                     loadMeetingDetails(meetingId.toString())
-                    val msg = if (emailList.size == 1) "Invitation sent to ${emailList.first()}"
-                    else "Broadcast invitations sent to ${emailList.size} recipients!"
+
+                    val successCount = if (batchResponse.successCount > 0) batchResponse.successCount else validEmails.size
+                    val msg = if (batchResponse.message.isNotBlank()) {
+                        batchResponse.message
+                    } else if (validEmails.size == 1) {
+                        "Invitation sent to ${validEmails.first()}"
+                    } else {
+                        "Broadcast invitations sent to $successCount recipient(s)!"
+                    }
                     onResult?.invoke(true, msg)
                 }
                 is NetworkResult.Error -> {

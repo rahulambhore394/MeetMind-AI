@@ -3,6 +3,7 @@ package com.developer_rahul.meetmind_ai.feature.meetingroom.presentation
 import com.developer_rahul.meetmind_ai.feature.meetingroom.data.repository.MeetingCallRepository
 import com.developer_rahul.meetmind_ai.feature.meetingroom.domain.model.MeetingCallEvent
 import com.developer_rahul.meetmind_ai.feature.meetings.data.repository.MeetingRepository
+import com.developer_rahul.meetmind_ai.core.network.websocket.MeetingWebSocketManager
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -13,11 +14,13 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import com.developer_rahul.meetmind_ai.core.media.tts.TextToSpeechManager
-import com.developer_rahul.meetmind_ai.core.network.websocket.MeetingWebSocketManager
+import com.developer_rahul.meetmind_ai.feature.representative.data.remote.dto.AiProxySpeechDto
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.webrtc.VideoTrack
+import kotlinx.coroutines.test.resetMain
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveMeetingViewModelTest {
@@ -27,6 +30,7 @@ class LiveMeetingViewModelTest {
     private val meetingWebSocketManager = mockk<MeetingWebSocketManager>(relaxed = true)
     private val textToSpeechManager = mockk<TextToSpeechManager>(relaxed = true)
     private val eventsFlow = MutableSharedFlow<MeetingCallEvent>()
+    private val aiProxySpeechFlow = MutableSharedFlow<AiProxySpeechDto>()
     private lateinit var viewModel: LiveMeetingViewModel
     private val testDispatcher = UnconfinedTestDispatcher()
 
@@ -34,6 +38,7 @@ class LiveMeetingViewModelTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         every { repository.events } returns eventsFlow
+        every { meetingWebSocketManager.aiProxySpeech } returns aiProxySpeechFlow
         viewModel = LiveMeetingViewModel(
             meetingCallRepository = repository,
             meetingRepository = meetingRepository,
@@ -41,6 +46,11 @@ class LiveMeetingViewModelTest {
             textToSpeechManager = textToSpeechManager,
             meetingId = 1L
         )
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     @Test

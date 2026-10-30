@@ -17,9 +17,15 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.encodeToString
 import okhttp3.OkHttpClient
 
 class MeetingWebSocketManager(
@@ -74,16 +80,40 @@ class MeetingWebSocketManager(
         doConnect()
     }
 
+    suspend fun awaitConnection(timeoutMs: Long = 5000L) {
+        if (stompClient == null) {
+            connect()
+        }
+        try {
+            withTimeout(timeoutMs) {
+                stompClient?.connectionState?.first { it is StompClient.ConnectionState.Connected }
+            }
+        } catch (e: Exception) {
+            Log.w("MeetingWS", "Timeout waiting for WebSocket STOMP connection: ${e.message}")
+        }
+    }
+
     private fun doConnect() {
         val token = tokenProvider.getToken() ?: return
         val wsUrl = if (customWsUrl != null) {
             customWsUrl
-        } else if (BuildConfig.BASE_URL.contains("onrender.com")) {
-            BuildConfig.BASE_URL.replace("http", "ws") + "ws"
         } else {
-            val candidateHosts = listOf("127.0.0.1:8080", "10.70.43.145:8080", "10.0.2.2:8080")
-            val chosenHost = candidateHosts[reconnectAttempt % candidateHosts.size]
-            "ws://$chosenHost/ws"
+            val activeHost = com.developer_rahul.meetmind_ai.core.network.interceptor.HostManager.activeHost
+            val base = BuildConfig.BASE_URL.trimEnd('/')
+            if (activeHost != null && !base.contains("onrender.com")) {
+                val scheme = if (activeHost.contains("onrender.com")) "wss" else "ws"
+                val portSuffix = if (activeHost.contains("onrender.com")) "" else ":8080"
+                "$scheme://$activeHost$portSuffix/ws"
+            } else {
+                val wsBase = if (base.startsWith("https://")) {
+                    base.replaceFirst("https://", "wss://")
+                } else if (base.startsWith("http://")) {
+                    base.replaceFirst("http://", "ws://")
+                } else {
+                    "ws://$base"
+                }
+                "$wsBase/ws"
+            }
         }
         
         Log.d("MeetingWS", "Connecting to $wsUrl (Attempt ${reconnectAttempt + 1})")
@@ -105,7 +135,7 @@ class MeetingWebSocketManager(
                         
                         meetingSubscriptions.toList().forEach { subscribeToMeeting(it) }
                         chatSubscriptions.toList().forEach { subscribeToChat(it) }
-                        signalingSubscriptions.toList().forEach { subscribeToSignaling(it) }
+                        signalingSubscriptions.toList().forEach { resubscribeToSignaling(it) }
                         recordingSubscriptions.toList().forEach { subscribeToRecordings(it) }
                         intelligenceSubscriptions.toList().forEach { subscribeToIntelligence(it) }
                         userSubscriptions.toList().forEach { subscribeToUserNotifications(it) }
@@ -204,10 +234,40 @@ class MeetingWebSocketManager(
 
     private fun parseAndEmitChatMessage(body: String) {
         try {
-            val dto = json.decodeFromString<ChatMessageResponseDto>(body)
-            _chatMessages.tryEmit(dto)
+            val element = json.parseToJsonElement(body).jsonObject
+            val messageId = element["messageId"]?.jsonPrimitive?.longOrNull
+                ?: element["id"]?.jsonPrimitive?.longOrNull
+                ?: System.currentTimeMillis()
+            val meetingId = element["meetingId"]?.jsonPrimitive?.longOrNull ?: 0L
+            val senderId = element["senderId"]?.jsonPrimitive?.longOrNull
+                ?: element["userId"]?.jsonPrimitive?.longOrNull
+                ?: 0L
+            val senderName = element["senderName"]?.jsonPrimitive?.contentOrNull
+                ?: element["userName"]?.jsonPrimitive?.contentOrNull
+                ?: "User $senderId"
+            val messageText = element["message"]?.jsonPrimitive?.contentOrNull
+                ?: element["content"]?.jsonPrimitive?.contentOrNull
+                ?: element["text"]?.jsonPrimitive?.contentOrNull
+                ?: ""
+            val messageType = element["messageType"]?.jsonPrimitive?.contentOrNull ?: "CHAT"
+            val sentAt = element["sentAt"]?.jsonPrimitive?.contentOrNull
+                ?: element["timestamp"]?.jsonPrimitive?.contentOrNull
+                ?: java.time.Instant.now().toString()
+
+            if (messageText.isNotBlank()) {
+                val dto = ChatMessageResponseDto(
+                    messageId = messageId,
+                    meetingId = meetingId,
+                    senderId = senderId,
+                    senderName = senderName,
+                    message = messageText,
+                    messageType = messageType,
+                    sentAt = sentAt
+                )
+                _chatMessages.tryEmit(dto)
+            }
         } catch (e: Exception) {
-            Log.e("MeetingWS", "Failed to parse chat message: ${e.message}")
+            Log.e("MeetingWS", "Failed to parse chat message: ${e.message}, body=$body")
         }
     }
 
@@ -222,8 +282,6 @@ class MeetingWebSocketManager(
 
     private fun parseAndEmitRecordingEvent(body: String) {
         try {
-            // Backend sends numeric fields (ownerId, recordingId, meetingId, timestamp) as Long.
-            // Deserialize as JsonObject first, then convert each entry to String.
             val jsonObj = json.parseToJsonElement(body).jsonObject
             val event = jsonObj.entries.associate { (k, v) -> k to v.jsonPrimitive.content }
             _recordingEvents.tryEmit(event)
@@ -270,8 +328,9 @@ class MeetingWebSocketManager(
     }
 
     fun subscribeToMeeting(meetingId: Long) {
-        meetingSubscriptions.add(meetingId)
-        stompClient?.subscribe("/topic/meetings/$meetingId")
+        if (meetingSubscriptions.add(meetingId)) {
+            stompClient?.subscribe("/topic/meetings/$meetingId")
+        }
     }
 
     fun unsubscribeFromMeeting(meetingId: Long) {
@@ -280,8 +339,9 @@ class MeetingWebSocketManager(
     }
 
     fun subscribeToChat(meetingId: Long) {
-        chatSubscriptions.add(meetingId)
-        stompClient?.subscribe("/topic/meetings/$meetingId/chat")
+        if (chatSubscriptions.add(meetingId)) {
+            stompClient?.subscribe("/topic/meetings/$meetingId/chat")
+        }
     }
 
     fun unsubscribeFromChat(meetingId: Long) {
@@ -290,7 +350,14 @@ class MeetingWebSocketManager(
     }
 
     fun subscribeToSignaling(meetingId: Long) {
-        signalingSubscriptions.add(meetingId)
+        if (signalingSubscriptions.add(meetingId)) {
+            stompClient?.subscribe("/topic/meetings/$meetingId/signaling")
+            stompClient?.subscribe("/user/queue/meetings/$meetingId/signaling")
+            sendSignalingMessage(meetingId, "JOIN")
+        }
+    }
+
+    private fun resubscribeToSignaling(meetingId: Long) {
         stompClient?.subscribe("/topic/meetings/$meetingId/signaling")
         stompClient?.subscribe("/user/queue/meetings/$meetingId/signaling")
         sendSignalingMessage(meetingId, "JOIN")
@@ -304,8 +371,9 @@ class MeetingWebSocketManager(
     }
 
     fun subscribeToRecordings(meetingId: Long) {
-        recordingSubscriptions.add(meetingId)
-        stompClient?.subscribe("/topic/meetings/$meetingId/recordings")
+        if (recordingSubscriptions.add(meetingId)) {
+            stompClient?.subscribe("/topic/meetings/$meetingId/recordings")
+        }
     }
 
     fun unsubscribeFromRecordings(meetingId: Long) {
@@ -314,8 +382,9 @@ class MeetingWebSocketManager(
     }
 
     fun subscribeToIntelligence(meetingId: Long) {
-        intelligenceSubscriptions.add(meetingId)
-        stompClient?.subscribe("/topic/meetings/$meetingId/intelligence")
+        if (intelligenceSubscriptions.add(meetingId)) {
+            stompClient?.subscribe("/topic/meetings/$meetingId/intelligence")
+        }
     }
 
     fun unsubscribeFromIntelligence(meetingId: Long) {
@@ -324,8 +393,9 @@ class MeetingWebSocketManager(
     }
 
     fun subscribeToTranslation(meetingId: Long, targetLanguage: String) {
-        translationSubscriptions.add("$meetingId:$targetLanguage")
-        stompClient?.subscribe("/topic/meetings/$meetingId/translations/$targetLanguage")
+        if (translationSubscriptions.add("$meetingId:$targetLanguage")) {
+            stompClient?.subscribe("/topic/meetings/$meetingId/translations/$targetLanguage")
+        }
     }
 
     fun unsubscribeFromTranslation(meetingId: Long, targetLanguage: String) {
@@ -334,8 +404,9 @@ class MeetingWebSocketManager(
     }
 
     fun subscribeToUserNotifications(userId: Long) {
-        userSubscriptions.add(userId)
-        stompClient?.subscribe("/topic/users/$userId/notifications")
+        if (userSubscriptions.add(userId)) {
+            stompClient?.subscribe("/topic/users/$userId/notifications")
+        }
     }
 
     fun unsubscribeFromUserNotifications(userId: Long) {
@@ -344,23 +415,49 @@ class MeetingWebSocketManager(
     }
 
     fun sendTranslationRequest(meetingId: Long, sourceText: String, sourceLanguage: String, targetLanguage: String? = null) {
-        // Fallback to manually creating JSON string if encodeToString extension is acting up
-        val body = "{\"sourceText\":\"$sourceText\",\"sourceLanguage\":\"$sourceLanguage\",\"targetLanguage\":\"${targetLanguage ?: ""}\",\"timestamp\":${System.currentTimeMillis()}}"
+        val dto = LiveTranslateRequestDto(sourceText, sourceLanguage, targetLanguage ?: "", System.currentTimeMillis())
+        val body = json.encodeToString(LiveTranslateRequestDto.serializer(), dto)
         stompClient?.send("/app/meetings/$meetingId/translate", body)
     }
 
     fun sendLanguagePreference(meetingId: Long, targetLanguage: String) {
-        val body = "{\"targetLanguage\":\"$targetLanguage\"}"
+        val dto = LanguagePreferenceRequestDto(targetLanguage)
+        val body = json.encodeToString(LanguagePreferenceRequestDto.serializer(), dto)
         stompClient?.send("/app/meetings/$meetingId/language-preference", body)
     }
 
     fun sendSignalingMessage(meetingId: Long, type: String, payload: String? = null, receiverId: Long? = null) {
-        val body = "{\"meetingId\":$meetingId,\"type\":\"$type\",\"payload\":${if (payload != null) "\"$payload\"" else "null"},\"receiverId\":${receiverId ?: "null"}}"
+        val currentUserId = tokenProvider.getUserId()
+        val currentUserName = tokenProvider.getUserName()
+        val dto = SignalingMessageDto(
+            meetingId = meetingId,
+            senderId = if (currentUserId > 0L) currentUserId else null,
+            senderName = currentUserName,
+            type = type,
+            payload = payload,
+            receiverId = receiverId
+        )
+        val body = json.encodeToString(SignalingMessageDto.serializer(), dto)
         stompClient?.send("/app/meetings/$meetingId/signaling", body)
     }
 
     fun sendChatMessage(meetingId: Long, message: String) {
-        val body = "{\"meetingId\":$meetingId,\"message\":\"$message\"}"
+        val currentUserId = tokenProvider.getUserId()
+        val currentUserName = tokenProvider.getUserName() ?: "User"
+        val jsonElement = buildJsonObject {
+            put("meetingId", meetingId)
+            put("message", message)
+            put("content", message)
+            if (currentUserId > 0L) {
+                put("senderId", currentUserId)
+                put("userId", currentUserId)
+            }
+            put("senderName", currentUserName)
+            put("userName", currentUserName)
+            put("sentAt", java.time.Instant.now().toString())
+        }
+        val body = json.encodeToString(jsonElement)
+        stompClient?.send("/app/meetings/$meetingId/chat", body)
         stompClient?.send("/app/chat.send", body)
     }
 
@@ -375,7 +472,12 @@ class MeetingWebSocketManager(
     }
 
     fun sendAiProxyQuery(meetingId: Long, representativeId: Long, query: String, language: String = "en") {
-        val body = "{\"representativeId\":$representativeId,\"query\":\"$query\",\"language\":\"$language\"}"
+        val jsonElement = buildJsonObject {
+            put("representativeId", representativeId)
+            put("query", query)
+            put("language", language)
+        }
+        val body = json.encodeToString(jsonElement)
         stompClient?.send("/app/meetings/$meetingId/ai-proxy/ask", body)
     }
 

@@ -14,9 +14,7 @@ import java.util.*;
 public class LocalTranslationProvider implements TranslationProvider {
 
     private static final Logger log = LoggerFactory.getLogger(LocalTranslationProvider.class);
-    private static final Set<String> SUPPORTED_LANGS = Set.of(
-            "en", "hi", "mr", "gu", "es", "fr", "de", "zh", "ja", "ar", "bn", "ta", "te", "kn", "ml", "pa", "ru"
-    );
+    private static final Set<String> SUPPORTED_LANGS = Set.of("en", "hi", "mr");
 
     // Phrase dictionaries: key = "sourceLang:targetLang:lowerCaseSourcePhrase"
     private final Map<String, String> phraseDictionary = new HashMap<>();
@@ -35,7 +33,9 @@ public class LocalTranslationProvider implements TranslationProvider {
     @Override
     public boolean supportsLanguagePair(String sourceLanguage, String targetLanguage) {
         if (sourceLanguage == null || targetLanguage == null) return false;
-        return true;
+        String s = normalize(sourceLanguage);
+        String t = normalize(targetLanguage);
+        return SUPPORTED_LANGS.contains(s) && SUPPORTED_LANGS.contains(t);
     }
 
     @Override

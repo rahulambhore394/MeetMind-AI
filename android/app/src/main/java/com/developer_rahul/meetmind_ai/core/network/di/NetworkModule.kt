@@ -23,7 +23,7 @@ object NetworkModule {
     fun provideOkHttpClient(tokenProvider: TokenProvider): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = if (BuildConfig.DEBUG) {
-                HttpLoggingInterceptor.Level.BODY
+                HttpLoggingInterceptor.Level.HEADERS
             } else {
                 HttpLoggingInterceptor.Level.NONE
             }
@@ -33,9 +33,10 @@ object NetworkModule {
             .addInterceptor(FallbackNetworkInterceptor())
             .addInterceptor(AuthInterceptor(tokenProvider))
             .addInterceptor(loggingInterceptor)
-            .connectTimeout(10, TimeUnit.SECONDS)
+            .connectTimeout(4, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.SECONDS)
             .writeTimeout(10, TimeUnit.SECONDS)
+            .connectionPool(okhttp3.ConnectionPool(10, 5, TimeUnit.MINUTES))
             .build()
     }
 

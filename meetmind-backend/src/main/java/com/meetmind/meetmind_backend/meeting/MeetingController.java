@@ -2,6 +2,7 @@ package com.meetmind.meetmind_backend.meeting;
 
 
 
+import com.meetmind.meetmind_backend.common.SecurityUtils;
 import com.meetmind.meetmind_backend.meeting.dto.CreateMeetingRequest;
 import com.meetmind.meetmind_backend.meeting.dto.MeetingResponse;
 import com.meetmind.meetmind_backend.meeting.dto.UpdateMeetingRequest;
@@ -41,7 +42,7 @@ public class MeetingController {
     ) {
 
         User currentUser =
-                (User) authentication.getPrincipal();
+                SecurityUtils.extractUser(authentication);
 
         MeetingResponse response =
                 meetingService.createMeeting(
@@ -61,7 +62,7 @@ public class MeetingController {
 
     @GetMapping
     public ResponseEntity<List<MeetingResponse>> getAllMeetings(Authentication authentication) {
-        User user = (User) authentication.getPrincipal();
+        User user = SecurityUtils.extractUser(authentication);
         return ResponseEntity.ok(
                 meetingService.getAllMeetings(user.getId())
         );
@@ -72,7 +73,7 @@ public class MeetingController {
             @PathVariable String code,
             Authentication authentication
     ) {
-        User user = (User) authentication.getPrincipal();
+        User user = SecurityUtils.extractUser(authentication);
         return ResponseEntity.ok(
                 meetingService.getMeetingByCode(code, user.getId())
         );
@@ -83,7 +84,7 @@ public class MeetingController {
             @PathVariable String code,
             Authentication authentication
     ) {
-        User user = (User) authentication.getPrincipal();
+        User user = SecurityUtils.extractUser(authentication);
         return ResponseEntity.ok(
                 meetingService.getMeetingByCode(code, user.getId())
         );
@@ -96,7 +97,7 @@ public class MeetingController {
     ) {
 
         User currentUser =
-                (User) authentication.getPrincipal();
+                SecurityUtils.extractUser(authentication);
 
 
         MeetingResponse response =
@@ -116,7 +117,7 @@ public class MeetingController {
     ) {
 
         User currentUser =
-                (User) authentication.getPrincipal();
+                SecurityUtils.extractUser(authentication);
 
 
         MeetingResponse response =
@@ -134,7 +135,7 @@ public class MeetingController {
             @PathVariable Long meetingId,
             Authentication authentication
     ) {
-        User user = (User) authentication.getPrincipal();
+        User user = SecurityUtils.extractUser(authentication);
         return ResponseEntity.ok(
                 meetingService.getMeetingStatus(
                         meetingId,
@@ -151,7 +152,7 @@ public class MeetingController {
             @PathVariable Long meetingId,
             Authentication authentication
     ) {
-        User user = (User) authentication.getPrincipal();
+        User user = SecurityUtils.extractUser(authentication);
         return ResponseEntity.ok(
                 meetingService.getMeeting(meetingId, user.getId())
         );
@@ -174,7 +175,7 @@ public class MeetingController {
     ) {
 
         User currentUser =
-                (User) authentication.getPrincipal();
+                SecurityUtils.extractUser(authentication);
 
         MeetingResponse response =
                 meetingService.updateMeeting(
@@ -198,7 +199,7 @@ public class MeetingController {
     ) {
 
         User currentUser =
-                (User) authentication.getPrincipal();
+                SecurityUtils.extractUser(authentication);
 
         meetingService.deleteMeeting(
                 meetingId,

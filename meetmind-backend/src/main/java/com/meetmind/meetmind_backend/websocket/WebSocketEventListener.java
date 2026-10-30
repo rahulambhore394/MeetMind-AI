@@ -24,24 +24,27 @@ public class WebSocketEventListener {
     private final StringRedisTemplate redisTemplate;
     private final org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
     private final com.meetmind.meetmind_backend.user.UserRepository userRepository;
+    private final com.meetmind.meetmind_backend.webrtc.SignalingService signalingService;
 
     public WebSocketEventListener(
             PresenceService presenceService,
             StringRedisTemplate redisTemplate,
             org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate,
-            com.meetmind.meetmind_backend.user.UserRepository userRepository
+            com.meetmind.meetmind_backend.user.UserRepository userRepository,
+            com.meetmind.meetmind_backend.webrtc.SignalingService signalingService
     ) {
         this.presenceService = presenceService;
         this.redisTemplate = redisTemplate;
         this.messagingTemplate = messagingTemplate;
         this.userRepository = userRepository;
+        this.signalingService = signalingService;
     }
 
     @EventListener
     public void handleWebSocketConnectListener(SessionConnectedEvent event) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
-        Principal principal = accessor.getUser();
-        String sessionId = accessor.getSessionId();
+        Principal principal = event.getUser() != null ? event.getUser() : accessor.getUser();
+        String sessionId = event.getMessage() != null && accessor.getSessionId() != null ? accessor.getSessionId() : null;
         Long userId = getUserId(principal);
 
         if (userId != null && sessionId != null) {
@@ -53,8 +56,8 @@ public class WebSocketEventListener {
     @EventListener
     public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
-        Principal principal = accessor.getUser();
-        String sessionId = accessor.getSessionId();
+        Principal principal = event.getUser() != null ? event.getUser() : accessor.getUser();
+        String sessionId = event.getSessionId() != null ? event.getSessionId() : accessor.getSessionId();
         Long userId = getUserId(principal);
 
         if (userId != null && sessionId != null) {
@@ -79,10 +82,8 @@ public class WebSocketEventListener {
                 if (meetingIdStr != null) {
                     Long meetingId = Long.parseLong(meetingIdStr);
                     
-                    // Remove signaling state from Redis
-                    String presenceKey = "meeting:signaling:presence:" + meetingId;
-                    redisTemplate.opsForSet().remove(presenceKey, String.valueOf(userId));
-                    redisTemplate.delete(sessionSignalingKey);
+                    // Clean up both memoryPresence and Redis signaling presence
+                    signalingService.evictPresence(meetingId, userId, sessionId);
                     
                     // Resolve user details for name
                     String userName = "Participant";
@@ -114,8 +115,8 @@ public class WebSocketEventListener {
     @EventListener
     public void handleWebSocketSubscribeListener(SessionSubscribeEvent event) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
-        Principal principal = accessor.getUser();
-        String sessionId = accessor.getSessionId();
+        Principal principal = event.getUser() != null ? event.getUser() : accessor.getUser();
+        String sessionId = event.getMessage() != null && accessor.getSessionId() != null ? accessor.getSessionId() : null;
         String destination = accessor.getDestination();
         String subscriptionId = accessor.getSubscriptionId();
         Long userId = getUserId(principal);
@@ -145,8 +146,8 @@ public class WebSocketEventListener {
     @EventListener
     public void handleWebSocketUnsubscribeListener(SessionUnsubscribeEvent event) {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
-        Principal principal = accessor.getUser();
-        String sessionId = accessor.getSessionId();
+        Principal principal = event.getUser() != null ? event.getUser() : accessor.getUser();
+        String sessionId = event.getMessage() != null && accessor.getSessionId() != null ? accessor.getSessionId() : null;
         String subscriptionId = accessor.getSubscriptionId();
         Long userId = getUserId(principal);
 
@@ -167,10 +168,24 @@ public class WebSocketEventListener {
     }
 
     private Long getUserId(Principal principal) {
+        if (principal == null) {
+            return null;
+        }
         if (principal instanceof UsernamePasswordAuthenticationToken auth) {
+            if (auth.getPrincipal() instanceof com.meetmind.meetmind_backend.auth.UserPrincipal up) {
+                return up.getUser() != null ? up.getUser().getId() : null;
+            }
             if (auth.getPrincipal() instanceof User user) {
                 return user.getId();
             }
+        }
+        if (principal instanceof com.meetmind.meetmind_backend.auth.UserPrincipal up) {
+            return up.getUser() != null ? up.getUser().getId() : null;
+        }
+        if (principal.getName() != null) {
+            return userRepository.findByEmail(principal.getName())
+                    .map(User::getId)
+                    .orElse(null);
         }
         return null;
     }

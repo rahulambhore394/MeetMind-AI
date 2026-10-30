@@ -69,6 +69,7 @@ fun CreateMeetingScreen(
     var isInstantMeeting by remember { mutableStateOf(true) }
     var title by remember { mutableStateOf("") }
     var description by remember { mutableStateOf("") }
+    var inviteEmails by remember { mutableStateOf("") }
     var enableAiRep by remember { mutableStateOf(true) }
     var aiFocusMode by remember { mutableStateOf("Action Items & Summary") }
     var showAiConfig by remember { mutableStateOf(false) }
@@ -399,7 +400,12 @@ fun CreateMeetingScreen(
                                 java.time.LocalDateTime.of(selectedYear, selectedMonth + 1, selectedDay, selectedHour, selectedMinute, 0)
                             }
                             val scheduledTime = scheduledLdt.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                            viewModel.createMeeting(finalTitle, description, scheduledTime, null)
+                            val invitedList = inviteEmails.split(",", "\n", " ", ";")
+                                .map { it.trim() }
+                                .filter { it.isNotBlank() }
+                                .distinct()
+                                .ifEmpty { null }
+                            viewModel.createMeeting(finalTitle, description, scheduledTime, invitedList)
                         }
                     },
                     modifier = Modifier.fillMaxWidth().height(56.dp),

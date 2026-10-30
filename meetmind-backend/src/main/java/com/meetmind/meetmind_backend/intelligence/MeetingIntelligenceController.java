@@ -50,6 +50,101 @@ public class MeetingIntelligenceController {
         return ResponseEntity.ok(summary);
     }
 
+    @GetMapping("/api/meetings/{meetingId}/decisions")
+    public ResponseEntity<List<String>> listDecisions(
+            @PathVariable Long meetingId,
+            Authentication authentication
+    ) {
+        User user = extractUser(authentication);
+        List<String> decisions = intelligenceService.listDecisions(meetingId, user);
+        return ResponseEntity.ok(decisions);
+    }
+
+    @PostMapping("/api/meetings/{meetingId}/decisions")
+    public ResponseEntity<List<String>> addDecision(
+            @PathVariable Long meetingId,
+            @RequestBody Map<String, String> body,
+            Authentication authentication
+    ) {
+        User user = extractUser(authentication);
+        String decisionText = body != null ? body.get("decision") : null;
+        if (decisionText == null && body != null) {
+            decisionText = body.get("text");
+        }
+        List<String> decisions = intelligenceService.addDecision(meetingId, decisionText, user);
+        return ResponseEntity.ok(decisions);
+    }
+
+    @DeleteMapping("/api/meetings/{meetingId}/decisions/{decisionIndex}")
+    public ResponseEntity<List<String>> deleteDecision(
+            @PathVariable Long meetingId,
+            @PathVariable int decisionIndex,
+            Authentication authentication
+    ) {
+        User user = extractUser(authentication);
+        List<String> decisions = intelligenceService.deleteDecision(meetingId, decisionIndex, user);
+        return ResponseEntity.ok(decisions);
+    }
+
+    @GetMapping("/api/meetings/{meetingId}/chapters")
+    public ResponseEntity<List<TopicChapter>> listChapters(
+            @PathVariable Long meetingId,
+            Authentication authentication
+    ) {
+        User user = extractUser(authentication);
+        List<TopicChapter> chapters = intelligenceService.listChapters(meetingId, user);
+        return ResponseEntity.ok(chapters);
+    }
+
+    @GetMapping("/api/meetings/{meetingId}/parking-lot")
+    public ResponseEntity<List<ParkingQuestion>> listParkingLot(
+            @PathVariable Long meetingId,
+            Authentication authentication
+    ) {
+        User user = extractUser(authentication);
+        List<ParkingQuestion> items = intelligenceService.listParkingQuestions(meetingId, user);
+        return ResponseEntity.ok(items);
+    }
+
+    @PostMapping("/api/meetings/{meetingId}/parking-lot")
+    public ResponseEntity<List<ParkingQuestion>> addParkingQuestion(
+            @PathVariable Long meetingId,
+            @RequestBody Map<String, String> body,
+            Authentication authentication
+    ) {
+        User user = extractUser(authentication);
+        String question = body != null ? body.get("question") : null;
+        String askedBy = body != null ? body.get("askedBy") : null;
+        String status = body != null ? body.get("status") : "UNANSWERED";
+        List<ParkingQuestion> items = intelligenceService.addParkingQuestion(meetingId, question, askedBy, status, user);
+        return ResponseEntity.ok(items);
+    }
+
+    @PatchMapping("/api/meetings/{meetingId}/parking-lot/{questionIndex}")
+    public ResponseEntity<List<ParkingQuestion>> updateParkingQuestion(
+            @PathVariable Long meetingId,
+            @PathVariable int questionIndex,
+            @RequestBody Map<String, String> body,
+            Authentication authentication
+    ) {
+        User user = extractUser(authentication);
+        String status = body != null ? body.get("status") : null;
+        String notes = body != null ? body.get("notes") : null;
+        List<ParkingQuestion> items = intelligenceService.updateParkingQuestionStatus(meetingId, questionIndex, status, notes, user);
+        return ResponseEntity.ok(items);
+    }
+
+    @DeleteMapping("/api/meetings/{meetingId}/parking-lot/{questionIndex}")
+    public ResponseEntity<List<ParkingQuestion>> deleteParkingQuestion(
+            @PathVariable Long meetingId,
+            @PathVariable int questionIndex,
+            Authentication authentication
+    ) {
+        User user = extractUser(authentication);
+        List<ParkingQuestion> items = intelligenceService.deleteParkingQuestion(meetingId, questionIndex, user);
+        return ResponseEntity.ok(items);
+    }
+
     @GetMapping("/api/meetings/{meetingId}/action-items")
     public ResponseEntity<List<ActionItem>> listActionItems(
             @PathVariable Long meetingId,
@@ -64,29 +159,52 @@ public class MeetingIntelligenceController {
     public ResponseEntity<ActionItem> updateActionItemStatus(
             @PathVariable Long meetingId,
             @PathVariable Long actionItemId,
-            @RequestBody Map<String, String> body,
+            @RequestBody Map<String, Object> body,
             Authentication authentication
     ) {
         User user = extractUser(authentication);
-        String statusStr = body.get("status");
-        if (statusStr == null) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status is required");
+        String statusStr = null;
+        if (body != null) {
+            if (body.containsKey("status") && body.get("status") != null) {
+                statusStr = body.get("status").toString().trim();
+            } else if (body.containsKey("completed") && body.get("completed") != null) {
+                boolean isDone = Boolean.parseBoolean(body.get("completed").toString());
+                statusStr = isDone ? "COMPLETED" : "PENDING";
+            } else if (body.containsKey("isCompleted") && body.get("isCompleted") != null) {
+                boolean isDone = Boolean.parseBoolean(body.get("isCompleted").toString());
+                statusStr = isDone ? "COMPLETED" : "PENDING";
+            }
         }
-        
-        ActionItemStatus status = ActionItemStatus.valueOf(statusStr);
+
+        if (statusStr == null || statusStr.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "status or completed boolean is required");
+        }
+
+        ActionItemStatus status;
+        try {
+            status = ActionItemStatus.valueOf(statusStr.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            if ("OPEN".equalsIgnoreCase(statusStr)) {
+                status = ActionItemStatus.PENDING;
+            } else {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid status: " + statusStr);
+            }
+        }
+
         ActionItem updated = intelligenceService.updateActionItemStatus(meetingId, actionItemId, status, user);
         return ResponseEntity.ok(updated);
     }
 
-    @PostMapping("/api/meetings/{meetingId}/intelligence/generate")
+    @PostMapping({"/api/meetings/{meetingId}/intelligence/generate", "/api/meetings/{meetingId}/intelligence/analyze"})
     public ResponseEntity<MeetingIntelligenceService.SummaryDetailView> triggerAnalysis(
             @PathVariable Long meetingId,
+            @RequestParam(value = "transcriptId", required = false) Long queryTranscriptId,
             @RequestBody(required = false) Map<String, Object> requestBody,
             Authentication authentication
     ) {
         User user = extractUser(authentication);
-        Long transcriptId = null;
-        if (requestBody != null && requestBody.containsKey("transcriptId")) {
+        Long transcriptId = queryTranscriptId;
+        if (transcriptId == null && requestBody != null && requestBody.containsKey("transcriptId")) {
             Object raw = requestBody.get("transcriptId");
             if (raw instanceof Number n) {
                 transcriptId = n.longValue();

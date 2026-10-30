@@ -76,8 +76,9 @@ public class AiProxySpeechService {
             boolean isDirectMention = normalizedMsg.contains("@ai") ||
                     normalizedMsg.contains("@proxy") ||
                     normalizedMsg.contains("@representative") ||
-                    normalizedMsg.contains("@" + ownerFirstName) ||
-                    normalizedMsg.contains(ownerFirstName);
+                    (!ownerFirstName.isBlank() && normalizedMsg.contains("@" + ownerFirstName)) ||
+                    (!ownerFirstName.isBlank() && ownerFirstName.length() >= 3 && 
+                     java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(ownerFirstName) + "\\b").matcher(normalizedMsg).find());
 
             boolean matchesTopic = false;
             String matchedTopicName = "";

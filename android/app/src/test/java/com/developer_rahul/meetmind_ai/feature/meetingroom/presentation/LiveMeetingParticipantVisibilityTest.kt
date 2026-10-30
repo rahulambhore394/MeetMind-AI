@@ -17,10 +17,13 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
 import org.webrtc.VideoTrack
+import kotlinx.coroutines.test.resetMain
+import com.developer_rahul.meetmind_ai.feature.representative.data.remote.dto.AiProxySpeechDto
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class LiveMeetingParticipantVisibilityTest {
@@ -30,6 +33,7 @@ class LiveMeetingParticipantVisibilityTest {
     private val meetingWebSocketManager = mockk<MeetingWebSocketManager>(relaxed = true)
     private val textToSpeechManager = mockk<TextToSpeechManager>(relaxed = true)
     private val eventsFlow = MutableSharedFlow<MeetingCallEvent>()
+    private val aiProxySpeechFlow = MutableSharedFlow<AiProxySpeechDto>()
     private lateinit var viewModel: LiveMeetingViewModel
     private val testDispatcher = UnconfinedTestDispatcher()
 
@@ -37,6 +41,7 @@ class LiveMeetingParticipantVisibilityTest {
     fun setup() {
         Dispatchers.setMain(testDispatcher)
         every { meetingCallRepository.events } returns eventsFlow
+        every { meetingWebSocketManager.aiProxySpeech } returns aiProxySpeechFlow
         viewModel = LiveMeetingViewModel(
             meetingCallRepository = meetingCallRepository,
             meetingRepository = meetingRepository,
@@ -44,6 +49,11 @@ class LiveMeetingParticipantVisibilityTest {
             textToSpeechManager = textToSpeechManager,
             meetingId = 42L
         )
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     @Test

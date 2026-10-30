@@ -7,6 +7,8 @@ import com.developer_rahul.meetmind_ai.feature.notifications.domain.model.Notifi
 import com.developer_rahul.meetmind_ai.feature.notifications.domain.repository.NotificationRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import java.util.ArrayList
 
 class NotificationViewModel(
@@ -23,20 +25,27 @@ class NotificationViewModel(
 
     fun loadNotifications() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
-            val result = notificationRepository.getNotifications()
-            when (result) {
-                is NetworkResult.Success -> {
-                    _uiState.update { it.copy(isLoading = false, notifications = result.data) }
-                }
-                is NetworkResult.Error -> {
-                    _uiState.update { it.copy(isLoading = false, error = result.error.message) }
-                }
-                else -> {
-                    _uiState.update { it.copy(isLoading = false) }
+            _uiState.update { it.copy(isLoading = it.notifications.isEmpty()) }
+            coroutineScope {
+                val notificationsDeferred = async { notificationRepository.getNotifications() }
+                val unreadDeferred = async { notificationRepository.getUnreadCount() }
+                
+                val result = notificationsDeferred.await()
+                val unreadResult = unreadDeferred.await()
+
+                _uiState.update { state ->
+                    var s = state.copy(isLoading = false)
+                    when (result) {
+                        is NetworkResult.Success<List<Notification>> -> s = s.copy(notifications = result.data)
+                        is NetworkResult.Error -> s = s.copy(error = result.error.message)
+                        else -> {}
+                    }
+                    if (unreadResult is NetworkResult.Success<Long>) {
+                        s = s.copy(unreadCount = unreadResult.data)
+                    }
+                    s
                 }
             }
-            updateUnreadCount()
         }
     }
 

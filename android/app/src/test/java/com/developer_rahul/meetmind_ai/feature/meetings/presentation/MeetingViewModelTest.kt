@@ -9,7 +9,9 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -31,6 +33,13 @@ class MeetingViewModelTest {
     @Before
     fun setup() {
         Dispatchers.setMain(testDispatcher)
+        // Mock flows collected in init
+        io.mockk.every { webSocketManager.events } returns kotlinx.coroutines.flow.MutableSharedFlow()
+        io.mockk.every { presenceRepository.onlineParticipantIds } returns kotlinx.coroutines.flow.MutableStateFlow(emptySet())
+        io.mockk.every { recordingRepository.recordingEvents } returns kotlinx.coroutines.flow.MutableSharedFlow()
+        io.mockk.every { intelligenceRepository.intelligenceEvents } returns kotlinx.coroutines.flow.MutableSharedFlow()
+        io.mockk.every { recordingManager.state } returns kotlinx.coroutines.flow.MutableStateFlow(com.developer_rahul.meetmind_ai.feature.recording.domain.model.RecordingState())
+        
         // Initial load happens in init, so mock it before creating viewModel
         coEvery { meetingRepository.getAllMeetings() } returns NetworkResult.Success(emptyList())
         viewModel = MeetingViewModel(
@@ -43,6 +52,11 @@ class MeetingViewModelTest {
             recordingUploadManager,
             tokenProvider
         )
+    }
+
+    @After
+    fun tearDown() {
+        Dispatchers.resetMain()
     }
 
     @Test
@@ -63,7 +77,7 @@ class MeetingViewModelTest {
     @Test
     fun `createMeeting success updates creationSuccess state`() {
         val meeting = Meeting(1L, "Title", "Desc", 1L, "Host", "host@test.com", "2023-10-15T10:00:00", null, null, "2023-10-15T09:00:00", MeetingStatus.SCHEDULED)
-        coEvery { meetingRepository.createMeeting(any(), any(), any()) } returns NetworkResult.Success(meeting)
+        coEvery { meetingRepository.createMeeting(any(), any(), any(), any()) } returns NetworkResult.Success(meeting)
 
         viewModel.createMeeting("Title", "Desc", "2023-10-15T10:00:00")
 
@@ -97,6 +111,11 @@ class MeetingViewModelTest {
         coEvery { meetingRepository.getParticipants(meetingId) } returns NetworkResult.Success(emptyList())
         coEvery { recordingRepository.listRecordings(meetingId) } returns NetworkResult.Success(listOf(recording))
         coEvery { intelligenceRepository.getSummary(meetingId) } returns NetworkResult.Error(com.developer_rahul.meetmind_ai.core.network.model.MeetMindError(com.developer_rahul.meetmind_ai.core.network.model.ErrorType.UNKNOWN_ERROR, "Not found"))
+        io.mockk.every { recordingManager.state } returns kotlinx.coroutines.flow.MutableStateFlow(
+            com.developer_rahul.meetmind_ai.feature.recording.domain.model.RecordingState(
+                status = com.developer_rahul.meetmind_ai.feature.recording.domain.model.RecordingStatus.RECORDING
+            )
+        )
 
         viewModel.loadMeetingDetails(meetingId.toString())
         

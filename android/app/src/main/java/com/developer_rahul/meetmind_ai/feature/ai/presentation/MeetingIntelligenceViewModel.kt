@@ -26,8 +26,27 @@ class MeetingIntelligenceViewModel(
         viewModelScope.launch {
             intelligenceRepository.intelligenceEvents.collect { event ->
                 val type = event["type"]
-                if ("AI_SUMMARY_READY" == type) {
-                    loadIntelligence()
+                when (type) {
+                    "AI_SUMMARY_READY", "ACTION_ITEMS_EXTRACTED", "DECISIONS_UPDATED", "PARKING_LOT_UPDATED", "CHAPTERS_UPDATED" -> {
+                        loadIntelligence()
+                    }
+                    "ACTION_ITEM_UPDATED" -> {
+                        val actionItemId = event["actionItemId"]?.toLongOrNull()
+                        val newStatus = event["status"]
+                        if (actionItemId != null && newStatus != null) {
+                            _uiState.update { current ->
+                                val updatedSummary = current.summary?.let { s ->
+                                    val updatedItems = s.actionItems.map { item ->
+                                        if (item.id == actionItemId) item.copy(status = newStatus) else item
+                                    }
+                                    s.copy(actionItems = updatedItems)
+                                }
+                                current.copy(summary = updatedSummary)
+                            }
+                        } else {
+                            loadIntelligence()
+                        }
+                    }
                 }
             }
         }
@@ -54,12 +73,156 @@ class MeetingIntelligenceViewModel(
         }
     }
 
-    fun updateActionItemStatus(actionItemId: Long, isCompleted: Boolean) {
+    fun updateActionItemStatus(actionItemId: Long, newStatus: String) {
+        // Optimistic UI update for instant feedback
+        _uiState.update { current ->
+            val updatedSummary = current.summary?.let { s ->
+                val updatedItems = s.actionItems.map { item ->
+                    if (item.id == actionItemId) item.copy(status = newStatus) else item
+                }
+                s.copy(actionItems = updatedItems)
+            }
+            current.copy(summary = updatedSummary)
+        }
+
         viewModelScope.launch {
-            val status = if (isCompleted) "COMPLETED" else "OPEN"
-            val result = intelligenceRepository.updateActionItemStatus(meetingId, actionItemId, status)
+            val result = intelligenceRepository.updateActionItemStatus(meetingId, actionItemId, newStatus)
+            if (result is NetworkResult.Error) {
+                // If API failed, reload truth from server
+                loadIntelligence()
+            }
+        }
+    }
+
+    fun updateActionItemStatus(actionItemId: Long, isCompleted: Boolean) {
+        val newStatus = if (isCompleted) "COMPLETED" else "PENDING"
+        updateActionItemStatus(actionItemId, newStatus)
+    }
+
+    fun addDecision(decisionText: String) {
+        val clean = decisionText.trim()
+        if (clean.isBlank()) return
+
+        _uiState.update { current ->
+            val updatedSummary = current.summary?.let { s ->
+                val newDecisions = s.decisions + clean
+                s.copy(decisions = newDecisions)
+            }
+            current.copy(summary = updatedSummary)
+        }
+
+        viewModelScope.launch {
+            val result = intelligenceRepository.addDecision(meetingId, clean)
             if (result is NetworkResult.Success) {
-                // Refresh to get updated list
+                _uiState.update { current ->
+                    val updatedSummary = current.summary?.copy(decisions = result.data)
+                    current.copy(summary = updatedSummary)
+                }
+            } else if (result is NetworkResult.Error) {
+                loadIntelligence()
+            }
+        }
+    }
+
+    fun deleteDecision(index: Int) {
+        _uiState.update { current ->
+            val updatedSummary = current.summary?.let { s ->
+                val newDecisions = s.decisions.toMutableList().apply {
+                    if (index in indices) removeAt(index)
+                }
+                s.copy(decisions = newDecisions)
+            }
+            current.copy(summary = updatedSummary)
+        }
+
+        viewModelScope.launch {
+            val result = intelligenceRepository.deleteDecision(meetingId, index)
+            if (result is NetworkResult.Success) {
+                _uiState.update { current ->
+                    val updatedSummary = current.summary?.copy(decisions = result.data)
+                    current.copy(summary = updatedSummary)
+                }
+            } else if (result is NetworkResult.Error) {
+                loadIntelligence()
+            }
+        }
+    }
+
+    fun addParkingQuestion(question: String, askedBy: String = "Team", status: String = "UNANSWERED") {
+        val clean = question.trim()
+        if (clean.isBlank()) return
+
+        val optimistic = com.developer_rahul.meetmind_ai.feature.intelligence.data.remote.dto.ParkingQuestionDto(
+            id = System.currentTimeMillis(),
+            question = clean,
+            askedBy = askedBy,
+            status = status,
+            timeFormatted = "00:00"
+        )
+
+        _uiState.update { current ->
+            val updatedSummary = current.summary?.let { s ->
+                s.copy(parkingLotItems = s.parkingLotItems + optimistic)
+            }
+            current.copy(summary = updatedSummary)
+        }
+
+        viewModelScope.launch {
+            val result = intelligenceRepository.addParkingQuestion(meetingId, clean, askedBy, status)
+            if (result is NetworkResult.Success) {
+                _uiState.update { current ->
+                    val updatedSummary = current.summary?.copy(parkingLotItems = result.data)
+                    current.copy(summary = updatedSummary)
+                }
+            } else if (result is NetworkResult.Error) {
+                loadIntelligence()
+            }
+        }
+    }
+
+    fun updateParkingQuestionStatus(index: Int, newStatus: String) {
+        _uiState.update { current ->
+            val updatedSummary = current.summary?.let { s ->
+                val updatedItems = s.parkingLotItems.mapIndexed { i, item ->
+                    if (i == index) item.copy(status = newStatus) else item
+                }
+                s.copy(parkingLotItems = updatedItems)
+            }
+            current.copy(summary = updatedSummary)
+        }
+
+        viewModelScope.launch {
+            val result = intelligenceRepository.updateParkingQuestionStatus(meetingId, index, newStatus)
+            if (result is NetworkResult.Success) {
+                _uiState.update { current ->
+                    val updatedSummary = current.summary?.copy(parkingLotItems = result.data)
+                    current.copy(summary = updatedSummary)
+                }
+            } else if (result is NetworkResult.Error) {
+                loadIntelligence()
+            }
+        }
+    }
+
+    fun deleteParkingQuestion(index: Int) {
+        _uiState.update { current ->
+            val updatedSummary = current.summary?.let { s ->
+                val newItems = s.parkingLotItems.toMutableList().apply {
+                    if (index in indices) removeAt(index)
+                }
+                s.copy(parkingLotItems = newItems)
+            }
+            current.copy(summary = updatedSummary)
+        }
+
+        viewModelScope.launch {
+            val result = intelligenceRepository.deleteParkingQuestion(meetingId, index)
+            if (result is NetworkResult.Success) {
+                _uiState.update { current ->
+                    val updatedSummary = current.summary?.copy(parkingLotItems = result.data)
+                    current.copy(summary = updatedSummary)
+                }
+            } else if (result is NetworkResult.Error) {
                 loadIntelligence()
             }
         }

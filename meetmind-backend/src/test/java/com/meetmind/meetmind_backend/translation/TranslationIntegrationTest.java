@@ -44,7 +44,10 @@ import static org.mockito.Mockito.*;
  */
 @SpringBootTest(
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-        properties = "spring.jpa.hibernate.ddl-auto=update"
+        properties = {
+                "spring.jpa.hibernate.ddl-auto=update",
+                "spring.main.allow-bean-definition-overriding=true"
+        }
 )
 @Import(TestRedisConfig.class)
 @ActiveProfiles("test")
@@ -59,7 +62,7 @@ public class TranslationIntegrationTest {
     @TestConfiguration
     static class MockTranslationProviderConfig {
 
-        @Bean
+        @Bean(name = "hybridTranslationProvider")
         @Primary
         public TranslationProvider mockTranslationProvider() {
             return new TranslationProvider() {

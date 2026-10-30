@@ -4,6 +4,7 @@ import com.developer_rahul.meetmind_ai.core.network.error.ErrorMapper
 import com.developer_rahul.meetmind_ai.core.network.model.NetworkResult
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.MeetingApiService
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.BatchInviteRequestDto
+import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.BatchInviteResponseDto
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.ComprehensiveReportDto
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.CreateMeetingRequestDto
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.InviteParticipantRequestDto
@@ -16,12 +17,25 @@ class RealMeetingRepository(
     private val meetingApiService: MeetingApiService
 ) : MeetingRepository {
 
+    @Volatile
+    private var cachedMeetings: List<Meeting>? = null
+    private val cacheLock = Any()
+
     override suspend fun getAllMeetings(): NetworkResult<List<Meeting>> {
         return try {
             val response = meetingApiService.getAllMeetings()
-            NetworkResult.Success(response.map { it.toDomain() })
+            val domainList = response.map { it.toDomain() }
+            synchronized(cacheLock) {
+                cachedMeetings = domainList
+            }
+            NetworkResult.Success(domainList)
         } catch (e: Exception) {
-            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+            val cached = synchronized(cacheLock) { cachedMeetings }
+            if (cached != null && cached.isNotEmpty()) {
+                NetworkResult.Success(cached)
+            } else {
+                NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+            }
         }
     }
 
@@ -61,6 +75,7 @@ class RealMeetingRepository(
     override suspend fun deleteMeeting(meetingId: Long): NetworkResult<Unit> {
         return try {
             meetingApiService.deleteMeeting(meetingId)
+            cachedMeetings = cachedMeetings?.filter { it.id != meetingId }
             NetworkResult.Success(Unit)
         } catch (e: Exception) {
             NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
@@ -127,10 +142,10 @@ class RealMeetingRepository(
     override suspend fun batchInviteParticipants(
         meetingId: Long,
         emails: List<String>
-    ): NetworkResult<Unit> {
+    ): NetworkResult<BatchInviteResponseDto> {
         return try {
-            meetingApiService.batchInviteParticipants(meetingId, BatchInviteRequestDto(emails))
-            NetworkResult.Success(Unit)
+            val response = meetingApiService.batchInviteParticipants(meetingId, BatchInviteRequestDto(emails))
+            NetworkResult.Success(response)
         } catch (e: Exception) {
             NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
         }

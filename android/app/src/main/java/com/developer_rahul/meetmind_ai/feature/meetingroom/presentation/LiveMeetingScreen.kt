@@ -8,10 +8,13 @@ import android.media.projection.MediaProjectionManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -45,7 +48,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.MeetingStatus
 import com.developer_rahul.meetmind_ai.core.designsystem.*
+import com.developer_rahul.meetmind_ai.core.media.audio.AudioDeviceManager
 import com.developer_rahul.meetmind_ai.core.ui.ViewModelFactory
 import com.developer_rahul.meetmind_ai.core.ui.components.HostLeaveOrEndDialog
 import com.developer_rahul.meetmind_ai.core.ui.components.LeaveMeetingDialog
@@ -67,7 +72,7 @@ import org.webrtc.VideoTrack
 @Composable
 fun LiveMeetingScreen(
     meetingId: String,
-    onLeaveMeeting: () -> Unit,
+    onLeaveMeeting: (duration: String) -> Unit,
     onToggleChat: () -> Unit,
     onToggleParticipants: () -> Unit,
     onViewTranscript: () -> Unit = {},
@@ -110,6 +115,13 @@ fun LiveMeetingScreen(
         if (!hasCamera || !hasAudio) {
             permissionLauncher.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
         }
+        AudioDeviceManager.selectAudioDevice(context, "Speaker")
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            AudioDeviceManager.resetToNormalMode(context)
+        }
     }
 
     val uiState by meetingViewModel.uiState.collectAsState()
@@ -123,12 +135,36 @@ fun LiveMeetingScreen(
     var isMuted by remember { mutableStateOf(false) }
     var isVideoOff by remember { mutableStateOf(false) }
     
+    var elapsedSeconds by remember { mutableLongStateOf(0L) }
+    LaunchedEffect(Unit) {
+        val startMs = System.currentTimeMillis()
+        while (true) {
+            elapsedSeconds = (System.currentTimeMillis() - startMs) / 1000L
+            kotlinx.coroutines.delay(1000L)
+        }
+    }
+    val formattedDuration = remember(elapsedSeconds) {
+        val mins = elapsedSeconds / 60
+        val secs = elapsedSeconds % 60
+        "%02d:%02d".format(mins, secs)
+    }
+
+    // Auto-exit all participants when host ends the meeting for everyone
+    LaunchedEffect(meeting?.status) {
+        if (meeting?.status == MeetingStatus.ENDED) {
+            Toast.makeText(context, "The host has ended this meeting for everyone.", Toast.LENGTH_LONG).show()
+            callViewModel.leaveMeeting()
+            onLeaveMeeting(formattedDuration)
+        }
+    }
+
     var showMoreSheet by remember { mutableStateOf(false) }
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showRecordingConsent by remember { mutableStateOf(false) }
     var showTranslationSettings by remember { mutableStateOf(false) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var showChatSheet by remember { mutableStateOf(false) }
+    var showAudioDeviceSheet by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
     val recordingLauncher = rememberLauncherForActivityResult(
@@ -308,7 +344,7 @@ fun LiveMeetingScreen(
                         meetingViewModel.leaveMeeting(numericMeetingId)
                     }
                     callViewModel.leaveMeeting()
-                    onLeaveMeeting()
+                    onLeaveMeeting(formattedDuration)
                 },
                 onEndForEveryone = {
                     showLeaveDialog = false
@@ -316,7 +352,7 @@ fun LiveMeetingScreen(
                         meetingViewModel.endMeeting(numericMeetingId)
                     }
                     callViewModel.leaveMeeting()
-                    onLeaveMeeting()
+                    onLeaveMeeting(formattedDuration)
                 }
             )
         } else {
@@ -328,7 +364,7 @@ fun LiveMeetingScreen(
                         meetingViewModel.leaveMeeting(numericMeetingId)
                     }
                     callViewModel.leaveMeeting()
-                    onLeaveMeeting()
+                    onLeaveMeeting(formattedDuration)
                 }
             )
         }
@@ -356,6 +392,27 @@ fun LiveMeetingScreen(
         )
     }
 
+    if (showAudioDeviceSheet) {
+        val availableDevices = remember(context) {
+            AudioDeviceManager.getAvailableAudioDevices(context)
+        }
+        ModalBottomSheet(
+            onDismissRequest = { showAudioDeviceSheet = false },
+            containerColor = BackgroundSurface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = TextDisabled) }
+        ) {
+            AudioDeviceSelectorSheet(
+                availableDevices = availableDevices,
+                selectedDevice = callState.selectedAudioDevice,
+                onSelectDevice = { device ->
+                    callViewModel.selectAudioDevice(context, device)
+                    showAudioDeviceSheet = false
+                    Toast.makeText(context, "Audio routed to $device", Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
+    }
+
     if (showMoreSheet) {
         ModalBottomSheet(
             onDismissRequest = { showMoreSheet = false },
@@ -366,6 +423,11 @@ fun LiveMeetingScreen(
             MoreControlsContent(
                 isRecording = isRecording,
                 isSharing = callState.isScreenSharing,
+                selectedAudioDevice = callState.selectedAudioDevice,
+                onToggleAudioDevice = {
+                    showMoreSheet = false
+                    showAudioDeviceSheet = true
+                },
                 onToggleRecording = { 
                     val id = meetingId.toLongOrNull() ?: meeting?.id
                     if (id != null && id > 0L) {
@@ -460,33 +522,62 @@ fun LiveMeetingScreen(
             .background(Color(0xFF0A0C14)) 
     ) {
         val currentUserId = meetingViewModel.currentUserId
-        val activeParticipants = uiState.participants.filter {
-            it.status == com.developer_rahul.meetmind_ai.feature.meetings.domain.model.ParticipantStatus.JOINED ||
-            (currentUserId > 0L && it.userId == currentUserId) ||
-            callState.participants.containsKey(it.userId)
+        val knownUserIds = uiState.participants.mapNotNull { it.userId }.toSet()
+        val extraFromWebRtc: List<com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Participant> = callState.participants.keys
+            .filter { it !in knownUserIds && it > 0L }
+            .map { peerId: Long ->
+                com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Participant(
+                    id = peerId,
+                    userId = peerId,
+                    name = "Participant $peerId",
+                    email = "",
+                    role = com.developer_rahul.meetmind_ai.feature.meetings.domain.model.ParticipantRole.PARTICIPANT,
+                    status = com.developer_rahul.meetmind_ai.feature.meetings.domain.model.ParticipantStatus.JOINED,
+                    isOnline = true
+                )
+            }
+        val allParticipants = uiState.participants + extraFromWebRtc
+        val activeParticipants = allParticipants.filter { participant ->
+            val isLocal = (currentUserId > 0L && participant.userId == currentUserId) ||
+                          (participant.name.endsWith("(You)", ignoreCase = true) || participant.name.equals("You", ignoreCase = true))
+            val isAiAgent = participant.role == ParticipantRole.AI_REPRESENTATIVE || participant.role == ParticipantRole.AUTOMATED_AGENT
+            val inWebRtc = participant.userId != null && callState.participants.containsKey(participant.userId)
+            val isJoined = participant.status == com.developer_rahul.meetmind_ai.feature.meetings.domain.model.ParticipantStatus.JOINED || participant.isOnline
+            
+            isLocal || inWebRtc || isJoined || isAiAgent
+        }.ifEmpty {
+            allParticipants.filter {
+                it.status == com.developer_rahul.meetmind_ai.feature.meetings.domain.model.ParticipantStatus.JOINED ||
+                (currentUserId > 0L && it.userId == currentUserId)
+            }
         }
-        val participantsList = activeParticipants.ifEmpty { uiState.participants }
-        val totalParticipants = activeParticipants.size.coerceAtLeast(1)
+        val participantsList = activeParticipants.distinctBy { it.userId ?: it.id }
+        val totalParticipants = participantsList.size.coerceAtLeast(1)
 
         val localScreenTrack = if (callState.isScreenSharing) callState.localScreenTrack else null
         val remoteScreenTrack = callState.participants.values.mapNotNull { it.screenTrack }.firstOrNull()
         val activeScreenShareTrack = localScreenTrack ?: remoteScreenTrack
 
-        Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = if (activeScreenShareTrack != null) 75.dp else 0.dp)
+        ) {
             if (activeScreenShareTrack != null) {
                 // Prominent Screen Share Hero View
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(280.dp)
-                        .padding(top = 80.dp, start = 12.dp, end = 12.dp)
+                        .height(240.dp)
+                        .padding(horizontal = 12.dp, vertical = 6.dp)
                         .clip(RoundedCornerShape(20.dp))
                         .background(Color.Black)
                         .border(1.5.dp, NeonCyan, RoundedCornerShape(20.dp))
                 ) {
                     VideoRenderer(
                         modifier = Modifier.fillMaxSize(),
-                        videoTrack = activeScreenShareTrack
+                        videoTrack = activeScreenShareTrack,
+                        isOverlay = true
                     )
                     Surface(
                         modifier = Modifier
@@ -514,9 +605,11 @@ fun LiveMeetingScreen(
 
             LazyVerticalGrid(
                 columns = GridCells.Fixed(if (totalParticipants <= 1) 1 else 2),
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
                 contentPadding = PaddingValues(
-                    top = if (activeScreenShareTrack != null) 12.dp else 115.dp,
+                    top = if (activeScreenShareTrack != null) 6.dp else 115.dp,
                     bottom = 120.dp,
                     start = 12.dp,
                     end = 12.dp
@@ -549,7 +642,10 @@ fun LiveMeetingScreen(
                         isActiveSpeaker = if (isLocalUser) (!isMuted) else (isAiCurrentlySpeaking || (mediaState?.isSpeaking ?: false)),
                         screenTrack = effectiveScreenTrack
                     )
-                    ParticipantVideoTile(uiParticipant)
+                    ParticipantVideoTile(
+                        participant = uiParticipant,
+                        isOverlay = index > 0
+                    )
                 }
                 
                 if (participantsList.isEmpty()) {
@@ -610,6 +706,15 @@ fun LiveMeetingScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                     
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Text(
+                        text = formattedDuration,
+                        style = Typography.labelMedium,
+                        color = TextSecondary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+
                     Spacer(modifier = Modifier.width(8.dp))
                     
                     Surface(
@@ -787,7 +892,8 @@ fun LiveMeetingScreen(
                 if (callState.localVideoTrack != null && !isVideoOff) {
                     VideoRenderer(
                         modifier = Modifier.fillMaxSize(),
-                        videoTrack = callState.localVideoTrack
+                        videoTrack = callState.localVideoTrack,
+                        isOverlay = true
                     )
                 } else {
                     AvatarPlaceholder(name = "You", sizeDp = 48)
@@ -838,7 +944,8 @@ fun LiveMeetingScreen(
             ) {
                 SubtitleOverlay(
                     originalText = translationState.currentOriginalText,
-                    subtitles = recentSubtitles
+                    subtitles = recentSubtitles,
+                    errorMessage = translationState.error
                 )
             }
         }
@@ -882,6 +989,22 @@ fun LiveMeetingScreen(
                         callViewModel.setVideoEnabled(!isVideoOff)
                         Toast.makeText(context, if (isVideoOff) "Camera Turned Off" else "Camera Turned On", Toast.LENGTH_SHORT).show()
                     }
+                )
+
+                // Audio Output Routing Button (Speaker, Earpiece, Bluetooth, Headset)
+                val audioDeviceIcon = when (callState.selectedAudioDevice) {
+                    "Bluetooth" -> Icons.Default.BluetoothAudio
+                    "Headset" -> Icons.Default.Headset
+                    "Earpiece" -> Icons.Default.PhoneInTalk
+                    else -> Icons.Default.VolumeUp
+                }
+
+                MeetingControlButton(
+                    icon = audioDeviceIcon,
+                    isActive = callState.selectedAudioDevice != "Speaker",
+                    activeColor = NeonCyan.copy(alpha = 0.85f),
+                    inactiveColor = Color.White.copy(alpha = 0.12f),
+                    onClick = { showAudioDeviceSheet = true }
                 )
 
                 // Screen Share Button (Cyan ON / Translucent OFF)
@@ -941,9 +1064,92 @@ fun formatDuration(durationMs: Long): String {
 }
 
 @Composable
+fun AudioDeviceSelectorSheet(
+    availableDevices: List<String>,
+    selectedDevice: String,
+    onSelectDevice: (String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(24.dp)
+            .navigationBarsPadding()
+    ) {
+        Text("Audio Output Device", style = Typography.headlineSmall, color = TextPrimary, fontWeight = FontWeight.Bold)
+        Spacer(modifier = Modifier.height(4.dp))
+        Text("Select output device for meeting audio", style = Typography.bodySmall, color = TextSecondary)
+        Spacer(modifier = Modifier.height(20.dp))
+
+        availableDevices.forEach { device ->
+            val isSelected = device.equals(selectedDevice, ignoreCase = true)
+            val icon = when (device) {
+                "Bluetooth" -> Icons.Default.BluetoothAudio
+                "Headset" -> Icons.Default.Headset
+                "Earpiece" -> Icons.Default.PhoneInTalk
+                else -> Icons.Default.VolumeUp
+            }
+
+            Surface(
+                onClick = { onSelectDevice(device) },
+                shape = RoundedCornerShape(16.dp),
+                color = if (isSelected) ElectricIndigo.copy(alpha = 0.2f) else CardSurface,
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    if (isSelected) ElectricIndigo else BorderColor
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp)
+                    .bounceClick()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(
+                                if (isSelected) ElectricIndigo else GlassWhite,
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            icon,
+                            contentDescription = device,
+                            tint = if (isSelected) Color.White else TextPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Text(
+                        device,
+                        style = Typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = if (isSelected) ElectricIndigo else TextPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (isSelected) {
+                        Icon(
+                            Icons.Default.CheckCircle,
+                            contentDescription = "Selected",
+                            tint = ElectricIndigo,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun MoreControlsContent(
     isRecording: Boolean,
     isSharing: Boolean,
+    selectedAudioDevice: String = "Speaker",
+    onToggleAudioDevice: () -> Unit = {},
     onToggleRecording: () -> Unit,
     onInvitePeople: () -> Unit,
     onToggleScreenShare: () -> Unit,
@@ -973,6 +1179,17 @@ fun MoreControlsContent(
             title = "Participants List",
             color = ElectricIndigo,
             onClick = onToggleParticipants
+        )
+        ControlItem(
+            icon = when (selectedAudioDevice) {
+                "Bluetooth" -> Icons.Default.BluetoothAudio
+                "Headset" -> Icons.Default.Headset
+                "Earpiece" -> Icons.Default.PhoneInTalk
+                else -> Icons.Default.VolumeUp
+            },
+            title = "Audio Output ($selectedAudioDevice)",
+            color = NeonCyan,
+            onClick = onToggleAudioDevice
         )
         ControlItem(
             icon = if (isSharing) Icons.Default.StopScreenShare else Icons.Default.PresentToAll,
@@ -1045,7 +1262,10 @@ fun ControlItem(
 }
 
 @Composable
-fun ParticipantVideoTile(participant: Participant) {
+fun ParticipantVideoTile(
+    participant: Participant,
+    isOverlay: Boolean = false
+) {
     Box(
         modifier = Modifier
             .aspectRatio(0.82f)
@@ -1062,11 +1282,12 @@ fun ParticipantVideoTile(participant: Participant) {
                 }
             )
     ) {
-        val activeVideoTrack = participant.screenTrack ?: participant.videoTrack
-        if (activeVideoTrack != null && (participant.isVideoOn || participant.screenTrack != null)) {
+        val cameraTrack = participant.videoTrack
+        if (cameraTrack != null && participant.isVideoOn) {
             VideoRenderer(
                 modifier = Modifier.fillMaxSize(),
-                videoTrack = activeVideoTrack
+                videoTrack = cameraTrack,
+                isOverlay = isOverlay
             )
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -1173,34 +1394,114 @@ data class Participant(
 @Composable
 fun SubtitleOverlay(
     originalText: String,
-    subtitles: List<Subtitle>
+    subtitles: List<Subtitle>,
+    errorMessage: String? = null
 ) {
+    if (subtitles.isEmpty() && originalText.isBlank() && errorMessage.isNullOrBlank()) return
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color.Black.copy(alpha = 0.75f), RoundedCornerShape(16.dp))
+            .background(Color(0xFF0F172A).copy(alpha = 0.88f), RoundedCornerShape(16.dp))
             .border(1.dp, GlassWhite, RoundedCornerShape(16.dp))
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        horizontalAlignment = Alignment.Start,
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        subtitles.forEach { subtitle ->
-            Text(
-                text = "${subtitle.speaker}: ${subtitle.translatedText}",
-                color = Color.White,
-                style = Typography.bodyLarge,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Center
-            )
+        if (!errorMessage.isNullOrBlank()) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(RoseRed.copy(alpha = 0.15f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = RoseRed,
+                    modifier = Modifier.size(13.dp)
+                )
+                Text(
+                    text = errorMessage,
+                    color = RoseRed,
+                    style = Typography.bodySmall,
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
+        subtitles.takeLast(3).forEach { subtitle ->
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .background(ElectricIndigo.copy(alpha = 0.35f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 7.dp, vertical = 2.dp)
+                    ) {
+                        Text(
+                            text = subtitle.speaker,
+                            color = NeonCyan,
+                            style = Typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .background(EmeraldGreen.copy(alpha = 0.25f), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 5.dp, vertical = 1.dp)
+                    ) {
+                        Text(
+                            text = subtitle.targetLanguage.uppercase(),
+                            color = EmeraldGreen,
+                            style = Typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = subtitle.translatedText,
+                    color = Color.White,
+                    style = Typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                if (subtitle.originalText.isNotBlank() && !subtitle.originalText.equals(subtitle.translatedText, ignoreCase = true)) {
+                    Text(
+                        text = "\"${subtitle.originalText}\"",
+                        color = TextSecondary,
+                        style = Typography.labelSmall,
+                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                    )
+                }
+            }
+        }
+
         if (originalText.isNotBlank()) {
-            Text(
-                text = originalText,
-                color = Color.White.copy(alpha = 0.7f),
-                style = Typography.bodyMedium,
-                fontStyle = androidx.compose.ui.text.font.FontStyle.Italic,
-                textAlign = TextAlign.Center
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Mic,
+                    contentDescription = null,
+                    tint = EmeraldGreen,
+                    modifier = Modifier.size(13.dp)
+                )
+                Text(
+                    text = "$originalText...",
+                    color = TextPrimary.copy(alpha = 0.85f),
+                    style = Typography.bodySmall,
+                    fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
+                )
+            }
         }
     }
 }
@@ -1217,24 +1518,46 @@ fun TranslationSettingsContent(
     onTargetLanguageSelect: (String) -> Unit
 ) {
     val targetLanguages = listOf(
-        "en" to "English",
         "hi" to "Hindi (हिंदी)",
-        "mr" to "Marathi (मराठी)"
+        "mr" to "Marathi (मराठी)",
+        "en" to "English",
+        "es" to "Spanish (Español)",
+        "gu" to "Gujarati (ગુજરાતી)",
+        "fr" to "French (Français)",
+        "de" to "German (Deutsch)",
+        "ja" to "Japanese (日本語)"
     )
 
     val spokenLanguages = listOf(
-        "en-US" to "English (US)",
+        "en-US" to "English (US / India)",
         "hi-IN" to "Hindi (हिंदी)",
-        "mr-IN" to "Marathi (मराठी)"
+        "mr-IN" to "Marathi (मराठी)",
+        "es-ES" to "Spanish (Español)",
+        "gu-IN" to "Gujarati (ગુજરાતી)",
+        "fr-FR" to "French (Français)",
+        "de-DE" to "German (Deutsch)",
+        "ja-JP" to "Japanese (日本語)"
     )
 
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp)
             .navigationBarsPadding()
     ) {
-        Text("Real-Time Translation Settings", style = Typography.headlineSmall, color = TextPrimary, fontWeight = FontWeight.Bold)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .background(ElectricIndigo.copy(alpha = 0.2f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(Icons.Default.Translate, contentDescription = null, tint = ElectricIndigo, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Text("Real-Time Translation Settings", style = Typography.titleLarge, color = TextPrimary, fontWeight = FontWeight.Bold)
+        }
         Spacer(modifier = Modifier.height(20.dp))
         
         Row(
@@ -1271,8 +1594,8 @@ fun TranslationSettingsContent(
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
-        Text("Your Spoken Language", style = Typography.titleMedium, color = TextSecondary)
+        Spacer(modifier = Modifier.height(24.dp))
+        Text("Your Spoken Language", style = Typography.titleMedium, color = TextSecondary, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(8.dp))
         
         Column(modifier = Modifier.selectableGroup()) {
@@ -1299,8 +1622,8 @@ fun TranslationSettingsContent(
             }
         }
         
-        Spacer(modifier = Modifier.height(20.dp))
-        Text("Your Preferred Listening Language", style = Typography.titleMedium, color = TextSecondary)
+        Spacer(modifier = Modifier.height(24.dp))
+        Text("Your Preferred Subtitle Language", style = Typography.titleMedium, color = TextSecondary, fontWeight = FontWeight.SemiBold)
         Spacer(modifier = Modifier.height(8.dp))
         
         Column(modifier = Modifier.selectableGroup()) {
@@ -1499,4 +1822,3 @@ fun InMeetingChatSheetContent(
         }
     }
 }
-

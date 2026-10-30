@@ -30,7 +30,7 @@ public class MeetingRecording {
     private String storagePath;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(nullable = false, length = 50)
     private RecordingStatus status;
 
     @Column(name = "created_at", nullable = false)

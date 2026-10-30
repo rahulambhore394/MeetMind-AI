@@ -192,7 +192,7 @@ public class MeetingIntelligenceIntegrationTest {
         ActionItem item = actionItems.get(0);
         assertThat(item.getDescription()).isNotBlank();
         assertThat(item.getConfidence()).isGreaterThan(0.0);
-        assertThat(item.getStatus()).isEqualTo(ActionItemStatus.OPEN);
+        assertThat(item.getStatus()).isIn(ActionItemStatus.PENDING, ActionItemStatus.OPEN);
     }
 
     @Test
@@ -347,5 +347,347 @@ public class MeetingIntelligenceIntegrationTest {
         );
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    @Order(11)
+    void testExecutiveSummaryAndBulletPointHighlights() throws Exception {
+        String transcriptText = "The engineering team reviewed the Q3 cloud infrastructure budget. " +
+                "Due to a 25% increase in compute usage, current costs were exceeding projections. " +
+                "The team decided to migrate from On-Demand instances to AWS Savings Plans. " +
+                "Deployment is slated for Friday. Dave will lead the cutover and monitor cloud metrics.";
+
+        MeetingTranscript transcript = createTranscript(transcriptText);
+        MeetingSummary summary = intelligenceService.generateIntelligence(transcript.getId());
+
+        assertThat(summary).isNotNull();
+        assertThat(summary.getSummary()).isNotBlank();
+
+        // Verify 3 to 5 sentences
+        String[] sentences = summary.getSummary().split("(?<=[.!?])\\s+");
+        assertThat(sentences.length).isBetween(3, 5);
+        assertThat(summary.getSummary()).contains("Q3 cloud infrastructure budget");
+        assertThat(summary.getSummary()).contains("AWS Savings Plans");
+
+        // Verify key bullet points
+        assertThat(summary.getKeyPointsJson()).isNotBlank();
+        assertThat(summary.getKeyPointsJson()).isNotEqualTo("[]");
+        assertThat(summary.getKeyPointsJson()).contains("AWS Savings Plans");
+    }
+
+    @Test
+    @Order(12)
+    void testAutomatedActionItemExtractionAndTracking() throws Exception {
+        String transcriptText = "The team aligned on the release goals. " +
+                "I will prepare the deployment checklist by next Monday. " +
+                "Bob is assigned to update the API documentation before end of day. " +
+                "Sarah takes responsibility for security testing by Friday.";
+
+        MeetingTranscript transcript = createTranscript(transcriptText);
+
+        TranscriptSegment s1 = new TranscriptSegment();
+        s1.setTranscriptId(transcript.getId());
+        s1.setSegmentIndex(0);
+        s1.setSpeaker("Dave");
+        s1.setText("I will prepare the deployment checklist by next Monday.");
+        s1.setStartMs(1000L);
+        s1.setEndMs(6000L);
+        segmentRepository.save(s1);
+
+        TranscriptSegment s2 = new TranscriptSegment();
+        s2.setTranscriptId(transcript.getId());
+        s2.setSegmentIndex(1);
+        s2.setSpeaker("Host");
+        s2.setText("Bob is assigned to update the API documentation before end of day.");
+        s2.setStartMs(6500L);
+        s2.setEndMs(12000L);
+        segmentRepository.save(s2);
+
+        MeetingSummary summary = intelligenceService.generateIntelligence(transcript.getId());
+        assertThat(summary).isNotNull();
+
+        List<ActionItem> actionItems = actionItemRepository.findByMeetingSummaryId(summary.getId());
+        assertThat(actionItems).hasSizeGreaterThanOrEqualTo(2);
+
+        // Find Dave's item extracted via speaker + "I will prepare"
+        ActionItem daveTask = actionItems.stream()
+                .filter(a -> a.getDescription().toLowerCase().contains("prepare") || "Dave".equalsIgnoreCase(a.getAssignedUser()))
+                .findFirst().orElse(null);
+        assertThat(daveTask).isNotNull();
+        assertThat(daveTask.getStatus()).isEqualTo(ActionItemStatus.PENDING);
+        assertThat(daveTask.getDueDate()).containsIgnoringCase("next Monday");
+
+        // Test PATCH update to IN_PROGRESS and then COMPLETED
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(participantToken);
+
+        // 1. Update to IN_PROGRESS
+        HttpEntity<Map<String, String>> inProgressReq = new HttpEntity<>(Map.of("status", "IN_PROGRESS"), headers);
+        ResponseEntity<ActionItem> inProgressResp = restTemplate.exchange(
+                "http://localhost:" + port + "/api/meetings/" + meeting.getId() + "/action-items/" + daveTask.getId(),
+                HttpMethod.PATCH,
+                inProgressReq,
+                ActionItem.class
+        );
+        assertThat(inProgressResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(inProgressResp.getBody().getStatus()).isEqualTo(ActionItemStatus.IN_PROGRESS);
+
+        // 2. Update to COMPLETED
+        HttpEntity<Map<String, String>> completedReq = new HttpEntity<>(Map.of("status", "COMPLETED"), headers);
+        ResponseEntity<ActionItem> completedResp = restTemplate.exchange(
+                "http://localhost:" + port + "/api/meetings/" + meeting.getId() + "/action-items/" + daveTask.getId(),
+                HttpMethod.PATCH,
+                completedReq,
+                ActionItem.class
+        );
+        assertThat(completedResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(completedResp.getBody().getStatus()).isEqualTo(ActionItemStatus.COMPLETED);
+    }
+
+    @Test
+    @Order(7)
+    @DisplayName("Key Decision & Agreement Tracking - Real-time consensus extraction, GET, POST, DELETE management")
+    void testKeyDecisionAndAgreementTracking() throws Exception {
+        String transcriptText = "The team evaluated database architectures for the upcoming quarter. " +
+                "We settled on PostgreSQL 15 over MongoDB for the meeting intelligence persistence layer. " +
+                "Everyone agreed on a bi-weekly release sprint schedule starting November 1st. " +
+                "Let's go with Option B for our primary cloud deployment strategy.";
+
+        MeetingTranscript transcript = createTranscript(transcriptText);
+
+        TranscriptSegment s1 = new TranscriptSegment();
+        s1.setTranscriptId(transcript.getId());
+        s1.setSegmentIndex(0);
+        s1.setSpeaker("Lead Architect");
+        s1.setText("We settled on PostgreSQL 15 over MongoDB for the meeting intelligence persistence layer.");
+        s1.setStartMs(1000L);
+        s1.setEndMs(6000L);
+        segmentRepository.save(s1);
+
+        TranscriptSegment s2 = new TranscriptSegment();
+        s2.setTranscriptId(transcript.getId());
+        s2.setSegmentIndex(1);
+        s2.setSpeaker("Project Manager");
+        s2.setText("Everyone agreed on a bi-weekly release sprint schedule starting November 1st.");
+        s2.setStartMs(6500L);
+        s2.setEndMs(11000L);
+        segmentRepository.save(s2);
+
+        TranscriptSegment s3 = new TranscriptSegment();
+        s3.setTranscriptId(transcript.getId());
+        s3.setSegmentIndex(2);
+        s3.setSpeaker("DevOps Lead");
+        s3.setText("Let's go with Option B for our primary cloud deployment strategy.");
+        s3.setStartMs(11500L);
+        s3.setEndMs(16000L);
+        segmentRepository.save(s3);
+
+        MeetingSummary summary = intelligenceService.generateIntelligence(transcript.getId());
+        assertThat(summary).isNotNull();
+
+        List<String> decisions = intelligenceService.getSummaryDetail(meeting.getId(), participant).decisions();
+        assertThat(decisions).isNotEmpty();
+        assertThat(decisions.size()).isGreaterThanOrEqualTo(3);
+
+        assertThat(decisions).anyMatch(d -> d.contains("PostgreSQL 15 over MongoDB"));
+        assertThat(decisions).anyMatch(d -> d.contains("bi-weekly release sprint schedule"));
+        assertThat(decisions).anyMatch(d -> d.contains("Option B"));
+
+        HttpHeaders participantHeaders = new HttpHeaders();
+        participantHeaders.setBearerAuth(participantToken);
+
+        // 1. GET /api/meetings/{id}/decisions
+        ResponseEntity<List> getResp = restTemplate.exchange(
+                "http://localhost:" + port + "/api/meetings/" + meeting.getId() + "/decisions",
+                HttpMethod.GET,
+                new HttpEntity<>(participantHeaders),
+                List.class
+        );
+        assertThat(getResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(getResp.getBody()).hasSize(decisions.size());
+
+        // 2. POST /api/meetings/{id}/decisions (Real-time agreement addition)
+        String newDecision = "Approved zero-downtime blue/green deployment cutover on Friday";
+        HttpEntity<Map<String, String>> postReq = new HttpEntity<>(Map.of("decision", newDecision), participantHeaders);
+        ResponseEntity<List> postResp = restTemplate.exchange(
+                "http://localhost:" + port + "/api/meetings/" + meeting.getId() + "/decisions",
+                HttpMethod.POST,
+                postReq,
+                List.class
+        );
+        assertThat(postResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(postResp.getBody()).anyMatch(d -> d.toString().contains("Approved zero-downtime blue/green deployment cutover on Friday"));
+        int updatedSize = postResp.getBody().size();
+        assertThat(updatedSize).isEqualTo(decisions.size() + 1);
+
+        // 3. DELETE /api/meetings/{id}/decisions/{index} (Delete the newly added decision)
+        int lastIndex = updatedSize - 1;
+        ResponseEntity<List> deleteResp = restTemplate.exchange(
+                "http://localhost:" + port + "/api/meetings/" + meeting.getId() + "/decisions/" + lastIndex,
+                HttpMethod.DELETE,
+                new HttpEntity<>(participantHeaders),
+                List.class
+        );
+        assertThat(deleteResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(deleteResp.getBody()).noneMatch(d -> d.toString().contains("Approved zero-downtime blue/green deployment cutover on Friday"));
+        assertThat(deleteResp.getBody()).hasSize(decisions.size());
+
+        // 4. Outsider access denied
+        HttpHeaders outsiderHeaders = new HttpHeaders();
+        outsiderHeaders.setBearerAuth(outsiderToken);
+        ResponseEntity<String> outsiderResp = restTemplate.exchange(
+                "http://localhost:" + port + "/api/meetings/" + meeting.getId() + "/decisions",
+                HttpMethod.GET,
+                new HttpEntity<>(outsiderHeaders),
+                String.class
+        );
+        assertThat(outsiderResp.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+    }
+
+    @Test
+    @Order(7)
+    @DisplayName("Should extract topic chapters with timestamps and manage unanswered questions and parking lot items")
+    void testTopicChapterizationAndParkingLot() throws Exception {
+        String fullText = "Welcome everyone to the introduction and quarterly budget review. Our cloud infrastructure usage increased by 25%. " +
+                "Moving on to technical architecture discussion. Who has access to the production AWS billing console? " +
+                "Let's table the database migration to next sprint and put it in the parking lot for now.";
+        MeetingTranscript transcript = createTranscript(fullText);
+
+        // Segment 1: Introduction & Budget Review (00:00 - 05:15)
+        TranscriptSegment s1 = new TranscriptSegment();
+        s1.setTranscriptId(transcript.getId());
+        s1.setSegmentIndex(0);
+        s1.setSpeaker("Alice (Finance)");
+        s1.setText("Welcome everyone to the introduction and quarterly budget review. Our cloud infrastructure usage increased by 25%.");
+        s1.setStartMs(0L);
+        s1.setEndMs(315000L); // 05:15
+        segmentRepository.save(s1);
+
+        // Segment 2: Technical Architecture Discussion (05:16 - 18:30)
+        TranscriptSegment s2 = new TranscriptSegment();
+        s2.setTranscriptId(transcript.getId());
+        s2.setSegmentIndex(1);
+        s2.setSpeaker("Bob (DevOps)");
+        s2.setText("Moving on to technical architecture discussion. Who has access to the production AWS billing console?");
+        s2.setStartMs(316000L); // 05:16
+        s2.setEndMs(1110000L); // 18:30
+        segmentRepository.save(s2);
+
+        // Segment 3: Parking lot deferred item (18:31 - 25:00)
+        TranscriptSegment s3 = new TranscriptSegment();
+        s3.setTranscriptId(transcript.getId());
+        s3.setSegmentIndex(2);
+        s3.setSpeaker("Charlie (Tech Lead)");
+        s3.setText("Let's table the database migration to next sprint and put it in the parking lot for now.");
+        s3.setStartMs(1111000L); // 18:31
+        s3.setEndMs(1500000L); // 25:00
+        segmentRepository.save(s3);
+
+        MeetingSummary summary = intelligenceService.generateIntelligence(transcript.getId());
+        assertThat(summary).isNotNull();
+
+        MeetingIntelligenceService.SummaryDetailView detail = intelligenceService.getSummaryDetail(meeting.getId(), participant);
+
+        // Verify Topic Chapters & Smart Timestamps
+        assertThat(detail.chapters()).isNotEmpty();
+        TopicChapter ch1 = detail.chapters().get(0);
+        assertThat(ch1.title()).isNotEmpty();
+        assertThat(ch1.timeRange()).contains("00:00");
+        assertThat(ch1.keywords()).isNotEmpty();
+
+        // Verify Parking Lot and Questions
+        assertThat(detail.parkingLotItems()).isNotEmpty();
+        assertThat(detail.parkingLotItems()).anyMatch(q ->
+                q.question().contains("Who has access to the production AWS billing console")
+                        && "UNANSWERED".equalsIgnoreCase(q.status())
+        );
+        assertThat(detail.parkingLotItems()).anyMatch(q ->
+                q.question().contains("table the database migration")
+                        && "PARKING_LOT".equalsIgnoreCase(q.status())
+        );
+
+        HttpHeaders participantHeaders = new HttpHeaders();
+        participantHeaders.setBearerAuth(participantToken);
+
+        // 1. GET /api/meetings/{id}/chapters
+        ResponseEntity<List> chaptersResp = restTemplate.exchange(
+                "http://localhost:" + port + "/api/meetings/" + meeting.getId() + "/chapters",
+                HttpMethod.GET,
+                new HttpEntity<>(participantHeaders),
+                List.class
+        );
+        assertThat(chaptersResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(chaptersResp.getBody()).isNotEmpty();
+
+        // 2. GET /api/meetings/{id}/parking-lot
+        ResponseEntity<List> parkingResp = restTemplate.exchange(
+                "http://localhost:" + port + "/api/meetings/" + meeting.getId() + "/parking-lot",
+                HttpMethod.GET,
+                new HttpEntity<>(participantHeaders),
+                List.class
+        );
+        assertThat(parkingResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        int initialCount = parkingResp.getBody().size();
+        assertThat(initialCount).isGreaterThanOrEqualTo(2);
+
+        // 3. POST /api/meetings/{id}/parking-lot (Add a new unanswered question)
+        Map<String, String> newQuestion = Map.of(
+                "question", "Do we have automated rollback scripts for the DB cutover?",
+                "askedBy", "Diana (Security)",
+                "status", "UNANSWERED"
+        );
+        ResponseEntity<List> postResp = restTemplate.exchange(
+                "http://localhost:" + port + "/api/meetings/" + meeting.getId() + "/parking-lot",
+                HttpMethod.POST,
+                new HttpEntity<>(newQuestion, participantHeaders),
+                List.class
+        );
+        assertThat(postResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(postResp.getBody()).hasSize(initialCount + 1);
+        int newIdx = postResp.getBody().size() - 1;
+
+        // 4. PATCH /api/meetings/{id}/parking-lot/{index} (Mark RESOLVED)
+        Map<String, String> updateReq = Map.of(
+                "status", "RESOLVED",
+                "notes", "Resolved by Bob during follow-up call"
+        );
+        ResponseEntity<List> patchResp = restTemplate.exchange(
+                "http://localhost:" + port + "/api/meetings/" + meeting.getId() + "/parking-lot/" + newIdx,
+                HttpMethod.PATCH,
+                new HttpEntity<>(updateReq, participantHeaders),
+                List.class
+        );
+        assertThat(patchResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        Map<?, ?> resolvedItem = (Map<?, ?>) patchResp.getBody().get(newIdx);
+        assertThat(resolvedItem.get("status").toString()).isEqualToIgnoringCase("RESOLVED");
+
+        // 5. DELETE /api/meetings/{id}/parking-lot/{index} (Remove item)
+        ResponseEntity<List> deleteResp = restTemplate.exchange(
+                "http://localhost:" + port + "/api/meetings/" + meeting.getId() + "/parking-lot/" + newIdx,
+                HttpMethod.DELETE,
+                new HttpEntity<>(participantHeaders),
+                List.class
+        );
+        assertThat(deleteResp.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(deleteResp.getBody()).hasSize(initialCount);
+
+        // 6. Outsider Forbidden
+        HttpHeaders outsiderHeaders = new HttpHeaders();
+        outsiderHeaders.setBearerAuth(outsiderToken);
+        ResponseEntity<String> outsiderChapters = restTemplate.exchange(
+                "http://localhost:" + port + "/api/meetings/" + meeting.getId() + "/chapters",
+                HttpMethod.GET,
+                new HttpEntity<>(outsiderHeaders),
+                String.class
+        );
+        assertThat(outsiderChapters.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+
+        ResponseEntity<String> outsiderParking = restTemplate.exchange(
+                "http://localhost:" + port + "/api/meetings/" + meeting.getId() + "/parking-lot",
+                HttpMethod.GET,
+                new HttpEntity<>(outsiderHeaders),
+                String.class
+        );
+        assertThat(outsiderParking.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
     }
 }

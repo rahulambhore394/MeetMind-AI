@@ -26,6 +26,13 @@
         android:name="android.hardware.camera.autofocus"
         android:required="false" />
 
+    <!-- Required for Android 11+ package visibility to bind to SpeechRecognizer service -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+    </queries>
+
     <application
         android:name="com.developer_rahul.meetmind_ai.MeetMindApplication"
         android:allowBackup="true"

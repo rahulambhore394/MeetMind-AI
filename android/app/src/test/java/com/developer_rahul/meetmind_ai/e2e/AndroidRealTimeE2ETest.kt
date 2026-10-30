@@ -31,6 +31,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
 import org.junit.Assert.*
+import org.junit.Assume.assumeTrue
 import org.junit.Before
 import org.junit.FixMethodOrder
 import org.junit.Test
@@ -166,6 +167,15 @@ class AndroidRealTimeE2ETest {
             webSocketManager = webSocketManager,
             tokenProvider = inMemoryTokenProvider
         )
+
+        val isBackendReachable = try {
+            val probeClient = OkHttpClient.Builder().connectTimeout(1, TimeUnit.SECONDS).build()
+            val request = okhttp3.Request.Builder().url(baseUrl).build()
+            probeClient.newCall(request).execute().use { true }
+        } catch (e: Exception) {
+            false
+        }
+        assumeTrue("Live backend is not reachable at $baseUrl, skipping real-time E2E integration test.", isBackendReachable)
     }
 
     @Test
@@ -252,8 +262,10 @@ class AndroidRealTimeE2ETest {
     fun test03_RealTimeChatWebSocketSignaling() = runBlocking(Dispatchers.IO) {
         val timestamp = System.currentTimeMillis()
         val email = "chat_user_$timestamp@meetmind.ai"
-        authRepository.register("Chat Tester", email, "Password123!")
-        authRepository.login(email, "Password123!")
+        val regResult = authRepository.register("Chat Tester", email, "Password123!")
+        assertTrue("Register failed: $regResult", regResult is NetworkResult.Success)
+        val loginResult = authRepository.login(email, "Password123!")
+        assertTrue("Login failed: $loginResult", loginResult is NetworkResult.Success)
 
         val createResult = meetingRepository.createMeeting(
             title = "Live Chat Room $timestamp",
@@ -261,6 +273,7 @@ class AndroidRealTimeE2ETest {
             scheduledAt = "2026-09-16T14:00:00Z",
             invitedEmails = null
         )
+        assertTrue("Create meeting failed: $createResult", createResult is NetworkResult.Success)
         val meeting = (createResult as NetworkResult.Success).data
         meetingRepository.startMeeting(meeting.id)
 
@@ -309,8 +322,10 @@ class AndroidRealTimeE2ETest {
     fun test04_RealTimeAiProxyVoiceGeneration() = runBlocking(Dispatchers.IO) {
         val timestamp = System.currentTimeMillis()
         val email = "ai_proxy_owner_$timestamp@meetmind.ai"
-        authRepository.register("AI Proxy Host", email, "Password123!")
-        authRepository.login(email, "Password123!")
+        val regResult = authRepository.register("AI Proxy Host", email, "Password123!")
+        assertTrue("Register failed: $regResult", regResult is NetworkResult.Success)
+        val loginResult = authRepository.login(email, "Password123!")
+        assertTrue("Login failed: $loginResult", loginResult is NetworkResult.Success)
 
         val createResult = meetingRepository.createMeeting(
             title = "AI Proxy Voice Room $timestamp",
@@ -318,6 +333,7 @@ class AndroidRealTimeE2ETest {
             scheduledAt = "2026-09-16T14:00:00Z",
             invitedEmails = null
         )
+        assertTrue("Create meeting failed: $createResult", createResult is NetworkResult.Success)
         val meeting = (createResult as NetworkResult.Success).data
         meetingRepository.startMeeting(meeting.id)
 
@@ -387,8 +403,10 @@ class AndroidRealTimeE2ETest {
         val password = "Password123!"
 
         println("=== [E2E Complete] 1. Register & Login ===")
-        authRepository.register("Full Flow User", email, password)
-        authRepository.login(email, password)
+        val regResult = authRepository.register("Full Flow User", email, password)
+        assertTrue("Register failed: $regResult", regResult is NetworkResult.Success)
+        val loginResult = authRepository.login(email, password)
+        assertTrue("Login failed: $loginResult", loginResult is NetworkResult.Success)
         assertTrue(authRepository.isLoggedIn())
 
         println("=== [E2E Complete] 2. Create Meeting ===")
@@ -398,6 +416,7 @@ class AndroidRealTimeE2ETest {
             scheduledAt = "2026-09-16T16:00:00Z",
             invitedEmails = null
         )
+        assertTrue("Create meeting failed: $meetingResult", meetingResult is NetworkResult.Success)
         val meeting = (meetingResult as NetworkResult.Success).data
         meetingRepository.startMeeting(meeting.id)
 
@@ -420,6 +439,7 @@ class AndroidRealTimeE2ETest {
             reportPreferences = "FULL_REPORT",
             notificationPreferences = "IMMEDIATE"
         )
+        assertTrue("Create representative failed: $repResult", repResult is NetworkResult.Success)
         val rep = (repResult as NetworkResult.Success).data
 
         println("=== [E2E Complete] 5. Connect WebSocket, Chat, and AI Voice ===")
@@ -491,6 +511,7 @@ class AndroidRealTimeE2ETest {
             scheduledAt = "2026-09-16T17:00:00Z",
             invitedEmails = null
         )
+        assertTrue("Create meeting failed: $meetingResult", meetingResult is NetworkResult.Success)
         val meeting = (meetingResult as NetworkResult.Success).data
         meetingRepository.startMeeting(meeting.id)
 

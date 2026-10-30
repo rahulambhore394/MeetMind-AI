@@ -101,6 +101,9 @@ public class SignalingWebSocketController {
                         message
                 );
             }
+        } else {
+            // Broadcast room-wide signaling messages (e.g. MEDIA_UPDATE, SCREEN_SHARE_STOPPED) to all meeting participants
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/signaling", message);
         }
     }
 

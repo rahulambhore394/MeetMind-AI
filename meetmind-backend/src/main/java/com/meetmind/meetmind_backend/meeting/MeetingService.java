@@ -16,6 +16,9 @@ import com.meetmind.meetmind_backend.websocket.MeetingEventPublisher;
 import com.meetmind.meetmind_backend.websocket.MeetingEventType;
 import com.meetmind.meetmind_backend.event.SpringMeetingStartedEvent;
 import com.meetmind.meetmind_backend.event.SpringMeetingEndedEvent;
+import com.meetmind.meetmind_backend.event.SpringMeetingInvitationEvent;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.cache.annotation.CacheEvict;
@@ -26,9 +29,13 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
 
 @Service
 public class MeetingService {
+    private static final Logger log = LoggerFactory.getLogger(MeetingService.class);
     private final MeetingEventPublisher eventPublisher;
     private final ParticipantRepository participantRepository;
     private final MeetingRepository meetingRepository;
@@ -126,16 +133,41 @@ public class MeetingService {
                 if (email != null && !email.trim().isEmpty()) {
                     String cleanEmail = email.trim();
                     cleanEmails.add(cleanEmail);
-                    userRepository.findByEmail(cleanEmail).ifPresent(invitedUser -> {
-                        if (!invitedUser.getId().equals(host.getId())) {
-                            MeetingParticipant invitedPart = new MeetingParticipant();
-                            invitedPart.setMeeting(savedMeeting);
-                            invitedPart.setUser(invitedUser);
-                            invitedPart.setRole(ParticipantRole.PARTICIPANT);
-                            invitedPart.setStatus(ParticipantStatus.INVITED);
-                            participantRepository.save(invitedPart);
+                    java.util.Optional<User> optionalUser = userRepository.findByEmail(cleanEmail);
+                    User invitedUser;
+                    if (optionalUser.isPresent()) {
+                        invitedUser = optionalUser.get();
+                        if (invitedUser.getId().equals(host.getId())) {
+                            continue;
                         }
-                    });
+                    } else {
+                        invitedUser = new User();
+                        invitedUser.setName(cleanEmail.contains("@") ? cleanEmail.substring(0, cleanEmail.indexOf('@')) : cleanEmail);
+                        invitedUser.setEmail(cleanEmail);
+                        invitedUser.setPassword("INVITED_PLACEHOLDER_" + java.util.UUID.randomUUID());
+                        invitedUser = userRepository.save(invitedUser);
+                    }
+                    MeetingParticipant invitedPart = new MeetingParticipant();
+                    invitedPart.setMeeting(savedMeeting);
+                    invitedPart.setUser(invitedUser);
+                    invitedPart.setRole(ParticipantRole.PARTICIPANT);
+                    invitedPart.setStatus(ParticipantStatus.INVITED);
+                    participantRepository.save(invitedPart);
+                    applicationEventPublisher.publishEvent(
+                        new SpringMeetingInvitationEvent(
+                            this, savedMeeting.getId(), invitedUser.getId(), savedMeeting.getTitle(), host.getName()
+                        )
+                    );
+
+
+
+
+
+
+
+
+
+
                 }
             }
 
@@ -376,15 +408,30 @@ public class MeetingService {
 
     @Transactional(readOnly = true)
     public List<MeetingResponse> getAllMeetings(Long userId) {
-        // Return only meetings where user is host or participant
-        List<Long> meetingIds = participantRepository.findByUserId(userId)
-                .stream()
-                .map(p -> p.getMeeting().getId())
-                .toList();
+        List<MeetingParticipant> userParticipants = participantRepository.findByUserId(userId);
+        List<Meeting> hostedMeetings = meetingRepository.findByHostId(userId);
 
-        return meetingRepository.findAllById(meetingIds)
-                .stream()
-                .map(m -> toResponse(m, userId))
+        Map<Long, MeetingParticipant> participantByMeetingId = userParticipants.stream()
+                .collect(Collectors.toMap(p -> p.getMeeting().getId(), p -> p, (p1, p2) -> p1));
+
+        Map<Long, Meeting> allMeetings = new LinkedHashMap<>();
+        for (MeetingParticipant p : userParticipants) {
+            allMeetings.put(p.getMeeting().getId(), p.getMeeting());
+        }
+        for (Meeting m : hostedMeetings) {
+            allMeetings.putIfAbsent(m.getId(), m);
+        }
+
+        return allMeetings.values().stream()
+                .map(m -> {
+                    MeetingParticipant p = participantByMeetingId.get(m.getId());
+                    if (p != null) {
+                        boolean hasJoined = (p.getStatus() == ParticipantStatus.LEFT || p.getStatus() == ParticipantStatus.JOINED || p.getJoinedAt() != null);
+                        return new MeetingResponse(m, hasJoined, p.getStatus().name());
+                    }
+                    return new MeetingResponse(m, true, ParticipantStatus.JOINED.name());
+                })
+                .sorted((a, b) -> Long.compare(b.getId(), a.getId()))
                 .toList();
     }
 
@@ -393,6 +440,7 @@ public class MeetingService {
     // GET SINGLE MEETING
     // ==========================================
 
+    @Cacheable(value = "meetings", key = "#meetingId")
     @Transactional(readOnly = true)
     public MeetingResponse getMeeting(Long meetingId, Long userId) {
 
@@ -458,6 +506,7 @@ public class MeetingService {
     // DELETE MEETING
     // ==========================================
 
+    @Transactional
     @CacheEvict(value = "meetings", key = "#meetingId")
     public void deleteMeeting(
             Long meetingId,
@@ -474,10 +523,23 @@ public class MeetingService {
                                 )
                         );
 
-        verifyHost(meeting, currentUserId);
-
-        participantRepository.deleteByMeetingId(meetingId);
-        meetingRepository.delete(meeting);
+        boolean isHost = meeting.getHost().getId().equals(currentUserId);
+        if (isHost) {
+            // Host deletes the meeting. Database foreign keys ON DELETE CASCADE will
+            // atomically clean up participants, chats, recordings, transcripts, summaries, etc.
+            participantRepository.deleteByMeetingId(meetingId);
+            meetingRepository.delete(meeting);
+        } else {
+            // Non-host participant removes / leaves the meeting from their schedule
+            if (participantRepository.existsByMeetingIdAndUserId(meetingId, currentUserId)) {
+                participantRepository.deleteByMeetingIdAndUserId(meetingId, currentUserId);
+            } else {
+                throw new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "Only the meeting host can delete this meeting"
+                );
+            }
+        }
     }
 
 
@@ -517,47 +579,50 @@ public class MeetingService {
         }
     }
 
-    @Transactional
-    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 15000)
+    @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60000)
     public void autoEndEmptyMeetings() {
         List<Meeting> liveMeetings = meetingRepository.findByStatus(MeetingStatus.LIVE);
         LocalDateTime tenMinutesAgo = LocalDateTime.now().minusMinutes(10);
         for (Meeting meeting : liveMeetings) {
-            LocalDateTime emptySince = meeting.getEmptySince();
-            long activeCount = participantRepository.countByMeetingIdAndStatus(meeting.getId(), ParticipantStatus.JOINED);
-            if (activeCount > 0) {
-                if (emptySince != null) {
-                    meeting.setEmptySince(null);
+            try {
+                LocalDateTime emptySince = meeting.getEmptySince();
+                long activeCount = participantRepository.countByMeetingIdAndStatus(meeting.getId(), ParticipantStatus.JOINED);
+                if (activeCount > 0) {
+                    if (emptySince != null) {
+                        meeting.setEmptySince(null);
+                        meetingRepository.save(meeting);
+                    }
+                    continue;
+                }
+                if (emptySince == null) {
+                    emptySince = meeting.getStartedAt() != null ? meeting.getStartedAt() : LocalDateTime.now();
+                    meeting.setEmptySince(emptySince);
                     meetingRepository.save(meeting);
                 }
-                continue;
-            }
-            if (emptySince == null) {
-                emptySince = meeting.getStartedAt() != null ? meeting.getStartedAt() : LocalDateTime.now();
-                meeting.setEmptySince(emptySince);
-                meetingRepository.save(meeting);
-            }
-            if (emptySince.isBefore(tenMinutesAgo)) {
-                meeting.setStatus(MeetingStatus.ENDED);
-                meeting.setEndedAt(LocalDateTime.now());
-                meetingRepository.save(meeting);
+                if (emptySince.isBefore(tenMinutesAgo)) {
+                    meeting.setStatus(MeetingStatus.ENDED);
+                    meeting.setEndedAt(LocalDateTime.now());
+                    meetingRepository.save(meeting);
 
-                MeetingEvent event = new MeetingEvent(
-                        MeetingEventType.MEETING_ENDED,
-                        meeting.getId(),
-                        meeting.getHost().getId(),
-                        meeting.getHost().getName(),
-                        "Meeting automatically ended after 10 minutes of inactivity"
-                );
-                eventPublisher.publish(meeting.getId(), event);
-                applicationEventPublisher.publishEvent(
-                        new SpringMeetingEndedEvent(
-                                this,
-                                meeting.getId(),
-                                meeting.getHost().getId(),
-                                meeting.getHost().getName()
-                        )
-                );
+                    MeetingEvent event = new MeetingEvent(
+                            MeetingEventType.MEETING_ENDED,
+                            meeting.getId(),
+                            meeting.getHost().getId(),
+                            meeting.getHost().getName(),
+                            "Meeting automatically ended after 10 minutes of inactivity"
+                    );
+                    eventPublisher.publish(meeting.getId(), event);
+                    applicationEventPublisher.publishEvent(
+                            new SpringMeetingEndedEvent(
+                                    this,
+                                    meeting.getId(),
+                                    meeting.getHost().getId(),
+                                    meeting.getHost().getName()
+                            )
+                    );
+                }
+            } catch (Exception e) {
+                log.warn("Failed to check or auto-end empty meeting {}: {}", meeting.getId(), e.getMessage());
             }
         }
     }

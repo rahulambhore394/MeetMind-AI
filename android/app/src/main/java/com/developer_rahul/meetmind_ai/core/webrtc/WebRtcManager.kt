@@ -4,7 +4,10 @@ import android.content.Context
 import android.util.Log
 import com.developer_rahul.meetmind_ai.core.webrtc.data.remote.dto.IceServerDto
 import org.webrtc.*
+import org.webrtc.audio.AudioDeviceModule
+import org.webrtc.audio.JavaAudioDeviceModule
 import java.util.*
+import kotlinx.coroutines.*
 
 class WebRtcManager(
     private val context: Context,
@@ -13,6 +16,7 @@ class WebRtcManager(
     private val TAG = "WebRtcManager"
     
     private var peerConnectionFactory: PeerConnectionFactory? = null
+    private var audioDeviceModule: AudioDeviceModule? = null
     private var localVideoSource: VideoSource? = null
     private var localVideoTrack: VideoTrack? = null
     private var localAudioSource: AudioSource? = null
@@ -38,8 +42,37 @@ class WebRtcManager(
         val defaultVideoEncoderFactory = DefaultVideoEncoderFactory(eglBaseContext, true, true)
         val defaultVideoDecoderFactory = DefaultVideoDecoderFactory(eglBaseContext)
 
+        val adm = JavaAudioDeviceModule.builder(context)
+            .setUseHardwareAcousticEchoCanceler(JavaAudioDeviceModule.isBuiltInAcousticEchoCancelerSupported())
+            .setUseHardwareNoiseSuppressor(JavaAudioDeviceModule.isBuiltInNoiseSuppressorSupported())
+            .setAudioRecordErrorCallback(object : JavaAudioDeviceModule.AudioRecordErrorCallback {
+                override fun onWebRtcAudioRecordInitError(errorMessage: String?) {
+                    Log.e(TAG, "AudioRecord init error: $errorMessage")
+                }
+                override fun onWebRtcAudioRecordStartError(errorCode: JavaAudioDeviceModule.AudioRecordStartErrorCode?, errorMessage: String?) {
+                    Log.e(TAG, "AudioRecord start error: $errorCode, $errorMessage")
+                }
+                override fun onWebRtcAudioRecordError(errorMessage: String?) {
+                    Log.e(TAG, "AudioRecord error: $errorMessage")
+                }
+            })
+            .setAudioTrackErrorCallback(object : JavaAudioDeviceModule.AudioTrackErrorCallback {
+                override fun onWebRtcAudioTrackInitError(errorMessage: String?) {
+                    Log.e(TAG, "AudioTrack init error: $errorMessage")
+                }
+                override fun onWebRtcAudioTrackStartError(errorCode: JavaAudioDeviceModule.AudioTrackStartErrorCode?, errorMessage: String?) {
+                    Log.e(TAG, "AudioTrack start error: $errorCode, $errorMessage")
+                }
+                override fun onWebRtcAudioTrackError(errorMessage: String?) {
+                    Log.e(TAG, "AudioTrack error: $errorMessage")
+                }
+            })
+            .createAudioDeviceModule()
+        audioDeviceModule = adm
+
         peerConnectionFactory = PeerConnectionFactory.builder()
             .setOptions(factoryOptions)
+            .setAudioDeviceModule(adm)
             .setVideoEncoderFactory(defaultVideoEncoderFactory)
             .setVideoDecoderFactory(defaultVideoDecoderFactory)
             .createPeerConnectionFactory()
@@ -51,19 +84,52 @@ class WebRtcManager(
         }
         stopLocalStream()
 
+        // 1. Audio creation - decoupled so camera failure never breaks microphone
         try {
-            // Audio
-            localAudioSource = peerConnectionFactory?.createAudioSource(MediaConstraints())
-            localAudioTrack = peerConnectionFactory?.createAudioTrack("ARDAMSa0", localAudioSource)
+            val audioConstraints = MediaConstraints().apply {
+                mandatory.add(MediaConstraints.KeyValuePair("googEchoCancellation", "true"))
+                mandatory.add(MediaConstraints.KeyValuePair("googAutoGainControl", "true"))
+                mandatory.add(MediaConstraints.KeyValuePair("googHighpassFilter", "true"))
+                mandatory.add(MediaConstraints.KeyValuePair("googNoiseSuppression", "true"))
+            }
+            localAudioSource = peerConnectionFactory?.createAudioSource(audioConstraints)
+            localAudioTrack = peerConnectionFactory?.createAudioTrack("ARDAMSa0", localAudioSource)?.apply {
+                setEnabled(true)
+                setVolume(1.0)
+            }
+            Log.d(TAG, "Local audio track created and enabled successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error creating local audio track", e)
+        }
 
-            // Video
+        // 2. Video creation - with fallback resolution if 720p fails on budget devices
+        try {
             localVideoSource = peerConnectionFactory?.createVideoSource(false)
             videoCapturer = createVideoCapturer(context)
-            videoCapturer?.initialize(SurfaceTextureHelper.create("CaptureThread", eglBaseContext), context, localVideoSource?.capturerObserver)
-            videoCapturer?.startCapture(1280, 720, 30)
-            localVideoTrack = peerConnectionFactory?.createVideoTrack("ARDAMSv0", localVideoSource)
+            if (videoCapturer != null) {
+                videoCapturer?.initialize(SurfaceTextureHelper.create("CaptureThread", eglBaseContext), context, localVideoSource?.capturerObserver)
+                try {
+                    videoCapturer?.startCapture(1280, 720, 30)
+                } catch (e: Exception) {
+                    Log.w(TAG, "720p capture failed, falling back to 640x480: ${e.message}")
+                    videoCapturer?.startCapture(640, 480, 24)
+                }
+                localVideoTrack = peerConnectionFactory?.createVideoTrack("ARDAMSv0", localVideoSource)?.apply {
+                    setEnabled(true)
+                }
+                Log.d(TAG, "Local video track created and enabled successfully")
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Error creating local stream", e)
+            Log.e(TAG, "Error creating local video stream", e)
+        }
+    }
+
+    fun updateCaptureFormat(width: Int, height: Int, fps: Int) {
+        try {
+            videoCapturer?.changeCaptureFormat(width, height, fps)
+            Log.d(TAG, "Dynamic capture format updated to ${width}x${height} @ ${fps}fps")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to update capture format: ${e.message}")
         }
     }
 
@@ -116,7 +182,11 @@ class WebRtcManager(
     }
 
     private fun createVideoCapturer(context: Context): VideoCapturer? {
-        val enumerator = Camera2Enumerator(context)
+        val enumerator: CameraEnumerator = if (Camera2Enumerator.isSupported(context)) {
+            Camera2Enumerator(context)
+        } else {
+            Camera1Enumerator(true)
+        }
         val deviceNames = enumerator.deviceNames
 
         for (deviceName in deviceNames) {
@@ -168,18 +238,39 @@ class WebRtcManager(
         }
     }
 
-    fun stopScreenCapture() {
+    fun stopScreenCapture(immediate: Boolean = false) {
         try {
+            screenVideoTrack?.setEnabled(false)
             screenCapturer?.stopCapture()
             screenCapturer?.dispose()
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping screen capturer: ${e.message}")
         }
         screenCapturer = null
-        screenVideoTrack?.dispose()
+
+        val trackToDispose = screenVideoTrack
+        val sourceToDispose = screenVideoSource
         screenVideoTrack = null
-        screenVideoSource?.dispose()
         screenVideoSource = null
+
+        if (immediate) {
+            try {
+                trackToDispose?.dispose()
+                sourceToDispose?.dispose()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error disposing screen video track/source immediately: ${e.message}")
+            }
+        } else {
+            CoroutineScope(Dispatchers.IO).launch {
+                try {
+                    delay(500)
+                    trackToDispose?.dispose()
+                    sourceToDispose?.dispose()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error disposing screen video track/source asynchronously: ${e.message}")
+                }
+            }
+        }
     }
 
     fun switchCamera() {
@@ -191,7 +282,7 @@ class WebRtcManager(
     fun getLocalScreenTrack(): VideoTrack? = screenVideoTrack
 
     fun dispose() {
-        stopScreenCapture()
+        stopScreenCapture(immediate = true)
         stopLocalStream()
         try {
             peerConnectionFactory?.dispose()
@@ -199,5 +290,11 @@ class WebRtcManager(
             Log.e(TAG, "Error disposing factory: ${e.message}")
         }
         peerConnectionFactory = null
+        try {
+            audioDeviceModule?.release()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error releasing audioDeviceModule: ${e.message}")
+        }
+        audioDeviceModule = null
     }
 }

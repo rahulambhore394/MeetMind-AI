@@ -28,7 +28,7 @@ class RealChatRepository(
         .shareIn(
             scope = repositoryScope,
             started = SharingStarted.Eagerly,
-            replay = 0
+            replay = 16
         )
 
     override suspend fun getMessages(meetingId: Long, page: Int): NetworkResult<List<ChatMessage>> {
@@ -42,10 +42,12 @@ class RealChatRepository(
     }
 
     override fun sendMessage(meetingId: Long, content: String) {
+        webSocketManager.connect()
         webSocketManager.sendChatMessage(meetingId, content)
     }
 
     override fun subscribeToChat(meetingId: Long) {
+        webSocketManager.connect()
         webSocketManager.subscribeToChat(meetingId)
     }
 

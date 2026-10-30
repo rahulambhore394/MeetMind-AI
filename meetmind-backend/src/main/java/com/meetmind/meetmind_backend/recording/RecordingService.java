@@ -48,7 +48,7 @@ public class RecordingService {
 
     public MeetingRecording startRecording(Long meetingId, User user) {
         Meeting meeting = getMeeting(meetingId);
-        verifyParticipantOrHost(meeting, user.getId());
+        verifyHost(meeting, user.getId());
 
         if (meeting.getStatus() != MeetingStatus.LIVE) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Meeting must be Live to record");

@@ -21,7 +21,7 @@ class SplashViewModel(
 
     private fun checkSession() {
         viewModelScope.launch {
-            delay(2000) // Keep delay for branding
+            delay(400) // Fast 400ms splash for instant app response
             if (authRepository.isLoggedIn()) {
                 _uiState.value = SplashUiState.Authenticated
             } else {

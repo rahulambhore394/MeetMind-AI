@@ -49,6 +49,9 @@ public class MeetingIntelligenceService {
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
+
     public MeetingIntelligenceService(
             MeetingIntelligenceProvider provider,
             MeetingSummaryRepository summaryRepository,
@@ -139,7 +142,7 @@ public class MeetingIntelligenceService {
                     item.setAssignedUser(data.assignedUser());
                     item.setDueDate(data.dueDate());
                     item.setConfidence(data.confidence() != null ? data.confidence() : 0.5);
-                    item.setStatus(ActionItemStatus.OPEN);
+                    item.setStatus(ActionItemStatus.PENDING);
                     item = actionItemRepository.save(item);
                     savedItems.add(item);
 
@@ -153,6 +156,37 @@ public class MeetingIntelligenceService {
 
             log.info("MeetingIntelligenceService: Persisted intelligence summary {} for meeting {} with {} action items",
                     summary.getId(), meetingId, savedItems.size());
+
+            if (messagingTemplate != null) {
+                messagingTemplate.convertAndSend(
+                        "/topic/meetings/" + meetingId + "/action-items",
+                        Map.of(
+                                "type", "ACTION_ITEMS_EXTRACTED",
+                                "meetingId", meetingId,
+                                "count", savedItems.size(),
+                                "timestamp", System.currentTimeMillis()
+                        )
+                );
+                messagingTemplate.convertAndSend(
+                        "/topic/meetings/" + meetingId + "/decisions",
+                        Map.of(
+                                "type", "DECISIONS_UPDATED",
+                                "meetingId", meetingId,
+                                "decisions", result.decisions(),
+                                "timestamp", System.currentTimeMillis()
+                        )
+                );
+                messagingTemplate.convertAndSend(
+                        "/topic/meetings/" + meetingId + "/intelligence",
+                        Map.of(
+                                "type", "AI_SUMMARY_READY",
+                                "meetingId", meetingId,
+                                "summaryId", summary.getId(),
+                                "actionItemCount", savedItems.size(),
+                                "timestamp", System.currentTimeMillis()
+                        )
+                );
+            }
 
             eventPublisher.publishEvent(new SpringAiSummaryReadyEvent(
                     this,
@@ -174,7 +208,7 @@ public class MeetingIntelligenceService {
 
     @Transactional
     public MeetingSummary autoGenerateSummaryOnMeetingEnd(Long meetingId) {
-        log.info("MeetingIntelligenceService: Auto-generating comprehensive meeting summary on conclusion for meeting {}", meetingId);
+        log.info("MeetingIntelligenceService: Generating meeting summary on conclusion for meeting {}", meetingId);
         
         Meeting meeting = meetingRepository.findById(meetingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Meeting not found"));
@@ -185,85 +219,50 @@ public class MeetingIntelligenceService {
         }
 
         List<MeetingTranscript> existingTranscripts = transcriptRepository.findByMeetingId(meetingId);
-        MeetingTranscript transcript;
-        if (!existingTranscripts.isEmpty()) {
-            transcript = existingTranscripts.get(0);
-        } else {
-            MeetingTranscript t = new MeetingTranscript();
-            t.setMeetingId(meetingId);
-            t.setRecordingId(null);
-            t.setLanguage("en");
-            t.setStatus(TranscriptionStatus.COMPLETED);
-            t.setFullText("Meeting concluded.");
-            t.setProviderName("AutoSummaryEngine");
-            transcript = transcriptRepository.save(t);
+        MeetingTranscript transcript = !existingTranscripts.isEmpty() ? existingTranscripts.get(0) : null;
+        if (transcript != null && transcript.getStatus() == TranscriptionStatus.COMPLETED) {
+            try {
+                return generateIntelligence(transcript.getId());
+            } catch (Exception e) {
+                log.warn("MeetingIntelligenceService: Failed to process real intelligence for transcript {}: {}", transcript.getId(), e.getMessage());
+            }
         }
 
         MeetingSummary summary = existingOpt.orElseGet(() -> {
             MeetingSummary s = new MeetingSummary();
             s.setMeetingId(meetingId);
-            s.setTranscriptId(transcript.getId());
+            if (transcript != null) {
+                s.setTranscriptId(transcript.getId());
+            }
             return s;
         });
 
-        List<MeetingParticipant> participants = participantRepository.findByMeetingId(meetingId);
-        String hostName = meeting.getHost() != null ? meeting.getHost().getName() : "Host";
-        
-        summary.setSummary("Executive Meeting Summary: Discussion concluded for '" + meeting.getTitle() + "'. Key topics, decisions, and action items were captured for participants.");
-        
-        List<String> keyPoints = List.of(
-                "Meeting '" + meeting.getTitle() + "' successfully conducted.",
-                "Participated by " + (participants.size() + 1) + " active member(s).",
-                "Reviewed status of deliverables, next milestones, and collaboration timeline."
-        );
-        summary.setKeyPointsJson(toJson(keyPoints));
-
-        List<String> decisions = List.of(
-                "Finalized project goals and immediate action item assignments.",
-                "Agreed to follow up on open deliverables by assigned due dates."
-        );
-        summary.setDecisionsJson(toJson(decisions));
-        summary.setTopicsJson(toJson(List.of("Project Sync", "Milestone Tracking", "Resource Allocation")));
-        summary.setQuestionsJson(toJson(List.of("What are the primary priorities for the upcoming phase?")));
+        summary.setSummary("No spoken transcript was recorded for '" + meeting.getTitle() + "'.");
+        summary.setKeyPointsJson("[]");
+        summary.setDecisionsJson("[]");
+        summary.setTopicsJson("[]");
+        summary.setQuestionsJson("[]");
         summary.setStatus("COMPLETED");
         summary.setProviderName("LocalIntelligenceEngine");
-        summary.setModelMetadata("1.0-auto-summary");
+        summary.setModelMetadata("1.0-real-data");
 
         summary = summaryRepository.save(summary);
-
-        // Generate action items with specific participant assignments
         actionItemRepository.deleteByMeetingSummaryId(summary.getId());
 
-        List<ActionItem> actionItems = new ArrayList<>();
-        
-        // Task 1: Host task
-        ActionItem item1 = new ActionItem();
-        item1.setMeetingId(meetingId);
-        item1.setMeetingSummaryId(summary.getId());
-        item1.setDescription("Prepare and distribute detailed meeting minutes & deliverables schedule");
-        item1.setAssignedUser(hostName);
-        item1.setDueDate("Tomorrow 5:00 PM");
-        item1.setConfidence(0.95);
-        item1.setStatus(ActionItemStatus.OPEN);
-        actionItems.add(actionItemRepository.save(item1));
+        log.info("MeetingIntelligenceService: Real meeting summary saved for meeting {}", meetingId);
 
-        // Tasks for each joined participant
-        for (MeetingParticipant p : participants) {
-            if (p.getUser() != null) {
-                ActionItem item = new ActionItem();
-                item.setMeetingId(meetingId);
-                item.setMeetingSummaryId(summary.getId());
-                item.setDescription("Review meeting outcomes and execute assigned action items");
-                item.setAssignedUser(p.getUser().getName());
-                item.setDueDate("End of Week");
-                item.setConfidence(0.90);
-                item.setStatus(ActionItemStatus.OPEN);
-                actionItems.add(actionItemRepository.save(item));
-            }
+        if (messagingTemplate != null) {
+            messagingTemplate.convertAndSend(
+                    "/topic/meetings/" + meetingId + "/intelligence",
+                    Map.of(
+                            "type", "AI_SUMMARY_READY",
+                            "meetingId", meetingId,
+                            "summaryId", summary.getId(),
+                            "actionItemCount", 0,
+                            "timestamp", System.currentTimeMillis()
+                    )
+            );
         }
-
-        log.info("MeetingIntelligenceService: Auto-generated summary ID {} for meeting {} with {} action items",
-                summary.getId(), meetingId, actionItems.size());
 
         return summary;
     }
@@ -278,10 +277,6 @@ public class MeetingIntelligenceService {
                 .orElseGet(() -> autoGenerateSummaryOnMeetingEnd(meetingId));
 
         List<ActionItem> allActionItems = actionItemRepository.findByMeetingId(meetingId);
-        if (allActionItems.isEmpty()) {
-            autoGenerateSummaryOnMeetingEnd(meetingId);
-            allActionItems = actionItemRepository.findByMeetingId(meetingId);
-        }
 
         // Filter user-specific tasks (matching name or email)
         String userName = user.getName();
@@ -352,7 +347,7 @@ public class MeetingIntelligenceService {
         String userEmail = user.getEmail();
 
         for (Meeting m : meetings) {
-            boolean isHost = m.getHost().getId().equals(user.getId());
+            boolean isHost = m.getHost() != null && m.getHost().getId().equals(user.getId());
             boolean isParticipant = participantRepository.existsByMeetingIdAndUserId(m.getId(), user.getId());
             boolean isAiRepOwner = aiRepresentativeRepository.findByMeetingIdAndOwnerId(m.getId(), user.getId()).isPresent();
 
@@ -382,7 +377,7 @@ public class MeetingIntelligenceService {
                 dto.setEndedAt(m.getEndedAt() != null ? m.getEndedAt().toString() : null);
                 dto.setMeetingType(meetingType);
                 dto.setStatus(m.getStatus().name());
-                dto.setSummarySnippet(summary != null ? summary.getSummary() : "Meeting report available.");
+                dto.setSummarySnippet(summary != null ? summary.getSummary() : "No summary recorded yet.");
                 dto.setActionItemCount(actionItems.size());
                 dto.setMyTaskCount(myTaskCount);
                 dto.setHasAiRepresentative(hasAiRep);
@@ -410,6 +405,9 @@ public class MeetingIntelligenceService {
                 });
 
         List<ActionItem> actionItems = actionItemRepository.findByMeetingSummaryId(summary.getId());
+        Map<String, Object> metrics = fromJsonMap(summary.getAnalysisJson());
+        List<TopicChapter> chapters = extractChaptersFromSummary(summary);
+        List<ParkingQuestion> parkingLotItems = extractParkingLotFromSummary(summary);
 
         return new SummaryDetailView(
                 summary.getId(),
@@ -420,12 +418,14 @@ public class MeetingIntelligenceService {
                 fromJsonList(summary.getDecisionsJson()),
                 fromJsonList(summary.getTopicsJson()),
                 fromJsonList(summary.getQuestionsJson()),
-                fromJsonMap(summary.getAnalysisJson()),
+                metrics,
                 actionItems,
                 summary.getStatus(),
                 summary.getProviderName(),
                 summary.getModelMetadata(),
-                summary.getCreatedAt()
+                summary.getCreatedAt(),
+                chapters,
+                parkingLotItems
         );
     }
 
@@ -446,7 +446,102 @@ public class MeetingIntelligenceService {
         }
         
         item.setStatus(status);
-        return actionItemRepository.save(item);
+        ActionItem saved = actionItemRepository.save(item);
+
+        if (messagingTemplate != null) {
+            Map<String, Object> wsPayload = Map.of(
+                    "type", "ACTION_ITEM_UPDATED",
+                    "meetingId", meetingId,
+                    "actionItemId", actionItemId,
+                    "status", saved.getStatus().name(),
+                    "actionItem", saved,
+                    "timestamp", System.currentTimeMillis()
+            );
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/action-items", wsPayload);
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/intelligence", wsPayload);
+        }
+
+        return saved;
+    }
+
+    public List<String> listDecisions(Long meetingId, User user) {
+        verifyAccess(meetingId, user.getId());
+        MeetingSummary summary = summaryRepository.findByMeetingId(meetingId).orElse(null);
+        if (summary == null) {
+            return List.of();
+        }
+        return fromJsonList(summary.getDecisionsJson());
+    }
+
+    @Transactional
+    public List<String> addDecision(Long meetingId, String decisionText, User user) {
+        verifyAccess(meetingId, user.getId());
+        if (decisionText == null || decisionText.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Decision text cannot be empty");
+        }
+
+        MeetingSummary summary = summaryRepository.findByMeetingId(meetingId)
+                .orElseGet(() -> {
+                    MeetingSummary s = new MeetingSummary();
+                    s.setMeetingId(meetingId);
+                    s.setStatus("COMPLETED");
+                    s.setSummary("Decisions tracked for meeting " + meetingId);
+                    return s;
+                });
+
+        List<String> decisions = new ArrayList<>(fromJsonList(summary.getDecisionsJson()));
+        String cleanDecision = decisionText.trim();
+        cleanDecision = Character.toUpperCase(cleanDecision.charAt(0)) + cleanDecision.substring(1);
+        if (!cleanDecision.endsWith(".") && !cleanDecision.endsWith("!") && !cleanDecision.endsWith("?")) {
+            cleanDecision += ".";
+        }
+        if (!decisions.contains(cleanDecision)) {
+            decisions.add(cleanDecision);
+        }
+        summary.setDecisionsJson(toJson(decisions));
+        summaryRepository.save(summary);
+
+        if (messagingTemplate != null) {
+            Map<String, Object> wsPayload = Map.of(
+                    "type", "DECISIONS_UPDATED",
+                    "meetingId", meetingId,
+                    "decisions", decisions,
+                    "timestamp", System.currentTimeMillis()
+            );
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/decisions", wsPayload);
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/intelligence", wsPayload);
+        }
+
+        return decisions;
+    }
+
+    @Transactional
+    public List<String> deleteDecision(Long meetingId, int index, User user) {
+        verifyAccess(meetingId, user.getId());
+        MeetingSummary summary = summaryRepository.findByMeetingId(meetingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Meeting summary not found"));
+
+        List<String> decisions = new ArrayList<>(fromJsonList(summary.getDecisionsJson()));
+        if (index < 0 || index >= decisions.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid decision index: " + index);
+        }
+
+        decisions.remove(index);
+        summary.setDecisionsJson(toJson(decisions));
+        summaryRepository.save(summary);
+
+        if (messagingTemplate != null) {
+            Map<String, Object> wsPayload = Map.of(
+                    "type", "DECISIONS_UPDATED",
+                    "meetingId", meetingId,
+                    "decisions", decisions,
+                    "timestamp", System.currentTimeMillis()
+            );
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/decisions", wsPayload);
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/intelligence", wsPayload);
+        }
+
+        return decisions;
     }
 
     public SummaryDetailView triggerAnalysis(Long meetingId, Long transcriptId, User user) throws IntelligenceException {
@@ -474,7 +569,7 @@ public class MeetingIntelligenceService {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Meeting not found");
         }
         boolean isHost = meetingRepository.findById(meetingId)
-                .map(m -> m.getHost().getId().equals(userId))
+                .map(m -> m.getHost() != null && m.getHost().getId().equals(userId))
                 .orElse(false);
         boolean isParticipant = participantRepository.existsByMeetingIdAndUserId(meetingId, userId);
         boolean isAiRepOwner = aiRepresentativeRepository.findByMeetingIdAndOwnerId(meetingId, userId).isPresent();
@@ -513,6 +608,203 @@ public class MeetingIntelligenceService {
         }
     }
 
+    public List<TopicChapter> extractChaptersFromSummary(MeetingSummary summary) {
+        if (summary == null) return List.of();
+        Map<String, Object> metrics = fromJsonMap(summary.getAnalysisJson());
+        if (metrics.containsKey("chapters") && metrics.get("chapters") != null) {
+            try {
+                return objectMapper.convertValue(metrics.get("chapters"), new TypeReference<List<TopicChapter>>() {});
+            } catch (Exception ignored) {}
+        }
+        List<String> topicStrings = fromJsonList(summary.getTopicsJson());
+        List<TopicChapter> fallback = new ArrayList<>();
+        long offset = 0L;
+        for (String ts : topicStrings) {
+            String title = ts;
+            String timeRange = "00:00 - 05:00";
+            long sMs = offset;
+            long eMs = offset + 300000L;
+            if (ts.contains(":")) {
+                int colonIdx = ts.indexOf(':');
+                String prefix = ts.substring(0, colonIdx).trim();
+                if (prefix.contains("-")) {
+                    timeRange = prefix;
+                    title = ts.substring(colonIdx + 1).trim();
+                }
+            }
+            fallback.add(new TopicChapter(title, sMs, eMs, timeRange, title, List.of()));
+            offset += 300000L;
+        }
+        return fallback;
+    }
+
+    public List<ParkingQuestion> extractParkingLotFromSummary(MeetingSummary summary) {
+        if (summary == null) return List.of();
+        Map<String, Object> metrics = fromJsonMap(summary.getAnalysisJson());
+        if (metrics.containsKey("parkingLotItems") && metrics.get("parkingLotItems") != null) {
+            try {
+                return objectMapper.convertValue(metrics.get("parkingLotItems"), new TypeReference<List<ParkingQuestion>>() {});
+            } catch (Exception ignored) {}
+        }
+        List<String> questionStrings = fromJsonList(summary.getQuestionsJson());
+        List<ParkingQuestion> fallback = new ArrayList<>();
+        long id = 1L;
+        for (String qs : questionStrings) {
+            String status = "UNANSWERED";
+            String qText = qs;
+            if (qs.startsWith("[") && qs.contains("]")) {
+                int endBracket = qs.indexOf(']');
+                status = qs.substring(1, endBracket).trim().toUpperCase();
+                qText = qs.substring(endBracket + 1).trim();
+            }
+            fallback.add(new ParkingQuestion(id++, qText, "Team", 0L, "00:00", status, "Extracted from meeting questions"));
+        }
+        return fallback;
+    }
+
+    public List<TopicChapter> listChapters(Long meetingId, User user) {
+        verifyAccess(meetingId, user.getId());
+        MeetingSummary summary = summaryRepository.findByMeetingId(meetingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Summary not found"));
+        return extractChaptersFromSummary(summary);
+    }
+
+    public List<ParkingQuestion> listParkingQuestions(Long meetingId, User user) {
+        verifyAccess(meetingId, user.getId());
+        MeetingSummary summary = summaryRepository.findByMeetingId(meetingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Summary not found"));
+        return extractParkingLotFromSummary(summary);
+    }
+
+    @Transactional
+    public List<ParkingQuestion> addParkingQuestion(Long meetingId, String question, String askedBy, String status, User user) {
+        verifyAccess(meetingId, user.getId());
+        MeetingSummary summary = summaryRepository.findByMeetingId(meetingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Summary not found"));
+
+        List<ParkingQuestion> items = new ArrayList<>(extractParkingLotFromSummary(summary));
+        long newId = items.isEmpty() ? 1L : (items.stream().mapToLong(ParkingQuestion::id).max().orElse(0L) + 1);
+        String finalAskedBy = (askedBy != null && !askedBy.isBlank()) ? askedBy.trim() : user.getName();
+        String finalStatus = (status != null && !status.isBlank()) ? status.trim().toUpperCase() : "UNANSWERED";
+        String cleanQ = question != null ? question.trim() : "Unspecified question";
+        if (!cleanQ.endsWith("?")) cleanQ += "?";
+
+        ParkingQuestion newItem = new ParkingQuestion(
+                newId,
+                cleanQ,
+                finalAskedBy,
+                0L,
+                "00:00",
+                finalStatus,
+                "Added manually by " + user.getName()
+        );
+        items.add(newItem);
+
+        Map<String, Object> metrics = new HashMap<>(fromJsonMap(summary.getAnalysisJson()));
+        metrics.put("parkingLotItems", items);
+        summary.setAnalysisJson(toJson(metrics));
+
+        List<String> qStrings = items.stream().map(q -> "[" + q.status() + "] " + q.question()).toList();
+        summary.setQuestionsJson(toJson(qStrings));
+        summaryRepository.save(summary);
+
+        if (messagingTemplate != null) {
+            Map<String, Object> wsPayload = Map.of(
+                    "type", "PARKING_LOT_UPDATED",
+                    "meetingId", meetingId,
+                    "parkingLotItems", items,
+                    "timestamp", System.currentTimeMillis()
+            );
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/parking-lot", wsPayload);
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/intelligence", wsPayload);
+        }
+
+        return items;
+    }
+
+    @Transactional
+    public List<ParkingQuestion> updateParkingQuestionStatus(Long meetingId, int index, String status, String notes, User user) {
+        verifyAccess(meetingId, user.getId());
+        MeetingSummary summary = summaryRepository.findByMeetingId(meetingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Summary not found"));
+
+        List<ParkingQuestion> items = new ArrayList<>(extractParkingLotFromSummary(summary));
+        if (index < 0 || index >= items.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid parking lot index: " + index);
+        }
+
+        ParkingQuestion current = items.get(index);
+        String newStatus = (status != null && !status.isBlank()) ? status.trim().toUpperCase() : current.status();
+        String newNotes = (notes != null) ? notes : current.notes();
+
+        ParkingQuestion updated = new ParkingQuestion(
+                current.id(),
+                current.question(),
+                current.askedBy(),
+                current.timestampMs(),
+                current.timeFormatted(),
+                newStatus,
+                newNotes
+        );
+        items.set(index, updated);
+
+        Map<String, Object> metrics = new HashMap<>(fromJsonMap(summary.getAnalysisJson()));
+        metrics.put("parkingLotItems", items);
+        summary.setAnalysisJson(toJson(metrics));
+
+        List<String> qStrings = items.stream().map(q -> "[" + q.status() + "] " + q.question()).toList();
+        summary.setQuestionsJson(toJson(qStrings));
+        summaryRepository.save(summary);
+
+        if (messagingTemplate != null) {
+            Map<String, Object> wsPayload = Map.of(
+                    "type", "PARKING_LOT_UPDATED",
+                    "meetingId", meetingId,
+                    "parkingLotItems", items,
+                    "timestamp", System.currentTimeMillis()
+            );
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/parking-lot", wsPayload);
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/intelligence", wsPayload);
+        }
+
+        return items;
+    }
+
+    @Transactional
+    public List<ParkingQuestion> deleteParkingQuestion(Long meetingId, int index, User user) {
+        verifyAccess(meetingId, user.getId());
+        MeetingSummary summary = summaryRepository.findByMeetingId(meetingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Summary not found"));
+
+        List<ParkingQuestion> items = new ArrayList<>(extractParkingLotFromSummary(summary));
+        if (index < 0 || index >= items.size()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid parking lot index: " + index);
+        }
+
+        items.remove(index);
+
+        Map<String, Object> metrics = new HashMap<>(fromJsonMap(summary.getAnalysisJson()));
+        metrics.put("parkingLotItems", items);
+        summary.setAnalysisJson(toJson(metrics));
+
+        List<String> qStrings = items.stream().map(q -> "[" + q.status() + "] " + q.question()).toList();
+        summary.setQuestionsJson(toJson(qStrings));
+        summaryRepository.save(summary);
+
+        if (messagingTemplate != null) {
+            Map<String, Object> wsPayload = Map.of(
+                    "type", "PARKING_LOT_UPDATED",
+                    "meetingId", meetingId,
+                    "parkingLotItems", items,
+                    "timestamp", System.currentTimeMillis()
+            );
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/parking-lot", wsPayload);
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/intelligence", wsPayload);
+        }
+
+        return items;
+    }
+
     public record SummaryDetailView(
             Long id,
             Long meetingId,
@@ -527,6 +819,20 @@ public class MeetingIntelligenceService {
             String status,
             String providerName,
             String modelMetadata,
-            java.time.LocalDateTime createdAt
-    ) {}
+            java.time.LocalDateTime createdAt,
+            List<TopicChapter> chapters,
+            List<ParkingQuestion> parkingLotItems
+    ) {
+        public SummaryDetailView(
+                Long id, Long meetingId, Long transcriptId, String summary,
+                List<String> keyPoints, List<String> decisions, List<String> topics,
+                List<String> questions, Map<String, Object> analysisMetrics,
+                List<ActionItem> actionItems, String status, String providerName,
+                String modelMetadata, java.time.LocalDateTime createdAt
+        ) {
+            this(id, meetingId, transcriptId, summary, keyPoints, decisions, topics, questions,
+                 analysisMetrics, actionItems, status, providerName, modelMetadata, createdAt,
+                 List.of(), List.of());
+        }
+    }
 }
