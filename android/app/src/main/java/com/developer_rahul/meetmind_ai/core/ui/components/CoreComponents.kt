@@ -93,7 +93,8 @@ fun MeetMindTextField(
     maxLines: Int = if (singleLine) 1 else Int.MAX_VALUE,
     minLines: Int = 1,
     visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None,
-    keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default
+    keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default,
+    keyboardActions: androidx.compose.foundation.text.KeyboardActions = androidx.compose.foundation.text.KeyboardActions.Default
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
         OutlinedTextField(
@@ -122,7 +123,8 @@ fun MeetMindTextField(
             maxLines = maxLines,
             minLines = minLines,
             visualTransformation = visualTransformation,
-            keyboardOptions = keyboardOptions
+            keyboardOptions = keyboardOptions,
+            keyboardActions = keyboardActions
         )
         if (error != null) {
             Text(

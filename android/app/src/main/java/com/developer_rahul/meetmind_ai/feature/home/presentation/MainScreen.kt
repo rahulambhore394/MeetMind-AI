@@ -70,7 +70,8 @@ fun MainScreen(
 
             Surface(
                 modifier = Modifier
-                    .padding(horizontal = 20.dp, vertical = 14.dp)
+                    .navigationBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
                     .fillMaxWidth()
                     .shadow(24.dp, RoundedCornerShape(36.dp), spotColor = ElectricIndigo.copy(alpha = 0.3f)),
                 shape = RoundedCornerShape(36.dp),
@@ -113,7 +114,9 @@ fun MainScreen(
         NavHost(
             navController = navController, 
             startDestination = "home_tab", 
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(bottom = innerPadding.calculateBottomPadding())
         ) {
             composable("home_tab") {
                 DashboardScreen(

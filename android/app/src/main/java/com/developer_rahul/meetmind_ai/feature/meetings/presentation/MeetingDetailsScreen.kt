@@ -10,18 +10,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
-import androidx.core.content.ContextCompat
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.developer_rahul.meetmind_ai.core.designsystem.*
-import com.developer_rahul.meetmind_ai.core.ui.components.*
-
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.developer_rahul.meetmind_ai.core.designsystem.*
 import com.developer_rahul.meetmind_ai.core.ui.ViewModelFactory
@@ -44,6 +42,7 @@ fun MeetingDetailsScreen(
     val uiState by viewModel.uiState.collectAsState()
     val meeting = uiState.selectedMeeting
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
 
     LaunchedEffect(meetingId) {
         viewModel.loadMeetingDetails(meetingId)
@@ -57,118 +56,127 @@ fun MeetingDetailsScreen(
     }
 
     var showDeleteConfirm by remember { mutableStateOf(false) }
-    // Invite dialog state variables
     var showInviteDialog by remember { mutableStateOf(false) }
     var inviteEmailInput by remember { mutableStateOf("") }
     var inviteMessage by remember { mutableStateOf<String?>(null) }
 
     if (showDeleteConfirm && meeting != null) {
         AlertDialog(
-            onDismissRequest = { showDeleteConfirm = false },
+            onDismissRequest = { if (!uiState.actionInProgress) showDeleteConfirm = false },
             containerColor = BackgroundSurface,
             title = { Text("Delete Meeting?", style = Typography.titleMedium, color = TextPrimary) },
             text = { Text("Are you sure you want to delete '${meeting.title}'? This action cannot be undone.", color = TextSecondary) },
             confirmButton = {
                 Button(
                     onClick = {
-                        viewModel.deleteMeeting(meeting.id) {
-                            showDeleteConfirm = false
-                            onBack()
-                        }
+                        viewModel.deleteMeeting(
+                            meetingId = meeting.id,
+                            onSuccess = {
+                                showDeleteConfirm = false
+                                android.widget.Toast.makeText(context, "Meeting removed", android.widget.Toast.LENGTH_SHORT).show()
+                                onBack()
+                            },
+                            onError = { err ->
+                                showDeleteConfirm = false
+                                android.widget.Toast.makeText(context, err, android.widget.Toast.LENGTH_LONG).show()
+                            }
+                        )
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = RoseRed)
+                    colors = ButtonDefaults.buttonColors(containerColor = RoseRed),
+                    enabled = !uiState.actionInProgress
                 ) {
-                    Text("Delete", color = Color.White)
+                    if (uiState.actionInProgress) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                    } else {
+                        Text("Delete", color = Color.White)
+                    }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
+                TextButton(
+                    onClick = { showDeleteConfirm = false },
+                    enabled = !uiState.actionInProgress
+                ) {
                     Text("Cancel", color = TextSecondary)
                 }
             }
         )
     }
 
-            if (showInviteDialog && meeting != null) {
-            AlertDialog(
-                onDismissRequest = { showInviteDialog = false },
-                containerColor = BackgroundSurface,
-                title = { Text("Invite Participants", style = Typography.titleMedium, color = TextPrimary) },
-                text = {
-                    Column {
-                        // Copy meeting code button
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(text = "Meeting Code: ", color = TextSecondary)
-                            Text(text = meeting.meetingCode ?: "", fontWeight = FontWeight.Bold, color = TextPrimary)
-                            IconButton(onClick = {
-                                clipboardManager.setText(AnnotatedString(meeting.meetingCode ?: ""))
-                                inviteMessage = "Code copied to clipboard"
-                            }) {
-                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = ElectricIndigo)
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        // Share intent button
-                        Button(
-                            onClick = {
-                                // Simple share intent using Android context
-                                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                    type = "text/plain"
-                                    putExtra(android.content.Intent.EXTRA_SUBJECT, "MeetMind Invitation")
-                                    putExtra(
-                                        android.content.Intent.EXTRA_TEXT,
-                                        "Join the meeting using code ${meeting.meetingCode}."
-                                    )
-                                }
-                                android.content.ContextCompat.startActivity(
-                                    android.app.Application().applicationContext,
-                                    android.content.Intent.createChooser(intent, "Share Meeting"),
-                                    null
-                                )
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo)
-                        ) {
-                            Text("Share", color = Color.White)
-                        }
-                        Spacer(modifier = Modifier.height(8.dp))
-                        // Email input field
-                        OutlinedTextField(
-                            value = inviteEmailInput,
-                            onValueChange = { inviteEmailInput = it },
-                            label = { Text("Emails (comma separated)") },
-                            singleLine = true,
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = ElectricIndigo,
-                                cursorColor = ElectricIndigo
-                            ),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        if (inviteMessage != null) {
-                            Text(text = inviteMessage!!, color = if (inviteMessage == "Invitations sent") ElectricIndigo else RoseRed)
+    if (showInviteDialog && meeting != null) {
+        AlertDialog(
+            onDismissRequest = { showInviteDialog = false },
+            containerColor = BackgroundSurface,
+            title = { Text("Invite Participants", style = Typography.titleMedium, color = TextPrimary) },
+            text = {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(text = "Meeting Code: ", color = TextSecondary)
+                        Text(text = meeting.meetingCode ?: "", fontWeight = FontWeight.Bold, color = TextPrimary)
+                        IconButton(onClick = {
+                            clipboardManager.setText(AnnotatedString(meeting.meetingCode ?: ""))
+                            inviteMessage = "Code copied to clipboard"
+                        }) {
+                            Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = ElectricIndigo)
                         }
                     }
-                },
-                confirmButton = {
+                    Spacer(modifier = Modifier.height(8.dp))
                     Button(
                         onClick = {
-                            viewModel.batchInviteParticipants(meeting.id, inviteEmailInput) { success, msg ->
-                                inviteMessage = msg
-                                if (success) {
-                                    viewModel.refreshMeetingParticipants(meeting.id)
-                                    showInviteDialog = false
-                                }
+                            val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(android.content.Intent.EXTRA_SUBJECT, "MeetMind Invitation")
+                                putExtra(
+                                    android.content.Intent.EXTRA_TEXT,
+                                    "Join my MeetMind AI meeting: ${meeting.title}\nMeeting Code: ${meeting.meetingCode ?: meeting.id}"
+                                )
                             }
+                            context.startActivity(android.content.Intent.createChooser(intent, "Share Meeting"))
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo)
-                    ) { Text("Send", color = Color.White) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showInviteDialog = false }) { Text("Cancel", color = TextSecondary) }
+                    ) {
+                        Text("Share Invitation", color = Color.White)
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = inviteEmailInput,
+                        onValueChange = { inviteEmailInput = it },
+                        label = { Text("Emails (comma separated)") },
+                        singleLine = false,
+                        maxLines = 3,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = ElectricIndigo,
+                            cursorColor = ElectricIndigo
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (inviteMessage != null) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(text = inviteMessage!!, color = if (inviteMessage!!.startsWith("Failed")) RoseRed else EmeraldGreen, style = Typography.labelSmall)
+                    }
                 }
-            )
-        }
-        Scaffold(
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.batchInviteParticipants(meeting.id, inviteEmailInput) { success, msg ->
+                            inviteMessage = msg
+                            if (success) {
+                                viewModel.refreshMeetingParticipants(meeting.id)
+                                showInviteDialog = false
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo)
+                ) { Text("Send", color = Color.White) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showInviteDialog = false }) { Text("Cancel", color = TextSecondary) }
+            }
+        )
+    }
 
+    Scaffold(
         topBar = {
             TopAppBar(
                 title = { },
@@ -181,24 +189,10 @@ fun MeetingDetailsScreen(
                     }
                 },
                 actions = {
-            if (meeting != null) {
-                IconButton(onClick = { showInviteDialog = true }) {
-                    Icon(Icons.Default.PersonAdd, contentDescription = "Invite Participants", tint = ElectricIndigo)
-                }
-                IconButton(onClick = { showDeleteConfirm = true }) {
-                    Icon(Icons.Default.Delete, contentDescription = "Delete Meeting", tint = RoseRed)
-                }
-            }
-        }
                     if (meeting != null) {
                         IconButton(onClick = { showInviteDialog = true }) {
                             Icon(Icons.Default.PersonAdd, contentDescription = "Invite Participants", tint = ElectricIndigo)
                         }
-                        IconButton(onClick = { showDeleteConfirm = true }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete Meeting", tint = RoseRed)
-                        }
-                    }
-                    if (meeting != null) {
                         IconButton(onClick = { showDeleteConfirm = true }) {
                             Icon(Icons.Default.Delete, contentDescription = "Delete Meeting", tint = RoseRed)
                         }
@@ -264,6 +258,7 @@ fun MeetingDetailsScreen(
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(uiState.detailsError!!, color = RoseRed)
+                    Spacer(Modifier.height(8.dp))
                     Button(onClick = { viewModel.loadMeetingDetails(meetingId) }) {
                         Text("Retry")
                     }
@@ -322,8 +317,6 @@ fun MeetingDetailsScreen(
                 Spacer(modifier = Modifier.height(24.dp))
                 
                 // Meeting Code Copy & Share Hero Card
-                val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
-                val context = androidx.compose.ui.platform.LocalContext.current
                 var copiedNotice by remember { mutableStateOf(false) }
 
                 Surface(
@@ -350,7 +343,7 @@ fun MeetingDetailsScreen(
                             Row {
                                 IconButton(
                                     onClick = {
-                                        clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(meeting.meetingCode ?: "mm-${meeting.id}"))
+                                        clipboardManager.setText(AnnotatedString(meeting.meetingCode ?: "mm-${meeting.id}"))
                                         copiedNotice = true
                                     }
                                 ) {
@@ -515,7 +508,6 @@ fun MeetingDetailsScreen(
                             maxLines = 4
                         )
 
-                        // If key discussion points exist, show top 2 bullets
                         if (intel != null && intel.keyPoints.isNotEmpty()) {
                             Spacer(Modifier.height(12.dp))
                             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {

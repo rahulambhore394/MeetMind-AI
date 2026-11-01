@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,18 +35,28 @@ fun SplashScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     
-    val scale = remember { Animatable(0.5f) }
+    val scale = remember { Animatable(0.4f) }
     val alpha = remember { Animatable(0f) }
     
     val infiniteTransition = rememberInfiniteTransition(label = "pulseGlow")
     val glowScale by infiniteTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = 1.25f,
+        initialValue = 0.95f,
+        targetValue = 1.28f,
         animationSpec = infiniteRepeatable(
-            animation = tween(1500, easing = FastOutSlowInEasing),
+            animation = tween(1800, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "glowScale"
+    )
+
+    val auraRotation by infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(12000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "auraRotation"
     )
 
     LaunchedEffect(Unit) {
@@ -61,7 +72,7 @@ fun SplashScreen(
     LaunchedEffect(Unit) {
         alpha.animateTo(
             targetValue = 1f,
-            animationSpec = tween(800)
+            animationSpec = tween(900)
         )
     }
 
@@ -77,19 +88,22 @@ fun SplashScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundSurface), // Dynamic device theme background
+            .background(BackgroundGradient)
+            .statusBarsPadding()
+            .navigationBarsPadding(),
         contentAlignment = Alignment.Center
     ) {
-        // Multi-ring Glowing Ambient Background Aura
+        // Multi-ring Radial Aura Background
         Box(
             modifier = Modifier
-                .size(320.dp)
+                .size(340.dp)
                 .scale(glowScale)
                 .background(
                     Brush.radialGradient(
                         colors = listOf(
-                            ElectricIndigo.copy(alpha = 0.25f),
-                            NeonCyan.copy(alpha = 0.1f),
+                            ElectricIndigo.copy(alpha = 0.28f),
+                            PurpleViolet.copy(alpha = 0.18f),
+                            NeonCyan.copy(alpha = 0.08f),
                             Color.Transparent
                         )
                     ),
@@ -99,25 +113,28 @@ fun SplashScreen(
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
             modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
                 .scale(scale.value)
                 .alpha(alpha.value)
         ) {
-            // Glowing Hero Brand Badge Icon
+            // Glassmorphic Brand Logo Badge
             Box(contentAlignment = Alignment.Center) {
                 // Outer Pulse Ring
                 Box(
                     modifier = Modifier
-                        .size(110.dp)
+                        .size(116.dp)
                         .clip(CircleShape)
-                        .background(ElectricIndigo.copy(alpha = 0.15f))
+                        .background(ElectricIndigo.copy(alpha = 0.12f))
                         .pulse(color = ElectricIndigo)
                 )
                 
                 Surface(
                     modifier = Modifier
-                        .size(96.dp)
-                        .aiGlow(color = NeonCyan, radius = 24.dp),
+                        .size(100.dp)
+                        .aiGlow(color = NeonCyan, radius = 28.dp),
                     shape = CircleShape,
                     color = CardSurface,
                     border = androidx.compose.foundation.BorderStroke(2.dp, GlassWhite)
@@ -127,80 +144,125 @@ fun SplashScreen(
                             .fillMaxSize()
                             .background(
                                 Brush.linearGradient(
-                                    colors = listOf(ElectricIndigo, Color(0xFF8B5CF6), NeonCyan)
+                                    colors = listOf(ElectricIndigo, PurpleViolet, NeonCyan)
                                 )
                             ),
                         contentAlignment = Alignment.Center
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "M",
-                                style = Typography.displayLarge.copy(fontSize = 46.sp),
-                                color = Color.White,
-                                fontWeight = FontWeight.Black
-                            )
-                        }
+                        Text(
+                            text = "M",
+                            style = Typography.displayLarge.copy(fontSize = 48.sp),
+                            color = Color.White,
+                            fontWeight = FontWeight.Black
+                        )
                     }
                 }
             }
             
-            Spacer(modifier = Modifier.height(28.dp))
+            Spacer(modifier = Modifier.height(32.dp))
             
-            // Brand Title
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    Icons.Default.AutoAwesome, 
-                    contentDescription = null, 
-                    tint = NeonCyan, 
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
+            // Brand Title Row with Glowing AI Icon
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Surface(
+                    shape = CircleShape,
+                    color = NeonCyan.copy(alpha = 0.2f),
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.AutoAwesome, 
+                            contentDescription = null, 
+                            tint = NeonCyan, 
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    "MEETMIND AI",
-                    style = Typography.headlineLarge,
+                    text = "MEETMIND AI",
+                    style = Typography.displaySmall,
                     color = TextPrimary,
-                    letterSpacing = 5.sp,
+                    letterSpacing = 4.sp,
                     fontWeight = FontWeight.Black
                 )
             }
             
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
+            // Subtitle Tagline Pill
             Surface(
-                color = ElectricIndigo.copy(alpha = 0.15f),
-                shape = CircleShape,
-                border = androidx.compose.foundation.BorderStroke(1.dp, ElectricIndigo.copy(alpha = 0.3f))
+                color = GlassBackground,
+                shape = RoundedCornerShape(100.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
             ) {
-                Text(
-                    "INTELLIGENT MEETINGS & LIVE AI REP",
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                    style = Typography.labelMedium,
-                    color = NeonCyan,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.5.sp
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Psychology, null, tint = NeonCyan, modifier = Modifier.size(14.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "INTELLIGENT MEETINGS & LIVE AI REP",
+                        style = Typography.labelMedium,
+                        color = NeonCyan,
+                        fontWeight = FontWeight.Bold,
+                        letterSpacing = 1.2.sp
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Feature Highlights Pills
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                FeaturePill(text = "⚡ WebRTC")
+                FeaturePill(text = "🤖 AI Proxy")
+                FeaturePill(text = "🌐 Live Translate")
             }
         }
 
-        // Bottom Animated Loading Indicator
+        // Bottom Progress Indicator & Status
         Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 60.dp),
+                .padding(bottom = 48.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             CircularProgressIndicator(
-                modifier = Modifier.size(24.dp),
+                modifier = Modifier.size(26.dp),
                 color = NeonCyan,
                 strokeWidth = 2.5.dp
             )
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             Text(
-                "Securing session...",
-                style = Typography.labelSmall,
-                color = TextDisabled
+                text = "Initializing secure workspace...",
+                style = Typography.labelMedium,
+                color = TextSecondary,
+                fontWeight = FontWeight.Medium
             )
         }
     }
 }
 
+@Composable
+private fun FeaturePill(text: String) {
+    Surface(
+        color = CardSurface.copy(alpha = 0.6f),
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor)
+    ) {
+        Text(
+            text = text,
+            style = Typography.labelSmall,
+            color = TextSecondary,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
+    }
+}

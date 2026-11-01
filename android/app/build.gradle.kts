@@ -22,7 +22,7 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "BASE_URL", "\"http://10.70.43.223:8080/\"")
+            buildConfigField("String", "BASE_URL", "\"http://10.70.44.41:8080/\"")
         }
         release {
             buildConfigField("String", "BASE_URL", "\"https://meetmind-backend-s3yy.onrender.com/\"")

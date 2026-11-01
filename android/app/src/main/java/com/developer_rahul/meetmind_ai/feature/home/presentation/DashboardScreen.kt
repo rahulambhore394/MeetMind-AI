@@ -1,6 +1,7 @@
 package com.developer_rahul.meetmind_ai.feature.home.presentation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,10 +15,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -25,6 +31,7 @@ import com.developer_rahul.meetmind_ai.core.designsystem.*
 import com.developer_rahul.meetmind_ai.core.ui.ViewModelFactory
 import com.developer_rahul.meetmind_ai.core.ui.components.*
 import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Meeting
+import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.MeetingStatus
 import com.developer_rahul.meetmind_ai.feature.meetings.presentation.MeetingViewModel
 import com.developer_rahul.meetmind_ai.feature.notifications.presentation.NotificationViewModel
 
@@ -60,48 +67,88 @@ fun DashboardScreen(
         topBar = {
             TopAppBar(
                 title = { 
-                    Column {
-                        Text(
-                            "Welcome Back", 
-                            style = Typography.titleMedium,
-                            color = TextSecondary
-                        )
-                        Text(
-                            "MEETMIND AI", 
-                            style = Typography.titleLarge, 
-                            fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp,
-                            color = ElectricIndigo
-                        ) 
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = ElectricIndigo.copy(alpha = 0.15f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder),
+                            modifier = Modifier.size(42.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    Icons.Default.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = NeonCyan,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
+                        }
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "MEETMIND AI", 
+                                    style = Typography.titleMedium, 
+                                    fontWeight = FontWeight.Black,
+                                    letterSpacing = 1.2.sp,
+                                    color = NeonCyan
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Box(
+                                    modifier = Modifier
+                                        .size(6.dp)
+                                        .background(EmeraldGreen, CircleShape)
+                                        .pulse(color = EmeraldGreen)
+                                )
+                            }
+                            Text(
+                                "AI Meeting Intelligence", 
+                                style = Typography.labelSmall,
+                                color = TextSecondary
+                            ) 
+                        }
                     }
                 },
                 actions = {
                     IconButton(
                         onClick = onNotifications,
                         modifier = Modifier
-                            .padding(end = 8.dp)
+                            .size(40.dp)
                             .background(GlassWhite, CircleShape)
+                            .bounceClick()
                     ) {
                         BadgedBox(badge = { 
                             if (notificationUiState.unreadCount > 0) {
                                 Badge(containerColor = RoseRed) { 
-                                    Text(notificationUiState.unreadCount.toString()) 
+                                    Text(
+                                        notificationUiState.unreadCount.toString(),
+                                        style = Typography.labelSmall,
+                                        fontWeight = FontWeight.Bold
+                                    ) 
                                 } 
                             }
                         }) {
-                            Icon(Icons.Default.Notifications, contentDescription = null, tint = TextPrimary)
+                            Icon(Icons.Default.Notifications, contentDescription = "Notifications", tint = TextPrimary, modifier = Modifier.size(20.dp))
                         }
                     }
+
+                    Spacer(Modifier.width(8.dp))
+
                     Surface(
                         onClick = onProfile,
-                        modifier = Modifier.size(40.dp).padding(end = 8.dp),
+                        modifier = Modifier
+                            .size(40.dp)
+                            .bounceClick(),
                         shape = CircleShape,
-                        color = GlassWhite
+                        color = ElectricIndigo.copy(alpha = 0.2f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Text("R", style = Typography.labelLarge, color = TextPrimary)
+                            Icon(Icons.Default.Person, contentDescription = "Profile", tint = NeonCyan, modifier = Modifier.size(20.dp))
                         }
                     }
+
+                    Spacer(Modifier.width(8.dp))
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundSurface)
             )
@@ -113,18 +160,20 @@ fun DashboardScreen(
                 .fillMaxSize()
                 .padding(padding)
                 .padding(horizontal = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+            contentPadding = PaddingValues(bottom = 120.dp)
         ) {
-            val nextMeeting = uiState.upcomingMeetings.firstOrNull() ?: uiState.liveMeetings.firstOrNull()
+            val nextMeeting = uiState.liveMeetings.firstOrNull() ?: uiState.upcomingMeetings.firstOrNull()
             
             if (nextMeeting != null) {
                 item {
-                    Spacer(modifier = Modifier.height(12.dp))
-                    SectionHeader(title = "Upcoming Meeting")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    SectionHeader(title = if (nextMeeting.status == MeetingStatus.LIVE) "Live Meeting Now 🟢" else "Next Upcoming Meeting")
                     UpcomingMeetingHero(
                         title = nextMeeting.title,
                         time = nextMeeting.scheduledAt,
                         status = nextMeeting.status.name,
+                        meetingCode = nextMeeting.meetingCode ?: "mm-${nextMeeting.id}",
                         onClick = { onMeetingClick(nextMeeting.id.toString()) }
                     )
                 }
@@ -145,7 +194,7 @@ fun DashboardScreen(
                         onClick = onNewMeeting
                     )
                     QuickActionCard(
-                        title = "Join Meeting",
+                        title = "Join Call",
                         subtitle = "Enter Code",
                         icon = Icons.Default.AddBox,
                         color = NeonCyan,
@@ -154,7 +203,7 @@ fun DashboardScreen(
                     )
                     QuickActionCard(
                         title = "AI Rep",
-                        subtitle = "Persona Setup",
+                        subtitle = "Proxy Agent",
                         icon = Icons.Default.SmartToy,
                         color = PurpleViolet,
                         modifier = Modifier.weight(1f),
@@ -165,44 +214,55 @@ fun DashboardScreen(
 
             item {
                 SectionHeader(
-                    title = "Meeting Reports & Summaries",
+                    title = "AI Summaries & Reports",
                     action = "View All",
                     onActionClick = onSummaries
                 )
-                MeetMindCard(
-                    modifier = Modifier.clickable { onSummaries() }
+                Surface(
+                    onClick = onSummaries,
+                    shape = RoundedCornerShape(20.dp),
+                    color = CardSurface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .bounceClick()
                 ) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(8.dp),
+                            .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Surface(
-                            modifier = Modifier.size(44.dp),
+                            modifier = Modifier.size(46.dp),
                             shape = CircleShape,
-                            color = NeonCyan.copy(alpha = 0.15f)
+                            color = NeonCyan.copy(alpha = 0.15f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.3f))
                         ) {
                             Box(contentAlignment = Alignment.Center) {
-                                Icon(Icons.Default.Assessment, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(22.dp))
+                                Icon(Icons.Default.Assessment, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(24.dp))
                             }
                         }
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(14.dp))
                         Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    "Post-Meeting Reports & Tasks", 
+                                    style = Typography.titleMedium, 
+                                    color = TextPrimary, 
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(3.dp))
                             Text(
-                                "Post-Meeting Reports & Work Assignments", 
-                                style = Typography.titleMedium, 
-                                color = TextPrimary, 
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                "Complete summary reports, key decisions, work assigned per person, and user-specific task breakdown.", 
+                                "Synthesized summaries, key decisions, action items, and participant task breakdown.", 
                                 style = Typography.bodySmall, 
-                                color = TextSecondary
+                                color = TextSecondary,
+                                lineHeight = 16.sp
                             )
                         }
-                        Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = TextSecondary)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(Icons.AutoMirrored.Filled.ArrowForward, null, tint = TextSecondary, modifier = Modifier.size(18.dp))
                     }
                 }
             }
@@ -210,11 +270,11 @@ fun DashboardScreen(
             if (uiState.meetings.isNotEmpty()) {
                 item {
                     SectionHeader(
-                        title = "Today's Schedule",
+                        title = "Recent & Scheduled Meetings",
                         action = "View All",
                         onActionClick = onViewAllSchedule
                     )
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         uiState.meetings.take(4).forEach { meeting ->
                             MeetingScheduleItem(
                                 title = meeting.title,
@@ -230,37 +290,28 @@ fun DashboardScreen(
             }
 
             item {
-                SectionHeader(
-                    title = "AI Intelligence Insights",
-                    action = "Configure",
-                    onActionClick = onAiRepConfig
-                )
-            }
-
-            item {
+                SectionHeader(title = "AI Intelligence Engine")
                 MeetMindCard(isAiCard = true) {
                     Row(
-                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                        modifier = Modifier.fillMaxWidth().padding(4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
-                            modifier = Modifier.size(44.dp).background(NeonCyan.copy(alpha = 0.15f), CircleShape),
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(NeonCyan.copy(alpha = 0.15f), CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(Icons.Default.AutoAwesome, null, tint = NeonCyan, modifier = Modifier.size(22.dp))
                         }
-                        Spacer(modifier = Modifier.width(16.dp))
+                        Spacer(modifier = Modifier.width(14.dp))
                         Column(modifier = Modifier.weight(1f)) {
-                            Text("Realtime AI Engine Active", style = Typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
+                            Text("Automated Realtime AI Active", style = Typography.titleMedium, color = TextPrimary, fontWeight = FontWeight.Bold)
                             Spacer(modifier = Modifier.height(2.dp))
-                            Text("Start or join a live meeting to generate automated summaries, key action items, and live transcripts.", style = Typography.bodySmall, color = TextSecondary)
+                            Text("Start or join any live call to enable live transcriptions, multi-language translation, and automated AI summary reports.", style = Typography.bodySmall, color = TextSecondary, lineHeight = 16.sp)
                         }
                     }
                 }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(140.dp))
             }
         }
     }
@@ -276,41 +327,44 @@ fun QuickActionCard(
     onClick: () -> Unit
 ) {
     Surface(
-        modifier = modifier
-            .bounceClick()
-            .clickable { onClick() },
-        shape = MaterialTheme.shapes.large,
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
         color = CardSurface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.25f))
+        border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.3f)),
+        modifier = modifier.bounceClick()
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(14.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Surface(
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier.size(44.dp),
                 shape = CircleShape,
-                color = color.copy(alpha = 0.12f),
-                border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.3f))
+                color = color.copy(alpha = 0.15f),
+                border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.35f))
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(24.dp))
+                    Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Text(
                 title, 
-                style = Typography.labelLarge, 
+                style = Typography.labelMedium, 
                 fontWeight = FontWeight.Bold,
-                color = TextPrimary
+                color = TextPrimary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 subtitle,
                 style = Typography.labelSmall,
-                color = TextSecondary
+                color = TextSecondary,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
         }
     }
@@ -321,72 +375,113 @@ fun UpcomingMeetingHero(
     title: String,
     time: String,
     status: String,
+    meetingCode: String,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
     Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(24.dp),
+        color = CardSurface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder),
         modifier = Modifier
             .fillMaxWidth()
+            .aiGlow(color = ElectricIndigo.copy(alpha = 0.35f), radius = 16.dp)
             .bounceClick()
-            .clickable { onClick() }
-            .aiGlow(color = ElectricIndigo.copy(alpha = 0.3f)),
-        shape = MaterialTheme.shapes.extraLarge,
-        color = CardSurface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
     ) {
         Box {
-            // Background Glow effect
+            // Background Hero Gradient Fill
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(150.dp)
+                    .height(140.dp)
                     .background(
-                        Brush.radialGradient(
-                            colors = listOf(ElectricIndigo.copy(alpha = 0.2f), Color.Transparent),
-                            center = androidx.compose.ui.geometry.Offset(1000f, 0f),
-                            radius = 600f
+                        Brush.linearGradient(
+                            colors = listOf(
+                                ElectricIndigo.copy(alpha = 0.22f),
+                                PurpleViolet.copy(alpha = 0.15f),
+                                Color.Transparent
+                            )
                         )
                     )
             )
 
-            Row(
-                modifier = Modifier.padding(20.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.padding(18.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .background(if (status == "LIVE") EmeraldGreen else RoseRed, CircleShape)
-                                .pulse()
+                                .background(if (status == "LIVE") EmeraldGreen else ElectricIndigo, CircleShape)
+                                .pulse(color = if (status == "LIVE") EmeraldGreen else ElectricIndigo)
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            if (status == "LIVE") "LIVE MEETING NOW" else status,
-                            style = Typography.labelLarge,
+                            text = if (status == "LIVE") "LIVE MEETING NOW 🟢" else "UPCOMING CALL",
+                            style = Typography.labelMedium,
                             fontWeight = FontWeight.Black,
-                            letterSpacing = 1.sp,
-                            color = if (status == "LIVE") EmeraldGreen else RoseRed
+                            letterSpacing = 1.2.sp,
+                            color = if (status == "LIVE") EmeraldGreen else NeonCyan
                         )
                     }
-                    Spacer(modifier = Modifier.height(10.dp))
-                    Text(title, style = Typography.headlineMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
-                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Surface(
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(meetingCode))
+                            android.widget.Toast.makeText(context, "Code copied: $meetingCode", android.widget.Toast.LENGTH_SHORT).show()
+                        },
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = 0.12f)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(meetingCode, style = Typography.labelSmall, color = NeonCyan, fontWeight = FontWeight.Bold)
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Default.ContentCopy, null, tint = NeonCyan, modifier = Modifier.size(11.dp))
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    text = title, 
+                    style = Typography.headlineMedium, 
+                    fontWeight = FontWeight.Bold, 
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Schedule, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
                         Spacer(Modifier.width(6.dp))
                         Text(time, style = Typography.bodyMedium, color = TextSecondary)
                     }
-                }
-                
-                Surface(
-                    onClick = onClick,
-                    shape = CircleShape,
-                    color = ElectricIndigo,
-                    modifier = Modifier.size(52.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.PlayArrow, contentDescription = "Join", tint = Color.White, modifier = Modifier.size(28.dp))
+
+                    Surface(
+                        onClick = onClick,
+                        shape = CircleShape,
+                        color = if (status == "LIVE") EmeraldGreen else ElectricIndigo,
+                        modifier = Modifier.size(44.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = "Join Call", tint = Color.White, modifier = Modifier.size(24.dp))
+                        }
                     }
                 }
             }
@@ -403,7 +498,8 @@ fun MeetingScheduleItem(
     meetingCode: String = "",
     onClick: (() -> Unit)? = null
 ) {
-    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     val accentColor = when (status) {
         "LIVE" -> EmeraldGreen
         "SCHEDULED" -> ElectricIndigo
@@ -411,24 +507,23 @@ fun MeetingScheduleItem(
     }
 
     Surface(
+        onClick = { onClick?.invoke() },
+        shape = RoundedCornerShape(16.dp),
+        color = CardSurface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.25f)),
         modifier = Modifier
             .fillMaxWidth()
             .bounceClick()
-            .clickable { onClick?.invoke() },
-        shape = MaterialTheme.shapes.large,
-        color = CardSurface,
-        border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.25f))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Left Icon Squircle Container with Status Color Accent
             Surface(
-                modifier = Modifier.size(48.dp),
-                shape = MaterialTheme.shapes.medium,
+                modifier = Modifier.size(44.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = accentColor.copy(alpha = 0.12f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.3f))
             ) {
@@ -437,14 +532,13 @@ fun MeetingScheduleItem(
                         imageVector = if (status == "LIVE") Icons.Default.VideoCall else Icons.Default.Event,
                         contentDescription = null,
                         tint = accentColor,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.width(14.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
-            // Main Content Area
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
@@ -456,21 +550,23 @@ fun MeetingScheduleItem(
                         style = Typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false)
                     )
                     
                     if (meetingCode.isNotBlank()) {
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(6.dp))
                         Surface(
                             onClick = {
-                                clipboardManager.setText(androidx.compose.ui.text.AnnotatedString(meetingCode))
+                                clipboardManager.setText(AnnotatedString(meetingCode))
+                                android.widget.Toast.makeText(context, "Code copied: $meetingCode", android.widget.Toast.LENGTH_SHORT).show()
                             },
                             shape = RoundedCornerShape(6.dp),
-                            color = ElectricIndigo.copy(alpha = 0.15f),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, ElectricIndigo.copy(alpha = 0.3f))
+                            color = ElectricIndigo.copy(alpha = 0.12f)
                         ) {
                             Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
@@ -479,92 +575,39 @@ fun MeetingScheduleItem(
                                     color = NeonCyan,
                                     fontWeight = FontWeight.Bold
                                 )
-                                Spacer(Modifier.width(4.dp))
-                                Icon(
-                                    Icons.Default.ContentCopy,
-                                    contentDescription = "Copy Code",
-                                    tint = NeonCyan,
-                                    modifier = Modifier.size(12.dp)
-                                )
                             }
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(6.dp))
+                Spacer(modifier = Modifier.height(4.dp))
 
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(Icons.Default.AccessTime, null, tint = TextSecondary, modifier = Modifier.size(13.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.AccessTime, null, tint = TextSecondary, modifier = Modifier.size(12.dp))
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(time, style = Typography.bodySmall, color = TextSecondary)
                     
-                    Spacer(modifier = Modifier.width(12.dp))
-                    
-                    Icon(Icons.Default.Person, null, tint = TextSecondary, modifier = Modifier.size(13.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(host, style = Typography.bodySmall, color = TextSecondary)
-                }
-            }
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            // Right Status Badge / Action Indicator
-            if (status == "LIVE") {
-                StatusChip(
-                    text = "LIVE 🟢",
-                    color = EmeraldGreen
-                )
-            } else {
-                Surface(
-                    shape = CircleShape,
-                    color = GlassWhite,
-                    modifier = Modifier.size(32.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowForward,
-                            contentDescription = "Open Details",
-                            tint = TextSecondary,
-                            modifier = Modifier.size(16.dp)
-                        )
+                    if (host.isNotBlank()) {
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Icon(Icons.Default.Person, null, tint = TextSecondary, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(host, style = Typography.bodySmall, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                 }
             }
-        }
-    }
-}
 
-@Composable
-fun AiInsightCard(insight: AiInsight) {
-    MeetMindCard(isAiCard = true) {
-        Row(verticalAlignment = Alignment.Top) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = MaterialTheme.shapes.medium,
-                color = NeonCyan.copy(alpha = 0.1f)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.AutoAwesome, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(20.dp))
-                }
-            }
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(insight.title, style = Typography.titleMedium, color = TextPrimary)
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    insight.description, 
-                    style = Typography.bodyMedium, 
-                    color = TextSecondary,
-                    lineHeight = 20.sp
+            Spacer(modifier = Modifier.width(8.dp))
+
+            if (status == "LIVE") {
+                StatusChip(text = "LIVE 🟢", color = EmeraldGreen)
+            } else {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = "Details",
+                    tint = TextSecondary,
+                    modifier = Modifier.size(16.dp)
                 )
             }
         }
     }
 }
-
-data class AiInsight(
-    val title: String,
-    val description: String
-)

@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: meetmind-backend
+    env: docker
+    repo: https://github.com/rahulambhore394/MeetMind-AI.git
+    dockerfilePath: Dockerfile
+    plan: free
+    healthCheckPath: /actuator/health
+    autoDeploy: true

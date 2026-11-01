@@ -116,7 +116,9 @@ class MeetingViewModel(
 
     private fun observeRealtimeEvents() {
         viewModelScope.launch {
-            // existing code ... (unchanged)
+            webSocketManager.events.collect { event ->
+                handleRealtimeEvent(event)
+            }
         }
     }
 
@@ -127,15 +129,7 @@ class MeetingViewModel(
                 is NetworkResult.Success -> {
                     _uiState.update { it.copy(participants = result.data) }
                 }
-                is NetworkResult.Error -> {
-                    // Optionally handle error, e.g., log or show toast
-                }
-            }
-        }
-    }
-        viewModelScope.launch {
-            webSocketManager.events.collect { event ->
-                handleRealtimeEvent(event)
+                else -> {}
             }
         }
     }
