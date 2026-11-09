@@ -83,7 +83,7 @@ public class WebSocketEventListener {
                     Long meetingId = Long.parseLong(meetingIdStr);
                     
                     // Clean up both memoryPresence and Redis signaling presence
-                    signalingService.evictPresence(meetingId, userId, sessionId);
+                    boolean lastSignalingSession = signalingService.evictPresence(meetingId, userId, sessionId);
                     
                     // Resolve user details for name
                     String userName = "Participant";
@@ -92,17 +92,18 @@ public class WebSocketEventListener {
                         userName = user.getName();
                     }
 
-                    // Broadcast LEAVE message to signaling topic
-                    com.meetmind.meetmind_backend.webrtc.dto.SignalingMessage leaveMsg = 
-                        new com.meetmind.meetmind_backend.webrtc.dto.SignalingMessage(
-                            meetingId,
-                            userId,
-                            userName,
-                            null,
-                            "LEAVE",
-                            "Abrupt Disconnect"
-                        );
-                    messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/signaling", leaveMsg);
+                    if (lastSignalingSession) {
+                        com.meetmind.meetmind_backend.webrtc.dto.SignalingMessage leaveMsg =
+                            new com.meetmind.meetmind_backend.webrtc.dto.SignalingMessage(
+                                meetingId,
+                                userId,
+                                userName,
+                                null,
+                                "LEAVE",
+                                "Abrupt Disconnect"
+                            );
+                        messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/signaling", leaveMsg);
+                    }
                 }
             } catch (Exception e) {
                 log.warn("Failed to clean up WebRTC presence on disconnect for session {}: {}", sessionId, e.getMessage());

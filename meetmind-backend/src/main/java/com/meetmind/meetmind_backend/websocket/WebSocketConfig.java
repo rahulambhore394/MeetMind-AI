@@ -3,6 +3,7 @@ package com.meetmind.meetmind_backend.websocket;
 
 
 import com.meetmind.meetmind_backend.auth.jwt.JwtService;
+import com.meetmind.meetmind_backend.meeting.MeetingRepository;
 import com.meetmind.meetmind_backend.user.UserRepository;
 import com.meetmind.meetmind_backend.participant.ParticipantRepository;
 import org.springframework.context.annotation.Configuration;
@@ -25,15 +26,18 @@ public class WebSocketConfig
     private final JwtService jwtService;
     private final UserRepository userRepository;
     private final ParticipantRepository participantRepository;
+    private final MeetingRepository meetingRepository;
 
     public WebSocketConfig(
             JwtService jwtService,
             UserRepository userRepository,
-            ParticipantRepository participantRepository
+            ParticipantRepository participantRepository,
+            MeetingRepository meetingRepository
     ) {
         this.jwtService = jwtService;
         this.userRepository = userRepository;
         this.participantRepository = participantRepository;
+        this.meetingRepository = meetingRepository;
     }
 
     @Override
@@ -49,6 +53,7 @@ public class WebSocketConfig
         registry.setApplicationDestinationPrefixes(
                 "/app"
         );
+        registry.setUserDestinationPrefix("/user");
     }
     @Override
     public void configureClientInboundChannel(
@@ -59,7 +64,8 @@ public class WebSocketConfig
                 new WebSocketAuthInterceptor(
                         jwtService,
                         userRepository,
-                        participantRepository
+                        participantRepository,
+                        meetingRepository
                 )
         );
     }

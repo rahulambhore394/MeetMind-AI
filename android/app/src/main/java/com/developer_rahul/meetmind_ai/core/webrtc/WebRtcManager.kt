@@ -22,10 +22,12 @@ class WebRtcManager(
     private var localAudioSource: AudioSource? = null
     private var localAudioTrack: AudioTrack? = null
     private var videoCapturer: VideoCapturer? = null
+    private var cameraTextureHelper: SurfaceTextureHelper? = null
 
     private var screenVideoSource: VideoSource? = null
     private var screenVideoTrack: VideoTrack? = null
     private var screenCapturer: VideoCapturer? = null
+    private var screenTextureHelper: SurfaceTextureHelper? = null
 
     init {
         initPeerConnectionFactory(context)
@@ -43,8 +45,9 @@ class WebRtcManager(
         val defaultVideoDecoderFactory = DefaultVideoDecoderFactory(eglBaseContext)
 
         val adm = JavaAudioDeviceModule.builder(context)
-            .setUseHardwareAcousticEchoCanceler(JavaAudioDeviceModule.isBuiltInAcousticEchoCancelerSupported())
-            .setUseHardwareNoiseSuppressor(JavaAudioDeviceModule.isBuiltInNoiseSuppressorSupported())
+            .setUseHardwareAcousticEchoCanceler(false)
+            .setUseHardwareNoiseSuppressor(false)
+            .setAudioSource(android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION)
             .setAudioRecordErrorCallback(object : JavaAudioDeviceModule.AudioRecordErrorCallback {
                 override fun onWebRtcAudioRecordInitError(errorMessage: String?) {
                     Log.e(TAG, "AudioRecord init error: $errorMessage")
@@ -84,6 +87,18 @@ class WebRtcManager(
         }
         stopLocalStream()
 
+        val hasAudioPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.RECORD_AUDIO
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val hasCameraPermission = androidx.core.content.ContextCompat.checkSelfPermission(
+            context,
+            android.Manifest.permission.CAMERA
+        ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (!hasAudioPermission || !hasCameraPermission) {
+            throw SecurityException("Camera and microphone permissions are required before starting WebRTC")
+        }
+
         // 1. Audio creation - decoupled so camera failure never breaks microphone
         try {
             val audioConstraints = MediaConstraints().apply {
@@ -107,7 +122,9 @@ class WebRtcManager(
             localVideoSource = peerConnectionFactory?.createVideoSource(false)
             videoCapturer = createVideoCapturer(context)
             if (videoCapturer != null) {
-                videoCapturer?.initialize(SurfaceTextureHelper.create("CaptureThread", eglBaseContext), context, localVideoSource?.capturerObserver)
+                val textureHelper = SurfaceTextureHelper.create("CaptureThread", eglBaseContext)
+                cameraTextureHelper = textureHelper
+                videoCapturer?.initialize(textureHelper, context, localVideoSource?.capturerObserver)
                 try {
                     videoCapturer?.startCapture(1280, 720, 30)
                 } catch (e: Exception) {
@@ -140,6 +157,8 @@ class WebRtcManager(
         } catch (e: Exception) {
             Log.e(TAG, "Error stopping capturer: ${e.message}")
         }
+        cameraTextureHelper?.dispose()
+        cameraTextureHelper = null
         videoCapturer = null
         localVideoTrack?.dispose()
         localVideoTrack = null
@@ -170,16 +189,63 @@ class WebRtcManager(
             builder.createIceServer()
         }
 
-        val rtcConfig = PeerConnection.RTCConfiguration(rtcIceServers)
-        rtcConfig.sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
+        val rtcConfig = PeerConnection.RTCConfiguration(rtcIceServers).apply {
+            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
+            continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
+            keyType = PeerConnection.KeyType.ECDSA
+        }
         
         val pc = peerConnectionFactory?.createPeerConnection(rtcConfig, observer)
         
-        localAudioTrack?.let { pc?.addTrack(it, listOf("ARDAMS")) }
-        localVideoTrack?.let { pc?.addTrack(it, listOf("ARDAMS")) }
+        if (pc != null) {
+            attachLocalTracks(pc)
+        }
         
         return pc
     }
+
+    fun attachLocalTracks(pc: PeerConnection) {
+        val audio = localAudioTrack
+        val video = localVideoTrack
+
+        val transceivers = pc.transceivers
+        val audioTransceiver = transceivers.firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO }
+        val videoTransceiver = transceivers.firstOrNull { it.mediaType == MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO }
+
+        if (audio != null) {
+            if (audioTransceiver != null) {
+                audioTransceiver.direction = RtpTransceiver.RtpTransceiverDirection.SEND_RECV
+                if (audioTransceiver.sender.track() == null) {
+                    audioTransceiver.sender.setTrack(audio, true)
+                }
+            } else {
+                pc.addTrack(audio, listOf("ARDAMS"))
+            }
+        } else if (audioTransceiver == null) {
+            pc.addTransceiver(
+                MediaStreamTrack.MediaType.MEDIA_TYPE_AUDIO,
+                RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.SEND_RECV)
+            )
+        }
+
+        if (video != null) {
+            if (videoTransceiver != null) {
+                videoTransceiver.direction = RtpTransceiver.RtpTransceiverDirection.SEND_RECV
+                if (videoTransceiver.sender.track() == null) {
+                    videoTransceiver.sender.setTrack(video, true)
+                }
+            } else {
+                pc.addTrack(video, listOf("ARDAMS"))
+            }
+        } else if (videoTransceiver == null) {
+            pc.addTransceiver(
+                MediaStreamTrack.MediaType.MEDIA_TYPE_VIDEO,
+                RtpTransceiver.RtpTransceiverInit(RtpTransceiver.RtpTransceiverDirection.SEND_RECV)
+            )
+        }
+    }
+
+    fun getLocalAudioTrack(): AudioTrack? = localAudioTrack
 
     private fun createVideoCapturer(context: Context): VideoCapturer? {
         val enumerator: CameraEnumerator = if (Camera2Enumerator.isSupported(context)) {
@@ -228,7 +294,9 @@ class WebRtcManager(
             val width = if (displayMetrics.widthPixels > 0) displayMetrics.widthPixels else 1280
             val height = if (displayMetrics.heightPixels > 0) displayMetrics.heightPixels else 720
 
-            screenCapturer?.initialize(SurfaceTextureHelper.create("ScreenCaptureThread", eglBaseContext), context, screenVideoSource?.capturerObserver)
+            val textureHelper = SurfaceTextureHelper.create("ScreenCaptureThread", eglBaseContext)
+            screenTextureHelper = textureHelper
+            screenCapturer?.initialize(textureHelper, context, screenVideoSource?.capturerObserver)
             screenCapturer?.startCapture(width, height, 15)
             screenVideoTrack = peerConnectionFactory?.createVideoTrack("ARDAMSs0", screenVideoSource)
             Log.d(TAG, "Screen capture started successfully ($width x $height)")
@@ -247,6 +315,8 @@ class WebRtcManager(
             Log.e(TAG, "Error stopping screen capturer: ${e.message}")
         }
         screenCapturer = null
+        screenTextureHelper?.dispose()
+        screenTextureHelper = null
 
         val trackToDispose = screenVideoTrack
         val sourceToDispose = screenVideoSource

@@ -53,11 +53,9 @@ class RealPresenceRepository(
 
     override fun subscribeToPresence(meetingId: Long) {
         _onlineParticipantIds.value = emptySet()
-        webSocketManager.subscribeToSignaling(meetingId)
     }
 
     override fun unsubscribeFromPresence(meetingId: Long) {
-        webSocketManager.unsubscribeFromSignaling(meetingId)
         _onlineParticipantIds.value = emptySet()
     }
 }

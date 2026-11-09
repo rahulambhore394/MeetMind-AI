@@ -10,6 +10,10 @@ import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.stereotype.Controller;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.messaging.handler.annotation.MessageExceptionHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.security.Principal;
 import java.util.Map;
@@ -17,6 +21,7 @@ import java.util.Set;
 
 @Controller
 public class SignalingWebSocketController {
+    private static final Logger log = LoggerFactory.getLogger(SignalingWebSocketController.class);
 
     private final SignalingService signalingService;
     private final SimpMessagingTemplate messagingTemplate;
@@ -52,12 +57,15 @@ public class SignalingWebSocketController {
         message.setMeetingId(meetingId);
         message.setSenderId(user.getId());
         message.setSenderName(user.getName());
+        log.debug("Signaling {} received: meeting={}, sender={}, receiver={}, session={}",
+                message.getType(), meetingId, user.getId(), message.getReceiverId(), sessionId);
 
         if ("JOIN".equalsIgnoreCase(message.getType())) {
             signalingService.registerPresence(meetingId, user.getId(), sessionId);
 
             // Fetch other peers already in this live session
             Set<Long> activePeers = signalingService.getActivePeers(meetingId, user.getId());
+            log.info("Signaling JOIN: meeting={}, user={}, activePeers={}", meetingId, user.getId(), activePeers);
             Map<Long, String> peerNames = signalingService.getPeerNames(activePeers);
 
             // Format PEER_LIST payload as: id1:name1,id2:name2
@@ -81,29 +89,55 @@ public class SignalingWebSocketController {
                     peerListMsg
             );
 
-            // Broadcast JOIN to all other subscribers in the meeting
-            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/signaling", message);
+            // Deliver JOIN only to peers already present in signaling. Sending it
+            // to the topic also delivers it back to the sender, which can make a
+            // client create a peer connection to itself.
+            for (Long activePeerId : activePeers) {
+                User activePeer = userRepository.findById(activePeerId).orElse(null);
+                if (activePeer != null) {
+                    messagingTemplate.convertAndSendToUser(
+                            activePeer.getEmail(),
+                            "/queue/meetings/" + meetingId + "/signaling",
+                            message
+                    );
+                }
+            }
 
         } else if ("LEAVE".equalsIgnoreCase(message.getType())) {
-            signalingService.evictPresence(meetingId, user.getId(), sessionId);
-            
-            // Broadcast LEAVE to all subscribers
-            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/signaling", message);
+            if (signalingService.evictPresence(meetingId, user.getId(), sessionId)) {
+                messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/signaling", message);
+            }
 
         } else if (message.getReceiverId() != null) {
             // Direct message (OFFER, ANSWER, ICE_CANDIDATE)
             signalingService.validateParticipant(meetingId, message.getReceiverId());
             User receiver = userRepository.findById(message.getReceiverId()).orElse(null);
             if (receiver != null) {
+                log.info("Routing {}: meeting={}, sender={}, receiver={}, destination=/user/{}/queue/meetings/{}/signaling",
+                        message.getType(), meetingId, user.getId(), receiver.getId(), receiver.getEmail(), meetingId);
                 messagingTemplate.convertAndSendToUser(
                         receiver.getEmail(),
                         "/queue/meetings/" + meetingId + "/signaling",
                         message
                 );
+            } else {
+                log.warn("Dropping {} for missing receiver {} in meeting {}",
+                        message.getType(), message.getReceiverId(), meetingId);
             }
         } else {
             // Broadcast room-wide signaling messages (e.g. MEDIA_UPDATE, SCREEN_SHARE_STOPPED) to all meeting participants
             messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/signaling", message);
+        }
+    }
+
+    @MessageExceptionHandler(ResponseStatusException.class)
+    public void handleException(Principal principal, ResponseStatusException exception) {
+        if (principal != null) {
+            messagingTemplate.convertAndSendToUser(
+                    principal.getName(),
+                    "/queue/errors",
+                    exception.getReason()
+            );
         }
     }
 

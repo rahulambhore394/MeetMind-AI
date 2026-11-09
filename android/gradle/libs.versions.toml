@@ -18,7 +18,7 @@ ksp = "2.2.10-1.0.31"
 composeBom = "2026.02.01"
 mockk = "1.13.12"
 kotlinxCoroutinesTest = "1.9.0"
-webrtc = "111.0.0"
+streamWebrtc = "1.3.10"
 work = "2.10.0"
 firebaseBom = "33.1.2"
 
@@ -26,7 +26,9 @@ firebaseBom = "33.1.2"
 firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
 firebase-messaging-ktx = { group = "com.google.firebase", name = "firebase-messaging-ktx" }
 firebase-analytics-ktx = { group = "com.google.firebase", name = "firebase-analytics-ktx" }
-webrtc = { group = "com.dafruits", name = "webrtc", version.ref = "webrtc" }
+webrtc = { group = "io.getstream", name = "stream-webrtc-android", version.ref = "streamWebrtc" }
+stream-webrtc-ui = { group = "io.getstream", name = "stream-webrtc-android-ui", version.ref = "streamWebrtc" }
+stream-webrtc-compose = { group = "io.getstream", name = "stream-webrtc-android-compose", version.ref = "streamWebrtc" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }

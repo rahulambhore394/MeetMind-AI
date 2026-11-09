@@ -184,7 +184,9 @@ fun AppNavigation(navController: NavHostController) {
             PreJoinMeetingScreen(
                 meetingId = id,
                 onBack = { navController.popBackStack() },
-                onJoin = { navController.navigate(Screen.LiveMeeting.createRoute(id)) }
+                onJoin = { resolvedMeetingId ->
+                    navController.navigate(Screen.LiveMeeting.createRoute(resolvedMeetingId))
+                }
             )
         }
 

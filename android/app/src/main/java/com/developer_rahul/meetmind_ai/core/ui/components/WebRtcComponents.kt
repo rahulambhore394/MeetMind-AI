@@ -1,10 +1,16 @@
 package com.developer_rahul.meetmind_ai.core.ui.components
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.graphics.Color
+import com.developer_rahul.meetmind_ai.MeetMindApplication
+import io.getstream.webrtc.android.compose.VideoRenderer as StreamVideoRenderer
+import io.getstream.webrtc.android.compose.VideoScalingType
+import io.getstream.webrtc.android.ui.VideoTextureViewRenderer
 import org.webrtc.RendererCommon
-import org.webrtc.SurfaceViewRenderer
 import org.webrtc.VideoTrack
 
 @Composable
@@ -12,54 +18,27 @@ fun VideoRenderer(
     modifier: Modifier = Modifier,
     videoTrack: VideoTrack? = null,
     isOverlay: Boolean = false,
-    onSurfaceReady: (SurfaceViewRenderer) -> Unit = {}
+    onSurfaceReady: (VideoTextureViewRenderer) -> Unit = {}
 ) {
-    var renderer by remember { mutableStateOf<SurfaceViewRenderer?>(null) }
-
-    DisposableEffect(videoTrack, renderer) {
-        val currentRenderer = renderer
-        val currentTrack = videoTrack
-        if (currentRenderer != null && currentTrack != null) {
-            currentTrack.addSink(currentRenderer)
-        }
-        onDispose {
-            if (currentRenderer != null && currentTrack != null) {
-                try {
-                    currentTrack.removeSink(currentRenderer)
-                } catch (e: Exception) {
-                    // Ignored if track is disposed
-                }
-            }
-        }
+    val eglBaseContext = remember {
+        MeetMindApplication.instance.container.webRtcManager.eglBaseContext
     }
 
-    AndroidView(
-        factory = { context ->
-            SurfaceViewRenderer(context).apply {
-                init(com.developer_rahul.meetmind_ai.MeetMindApplication.instance.container.webRtcManager.eglBaseContext, null)
-                setScalingType(RendererCommon.ScalingType.SCALE_ASPECT_FILL)
-                setEnableHardwareScaler(true)
-                if (isOverlay) {
-                    setZOrderMediaOverlay(true)
+    Box(modifier = modifier.background(Color.Black)) {
+        if (videoTrack != null) {
+            StreamVideoRenderer(
+                modifier = Modifier.fillMaxSize(),
+                videoTrack = videoTrack,
+                eglBaseContext = eglBaseContext,
+                videoScalingType = VideoScalingType.SCALE_ASPECT_FILL,
+                onTextureViewCreated = { renderer ->
+                    onSurfaceReady(renderer)
+                },
+                rendererEvents = object : RendererCommon.RendererEvents {
+                    override fun onFirstFrameRendered() {}
+                    override fun onFrameResolutionChanged(videoWidth: Int, videoHeight: Int, rotation: Int) {}
                 }
-                renderer = this
-                onSurfaceReady(this)
-            }
-        },
-        update = { view ->
-            if (renderer !== view) {
-                renderer = view
-            }
-            view.setZOrderMediaOverlay(isOverlay)
-        },
-        modifier = modifier,
-        onRelease = { view ->
-            renderer = null
-            try {
-                view.release()
-            } catch (e: Exception) {
-                // Ignored
-            }
+            )
         }
-    )
+    }
 }

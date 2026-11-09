@@ -263,29 +263,12 @@ public class SignalingIntegrationTest {
         assertEquals("PEER_LIST", peerListB.getType());
         assertTrue(peerListB.getPayload().contains(hostUser.getId().toString()));
 
-        // B receives A's broadcast JOIN message
-        SignalingMessage joinBroadcastB1 = queueB_Broadcast.poll(5, TimeUnit.SECONDS);
-        assertNotNull(joinBroadcastB1);
-        assertEquals("JOIN", joinBroadcastB1.getType());
-        assertEquals(hostUser.getId(), joinBroadcastB1.getSenderId());
-
-        // B receives B's own broadcast JOIN message
-        SignalingMessage joinBroadcastB2 = queueB_Broadcast.poll(5, TimeUnit.SECONDS);
-        assertNotNull(joinBroadcastB2);
-        assertEquals("JOIN", joinBroadcastB2.getType());
-        assertEquals(participantUser.getId(), joinBroadcastB2.getSenderId());
-
-        // A receives A's own broadcast JOIN message
-        SignalingMessage joinBroadcastA1 = queueA_Broadcast.poll(5, TimeUnit.SECONDS);
-        assertNotNull(joinBroadcastA1);
-        assertEquals("JOIN", joinBroadcastA1.getType());
-        assertEquals(hostUser.getId(), joinBroadcastA1.getSenderId());
-
-        // A receives B's broadcast JOIN message
-        SignalingMessage joinBroadcastA2 = queueA_Broadcast.poll(5, TimeUnit.SECONDS);
-        assertNotNull(joinBroadcastA2);
-        assertEquals("JOIN", joinBroadcastA2.getType());
-        assertEquals(participantUser.getId(), joinBroadcastA2.getSenderId());
+        // A receives B's JOIN on its private queue. JOIN must not be broadcast
+        // back to the sender or delivered to the joining client.
+        SignalingMessage joinForA = queueA_Private.poll(5, TimeUnit.SECONDS);
+        assertNotNull(joinForA);
+        assertEquals("JOIN", joinForA.getType());
+        assertEquals(participantUser.getId(), joinForA.getSenderId());
 
         // A sends OFFER to B
         SignalingMessage offer = new SignalingMessage(meeting.getId(), null, null, participantUser.getId(), "OFFER", "SDP-Offer-Details");

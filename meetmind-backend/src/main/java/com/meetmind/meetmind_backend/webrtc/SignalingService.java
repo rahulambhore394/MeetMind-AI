@@ -14,7 +14,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -29,7 +28,8 @@ public class SignalingService {
     private final UserRepository userRepository;
     private final StringRedisTemplate redisTemplate;
 
-    private final java.util.concurrent.ConcurrentHashMap<Long, java.util.Set<Long>> memoryPresence = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<Long, java.util.concurrent.ConcurrentHashMap<Long, java.util.Set<String>>> memoryPresence =
+            new java.util.concurrent.ConcurrentHashMap<>();
 
     public SignalingService(
             MeetingRepository meetingRepository,
@@ -60,12 +60,15 @@ public class SignalingService {
     }
 
     public void registerPresence(Long meetingId, Long userId, String sessionId) {
-        memoryPresence.computeIfAbsent(meetingId, k -> java.util.concurrent.ConcurrentHashMap.newKeySet()).add(userId);
+        memoryPresence
+                .computeIfAbsent(meetingId, k -> new java.util.concurrent.ConcurrentHashMap<>())
+                .computeIfAbsent(userId, k -> java.util.concurrent.ConcurrentHashMap.newKeySet())
+                .add(sessionId);
         try {
             String presenceKey = "meeting:signaling:presence:" + meetingId;
             String sessionKey = "session:signaling:meeting:" + sessionId;
 
-            redisTemplate.opsForSet().add(presenceKey, String.valueOf(userId));
+            redisTemplate.opsForSet().add(presenceKey, redisPresenceMember(userId, sessionId));
             redisTemplate.opsForValue().set(sessionKey, String.valueOf(meetingId), 24, TimeUnit.HOURS);
             redisTemplate.expire(presenceKey, 24, TimeUnit.HOURS);
         } catch (Exception e) {
@@ -73,32 +76,49 @@ public class SignalingService {
         }
     }
 
-    public void evictPresence(Long meetingId, Long userId, String sessionId) {
-        Set<Long> localSet = memoryPresence.get(meetingId);
-        if (localSet != null) {
-            localSet.remove(userId);
-            if (localSet.isEmpty()) {
+    public boolean evictPresence(Long meetingId, Long userId, String sessionId) {
+        Map<Long, Set<String>> localMeetingPresence = memoryPresence.get(meetingId);
+        boolean userStillActiveInMemory = false;
+        if (localMeetingPresence != null) {
+            Set<String> sessions = localMeetingPresence.get(userId);
+            if (sessions != null) {
+                sessions.remove(sessionId);
+                if (sessions.isEmpty()) {
+                    localMeetingPresence.remove(userId);
+                } else {
+                    userStillActiveInMemory = true;
+                }
+            }
+            if (localMeetingPresence.isEmpty()) {
                 memoryPresence.remove(meetingId);
             }
         }
+        boolean userStillActiveInRedis = false;
         try {
             String presenceKey = "meeting:signaling:presence:" + meetingId;
             String sessionKey = "session:signaling:meeting:" + sessionId;
 
-            redisTemplate.opsForSet().remove(presenceKey, String.valueOf(userId));
+            redisTemplate.opsForSet().remove(presenceKey, redisPresenceMember(userId, sessionId));
             redisTemplate.delete(sessionKey);
+            Set<String> members = redisTemplate.opsForSet().members(presenceKey);
+            String userPrefix = userId + ":";
+            if (members != null) {
+                userStillActiveInRedis = members.stream().anyMatch(member -> member.startsWith(userPrefix));
+            }
         } catch (Exception e) {
             log.warn("Redis error on evictPresence for user {} in meeting {}: {}", userId, meetingId, e.getMessage());
         }
+        return !(userStillActiveInMemory || userStillActiveInRedis);
     }
 
     public Set<Long> getActivePeers(Long meetingId, Long excludeUserId) {
         Set<Long> result = new java.util.HashSet<>();
         
-        // 1. Check in-memory presence
-        Set<Long> memoryPeers = memoryPresence.get(meetingId);
-        if (memoryPeers != null) {
-            result.addAll(memoryPeers);
+        // Only active signaling sessions count as peers. Database JOINED status is
+        // historical and must not be used to create WebRTC connections.
+        Map<Long, Set<String>> localMeetingPresence = memoryPresence.get(meetingId);
+        if (localMeetingPresence != null) {
+            result.addAll(localMeetingPresence.keySet());
         }
 
         // 2. Check Redis presence if available
@@ -108,7 +128,9 @@ public class SignalingService {
             if (members != null) {
                 for (String m : members) {
                     try {
-                        result.add(Long.parseLong(m));
+                        int separator = m.indexOf(':');
+                        String userId = separator >= 0 ? m.substring(0, separator) : m;
+                        result.add(Long.parseLong(userId));
                     } catch (Exception ignored) {}
                 }
             }
@@ -116,21 +138,12 @@ public class SignalingService {
             log.warn("Redis error on getActivePeers for meeting {}: {}", meetingId, e.getMessage());
         }
 
-        // 3. Fallback to DB joined participants
-        try {
-            List<com.meetmind.meetmind_backend.participant.MeetingParticipant> joined = 
-                    participantRepository.findByMeetingId(meetingId);
-            for (com.meetmind.meetmind_backend.participant.MeetingParticipant p : joined) {
-                if (p.getStatus() == com.meetmind.meetmind_backend.participant.ParticipantStatus.JOINED && p.getUser() != null) {
-                    result.add(p.getUser().getId());
-                }
-            }
-        } catch (Exception e) {
-            log.warn("DB fallback error on getActivePeers for meeting {}: {}", meetingId, e.getMessage());
-        }
-
         result.remove(excludeUserId);
         return result;
+    }
+
+    private String redisPresenceMember(Long userId, String sessionId) {
+        return userId + ":" + sessionId;
     }
 
     public Map<Long, String> getPeerNames(Set<Long> peerIds) {

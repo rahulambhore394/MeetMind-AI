@@ -23,8 +23,10 @@ class StompClient(
     private val subscriptions = mutableMapOf<String, String>() // destination to id
     private val pendingFrames = ConcurrentLinkedQueue<StompFrame>()
     @Volatile private var isConnected = false
+    @Volatile private var intentionalDisconnect = false
 
     fun connect() {
+        intentionalDisconnect = false
         _connectionState.tryEmit(ConnectionState.Connecting)
         val request = Request.Builder()
             .url(url)
@@ -37,23 +39,25 @@ class StompClient(
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                Log.v("StompClient", "Received: $text")
                 val frame = StompFrame.parse(text)
+                Log.v("StompClient", "Received: ${safeForLogging(frame)}")
                 handleFrame(frame)
             }
 
             override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
                 Log.d("StompClient", "WebSocket Closing: $reason")
                 isConnected = false
-                pendingFrames.clear()
-                _connectionState.tryEmit(ConnectionState.Disconnected)
+                if (!intentionalDisconnect) {
+                    _connectionState.tryEmit(ConnectionState.Disconnected)
+                }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 Log.e("StompClient", "WebSocket Failure: ${t.message}")
                 isConnected = false
-                pendingFrames.clear()
-                _connectionState.tryEmit(ConnectionState.Error(t.message ?: "Unknown error"))
+                if (!intentionalDisconnect) {
+                    _connectionState.tryEmit(ConnectionState.Error(t.message ?: "Unknown error"))
+                }
             }
         })
     }
@@ -73,10 +77,7 @@ class StompClient(
 
     fun subscribe(destination: String): String {
         val existingId = subscriptions[destination]
-        if (existingId != null) {
-            return existingId
-        }
-        val id = "sub-${subIdCounter.incrementAndGet()}"
+        val id = existingId ?: "sub-${subIdCounter.incrementAndGet()}"
         subscriptions[destination] = id
         val frame = StompFrame("SUBSCRIBE", mapOf("id" to id, "destination" to destination))
         sendFrame(frame)
@@ -108,8 +109,22 @@ class StompClient(
     }
 
     private fun sendRawFrame(frame: StompFrame) {
-        Log.v("StompClient", "Sending: $frame")
+        Log.v("StompClient", "Sending: ${safeForLogging(frame)}")
         webSocket?.send(frame.toString())
+    }
+
+    private fun safeForLogging(frame: StompFrame): StompFrame {
+        val safeHeaders = frame.headers.mapValues { (key, value) ->
+            if (key.equals("authorization", ignoreCase = true) ||
+                key.equals("cookie", ignoreCase = true) ||
+                key.equals("set-cookie", ignoreCase = true)
+            ) {
+                "[REDACTED]"
+            } else {
+                value
+            }
+        }
+        return frame.copy(headers = safeHeaders)
     }
 
     private fun handleFrame(frame: StompFrame) {
@@ -134,6 +149,7 @@ class StompClient(
     }
 
     fun disconnect() {
+        intentionalDisconnect = true
         isConnected = false
         pendingFrames.clear()
         webSocket?.close(1000, "User logout")

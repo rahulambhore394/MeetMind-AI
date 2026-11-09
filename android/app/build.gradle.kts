@@ -22,7 +22,7 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "BASE_URL", "\"http://10.70.44.41:8080/\"")
+            buildConfigField("String", "BASE_URL", "\"https://meetmind-backend-s3yy.onrender.com/\"")
         }
         release {
             buildConfigField("String", "BASE_URL", "\"https://meetmind-backend-s3yy.onrender.com/\"")
@@ -76,8 +76,10 @@ dependencies {
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
 
-    // WebRTC
+    // WebRTC (GetStream official WebRTC Android)
     implementation(libs.webrtc)
+    implementation(libs.stream.webrtc.ui)
+    implementation(libs.stream.webrtc.compose)
 
     // Firebase
     implementation(platform(libs.firebase.bom))

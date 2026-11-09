@@ -9,6 +9,9 @@ import java.util.List;
 @ConfigurationProperties(prefix = "webrtc")
 public class WebRtcProperties {
     private List<IceServer> iceServers = new ArrayList<>();
+    private String turnUrl;
+    private String turnUsername;
+    private String turnCredential;
 
     public List<IceServer> getIceServers() {
         return iceServers;
@@ -16,6 +19,30 @@ public class WebRtcProperties {
 
     public void setIceServers(List<IceServer> iceServers) {
         this.iceServers = iceServers;
+    }
+
+    public String getTurnUrl() {
+        return turnUrl;
+    }
+
+    public void setTurnUrl(String turnUrl) {
+        this.turnUrl = turnUrl;
+    }
+
+    public String getTurnUsername() {
+        return turnUsername;
+    }
+
+    public void setTurnUsername(String turnUsername) {
+        this.turnUsername = turnUsername;
+    }
+
+    public String getTurnCredential() {
+        return turnCredential;
+    }
+
+    public void setTurnCredential(String turnCredential) {
+        this.turnCredential = turnCredential;
     }
 
     public static class IceServer {

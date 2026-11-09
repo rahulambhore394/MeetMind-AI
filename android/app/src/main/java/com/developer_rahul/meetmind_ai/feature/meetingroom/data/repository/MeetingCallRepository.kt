@@ -33,6 +33,10 @@ class MeetingCallRepository(
     // Screen sharing RtpSender tracking map per peer
     private val screenSenders = ConcurrentHashMap<Long, RtpSender>()
 
+    // SDP offer/answer deduplication caches
+    private val lastHandledOfferSdp = ConcurrentHashMap<Long, String>()
+    private val lastHandledAnswerSdp = ConcurrentHashMap<Long, String>()
+
     // ICE restart recovery attempt counter per peer
     private val iceRestartAttempts = ConcurrentHashMap<Long, Int>()
     private val maxIceRestartAttempts = 3
@@ -80,6 +84,7 @@ class MeetingCallRepository(
      * Generates a new SDP Offer with `IceRestart=true` to negotiate new ICE candidates.
      */
     private fun triggerIceRestart(peerId: Long, reason: String) {
+        val meetingId = currentMeetingId ?: return
         val attempts = iceRestartAttempts.getOrDefault(peerId, 0)
         if (attempts >= maxIceRestartAttempts) {
             Log.w("MeetingCallRepo", "Max ICE restart attempts ($maxIceRestartAttempts) reached for peer $peerId. Aborting restart.")
@@ -97,6 +102,7 @@ class MeetingCallRepository(
             Log.d("MeetingCallRepo", "Native restartIce() call ignored/unsupported: ${e.message}")
         }
 
+        webRtcManager.attachLocalTracks(pc)
         makingOfferMap[peerId] = true
 
         val constraints = MediaConstraints().apply {
@@ -112,7 +118,9 @@ class MeetingCallRepository(
                     override fun onSetSuccess() {
                         makingOfferMap[peerId] = false
                         Log.i("MeetingCallRepo", "ICE restart SDP offer created & set locally for peer $peerId. Dispatching via signaling.")
-                        webSocketManager.sendSignalingMessage(currentMeetingId ?: 0, "OFFER", description.description, peerId)
+                        if (currentMeetingId == meetingId && peerConnections[peerId] === pc) {
+                            webSocketManager.sendSignalingMessage(meetingId, "OFFER", description.description, peerId)
+                        }
                     }
                     override fun onCreateFailure(s: String?) {
                         makingOfferMap[peerId] = false
@@ -241,6 +249,12 @@ class MeetingCallRepository(
     }
 
     suspend fun joinMeeting(meetingId: Long) {
+        if (meetingId <= 0L) {
+            throw IllegalArgumentException("Invalid meeting ID")
+        }
+        if (currentMeetingId != null || peerConnections.isNotEmpty()) {
+            leaveMeeting()
+        }
         currentMeetingId = meetingId
         localUserId = getCurrentUserId()
         isSfuMode = false
@@ -270,6 +284,11 @@ class MeetingCallRepository(
     }
 
     private fun handleSignalingMessage(message: com.developer_rahul.meetmind_ai.core.network.websocket.model.SignalingMessageDto) {
+        Log.d(
+            "MeetingCallRepo",
+            "Handling signaling type=${message.type}, meetingId=${message.meetingId}, " +
+                "senderId=${message.senderId}, receiverId=${message.receiverId}"
+        )
         if (message.type == "SFU_MODE") {
             Log.i("MeetingCallRepo", "Signaling indicated SFU Mode available - enabling SFU single-publisher connection model")
             isSfuMode = true
@@ -359,6 +378,7 @@ class MeetingCallRepository(
     }
 
     private fun createPeerConnection(peerId: Long, isInitiator: Boolean): PeerConnection? {
+        val meetingId = currentMeetingId ?: return null
         val existing = peerConnections[peerId]
         if (existing != null) {
             if (isInitiator) {
@@ -374,7 +394,9 @@ class MeetingCallRepository(
             override fun onIceCandidate(candidate: IceCandidate) {
                 val mid = candidate.sdpMid ?: ""
                 val payload = "$mid|${candidate.sdpMLineIndex}|${candidate.sdp}"
-                webSocketManager.sendSignalingMessage(currentMeetingId ?: 0, "ICE_CANDIDATE", payload, peerId)
+                if (currentMeetingId == meetingId && peerConnections[peerId] != null) {
+                    webSocketManager.sendSignalingMessage(meetingId, "ICE_CANDIDATE", payload, peerId)
+                }
             }
 
             override fun onTrack(transceiver: RtpTransceiver) {
@@ -513,7 +535,9 @@ class MeetingCallRepository(
     }
 
     private fun createOffer(peerId: Long) {
+        val meetingId = currentMeetingId ?: return
         val pc = peerConnections[peerId] ?: return
+        webRtcManager.attachLocalTracks(pc)
         makingOfferMap[peerId] = true
 
         val constraints = MediaConstraints().apply {
@@ -528,7 +552,9 @@ class MeetingCallRepository(
                     override fun onSetSuccess() {
                         makingOfferMap[peerId] = false
                         Log.d("MeetingCallRepo", "Offer setLocalDescription success for peer $peerId")
-                        webSocketManager.sendSignalingMessage(currentMeetingId ?: 0, "OFFER", description.description, peerId)
+                        if (currentMeetingId == meetingId && peerConnections[peerId] === pc) {
+                            webSocketManager.sendSignalingMessage(meetingId, "OFFER", description.description, peerId)
+                        }
                     }
                     override fun onCreateFailure(s: String?) {
                         makingOfferMap[peerId] = false
@@ -553,6 +579,11 @@ class MeetingCallRepository(
     }
 
     private fun handleOffer(peerId: Long, sdp: String) {
+        if (currentMeetingId == null) return
+        if (lastHandledOfferSdp[peerId] == sdp) {
+            Log.d("MeetingCallRepo", "Duplicate offer from peer $peerId, ignoring")
+            return
+        }
         val pc = peerConnections[peerId] ?: createPeerConnection(peerId, false) ?: return
 
         val isMakingOffer = makingOfferMap[peerId] == true
@@ -567,6 +598,7 @@ class MeetingCallRepository(
             return
         }
 
+        lastHandledOfferSdp[peerId] = sdp
         Log.d("MeetingCallRepo", "Handling offer from peer $peerId (collision=$isOfferCollision, polite=$polite)")
 
         if (isOfferCollision && polite) {
@@ -589,6 +621,8 @@ class MeetingCallRepository(
     }
 
     private fun applyRemoteOfferAndAnswer(peerId: Long, pc: PeerConnection, sdp: String) {
+        val meetingId = currentMeetingId ?: return
+        webRtcManager.attachLocalTracks(pc)
         val constraints = MediaConstraints().apply {
             mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveAudio", "true"))
             mandatory.add(MediaConstraints.KeyValuePair("OfferToReceiveVideo", "true"))
@@ -599,13 +633,16 @@ class MeetingCallRepository(
             override fun onSetSuccess() {
                 Log.d("MeetingCallRepo", "Remote offer set successfully for peer $peerId, draining ICE and creating answer")
                 drainPendingIceCandidates(peerId, pc)
+                webRtcManager.attachLocalTracks(pc)
                 pc.createAnswer(object : SdpObserver {
                     override fun onCreateSuccess(description: SessionDescription) {
                         pc.setLocalDescription(object : SdpObserver {
                             override fun onCreateSuccess(p0: SessionDescription?) {}
                             override fun onSetSuccess() {
                                 Log.d("MeetingCallRepo", "Local answer set successfully for peer $peerId")
-                                webSocketManager.sendSignalingMessage(currentMeetingId ?: 0, "ANSWER", description.description, peerId)
+                                if (currentMeetingId == meetingId && peerConnections[peerId] === pc) {
+                                    webSocketManager.sendSignalingMessage(meetingId, "ANSWER", description.description, peerId)
+                                }
                             }
                             override fun onCreateFailure(s: String?) {
                                 Log.e("MeetingCallRepo", "Failed to set local answer description for $peerId: $s")
@@ -632,6 +669,11 @@ class MeetingCallRepository(
     }
 
     private fun handleAnswer(peerId: Long, sdp: String) {
+        if (currentMeetingId == null) return
+        if (lastHandledAnswerSdp[peerId] == sdp) {
+            Log.d("MeetingCallRepo", "Duplicate answer from peer $peerId, ignoring")
+            return
+        }
         if (ignoreOfferMap[peerId] == true) {
             Log.d("MeetingCallRepo", "Ignoring answer from peer $peerId because we ignored its offer during glare")
             ignoreOfferMap[peerId] = false
@@ -643,6 +685,8 @@ class MeetingCallRepository(
             Log.w("MeetingCallRepo", "Received answer from peer $peerId but signaling state is ${pc.signalingState()}, ignoring")
             return
         }
+
+        lastHandledAnswerSdp[peerId] = sdp
 
         pc.setRemoteDescription(object : SdpObserver {
             override fun onCreateSuccess(p0: SessionDescription?) {}
@@ -659,8 +703,16 @@ class MeetingCallRepository(
 
     private fun handleIceCandidate(peerId: Long, payload: String) {
         val parts = payload.split("|")
-        if (parts.size < 3) return
-        val candidate = IceCandidate(parts[0], parts[1].toInt(), parts[2])
+        if (parts.size < 3) {
+            Log.w("MeetingCallRepo", "Ignoring malformed ICE candidate from peer $peerId")
+            return
+        }
+        val mLineIndex = parts[1].toIntOrNull()
+        if (mLineIndex == null) {
+            Log.w("MeetingCallRepo", "Ignoring ICE candidate with invalid m-line index from peer $peerId")
+            return
+        }
+        val candidate = IceCandidate(parts[0], mLineIndex, parts.drop(2).joinToString("|"))
         val pc = peerConnections[peerId]
         if (pc != null && pc.remoteDescription != null) {
             pc.addIceCandidate(candidate)
@@ -689,8 +741,13 @@ class MeetingCallRepository(
     }
 
     fun leaveMeeting() {
-        webSocketManager.unsubscribeFromSignaling(currentMeetingId ?: 0)
+        val meetingId = currentMeetingId
+        if (meetingId != null) {
+            webSocketManager.unsubscribeFromSignaling(meetingId)
+        }
         iceRestartAttempts.clear()
+        lastHandledOfferSdp.clear()
+        lastHandledAnswerSdp.clear()
         screenSenders.clear()
         makingOfferMap.clear()
         ignoreOfferMap.clear()

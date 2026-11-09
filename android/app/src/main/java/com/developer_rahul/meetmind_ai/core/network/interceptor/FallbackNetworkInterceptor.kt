@@ -44,7 +44,7 @@ class FallbackNetworkInterceptor : Interceptor {
         }
 
         // 3. Fallback candidates: 127.0.0.1 (USB adb reverse), Wi-Fi candidates, Emulator
-        val fallbackHosts = listOf("127.0.0.1", "10.70.43.223", "10.70.42.235", "192.168.137.188", "10.0.2.2")
+        val fallbackHosts = listOf("10.232.5.113", "127.0.0.1", "10.70.43.223", "10.70.42.235", "192.168.137.188", "10.0.2.2")
             .filter { it != originalHost }
 
         for (fallbackHost in fallbackHosts) {

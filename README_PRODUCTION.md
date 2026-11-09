@@ -22,6 +22,9 @@ The following environment variables should be set in the production environment:
 | `JWT_SECRET` | 256-bit Base64 encoded secret for JWT |
 | `JWT_EXPIRATION` | Token expiration in milliseconds |
 | `SPRING_FLYWAY_ENABLED` | Set to `true` for production migrations |
+| `TURN_URL` | TURN server URL, for example `turn:turn.example.com:3478` |
+| `TURN_USERNAME` | TURN server username |
+| `TURN_CREDENTIAL` | TURN server credential; store it as a deployment secret |
 
 ## 3. Backend Deployment (Docker)
 1. Build the backend jar: `./mvnw clean package -DskipTests`
@@ -31,6 +34,9 @@ The following environment variables should be set in the production environment:
 - CORS origins are restricted to `http://localhost:3000` and Android emulator by default. Update `SecurityConfig.java` for your production domain.
 - Actuator endpoints are protected with `ROLE_ADMIN`. Ensure you configure a user with this role in your production security setup.
 - Database passwords and JWT secrets must be changed from defaults using environment variables.
+- Configure TURN in production. STUN-only ICE configuration is insufficient for many
+  mobile and enterprise networks. The backend only exposes the TURN entry when
+  `TURN_URL` is set, so credentials are never committed to the repository.
 
 ## 5. Observability
 - Metrics are available at `/actuator/prometheus`.

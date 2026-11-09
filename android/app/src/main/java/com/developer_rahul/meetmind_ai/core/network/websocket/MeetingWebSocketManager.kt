@@ -121,7 +121,7 @@ class MeetingWebSocketManager(
         stompClient = StompClient(
             client = okHttpClient,
             url = wsUrl,
-            headers = mapOf("Authorization" to "Bearer $token")
+            headers = mapOf("Authorization" to ("Bearer " + token))
         ).apply {
             connect()
             
@@ -159,6 +159,7 @@ class MeetingWebSocketManager(
                     if (frame.command == "MESSAGE") {
                         val destination = frame.headers["destination"]
                         val body = frame.body
+                        Log.d("MeetingWS", "Received STOMP MESSAGE destination=$destination")
                         if (body != null) {
                             if (destination?.contains("/chat") == true) {
                                 parseAndEmitChatMessage(body)
@@ -274,9 +275,15 @@ class MeetingWebSocketManager(
     private fun parseAndEmitSignalingMessage(body: String) {
         try {
             val dto = json.decodeFromString<SignalingMessageDto>(body)
+            Log.d(
+                "MeetingWS",
+                "Received signaling type=${dto.type}, meetingId=${dto.meetingId}, " +
+                    "senderId=${dto.senderId}, receiverId=${dto.receiverId}"
+            )
             _signalingMessages.tryEmit(dto)
         } catch (e: Exception) {
             Log.e("MeetingWS", "Failed to parse signaling message: ${e.message}")
+            Log.e("MeetingWS", "Signaling body: $body")
         }
     }
 
@@ -350,9 +357,11 @@ class MeetingWebSocketManager(
     }
 
     fun subscribeToSignaling(meetingId: Long) {
-        if (signalingSubscriptions.add(meetingId)) {
-            stompClient?.subscribe("/topic/meetings/$meetingId/signaling")
-            stompClient?.subscribe("/user/queue/meetings/$meetingId/signaling")
+        signalingSubscriptions.add(meetingId)
+        stompClient?.subscribe("/topic/meetings/$meetingId/signaling")
+        stompClient?.subscribe("/user/queue/meetings/$meetingId/signaling")
+        scope.launch {
+            delay(200)
             sendSignalingMessage(meetingId, "JOIN")
         }
     }
@@ -360,7 +369,10 @@ class MeetingWebSocketManager(
     private fun resubscribeToSignaling(meetingId: Long) {
         stompClient?.subscribe("/topic/meetings/$meetingId/signaling")
         stompClient?.subscribe("/user/queue/meetings/$meetingId/signaling")
-        sendSignalingMessage(meetingId, "JOIN")
+        scope.launch {
+            delay(200)
+            sendSignalingMessage(meetingId, "JOIN")
+        }
     }
 
     fun unsubscribeFromSignaling(meetingId: Long) {
@@ -427,6 +439,10 @@ class MeetingWebSocketManager(
     }
 
     fun sendSignalingMessage(meetingId: Long, type: String, payload: String? = null, receiverId: Long? = null) {
+        if (meetingId <= 0L) {
+            Log.w("MeetingWS", "Ignoring signaling message with invalid meeting ID: type=$type")
+            return
+        }
         val currentUserId = tokenProvider.getUserId()
         val currentUserName = tokenProvider.getUserName()
         val dto = SignalingMessageDto(

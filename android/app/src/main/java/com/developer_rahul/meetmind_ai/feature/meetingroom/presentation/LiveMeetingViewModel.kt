@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import org.webrtc.VideoTrack
 
 import com.developer_rahul.meetmind_ai.feature.meetings.data.repository.MeetingRepository
+import com.developer_rahul.meetmind_ai.core.network.model.NetworkResult
 import android.util.Log
 
 class LiveMeetingViewModel(
@@ -30,6 +31,13 @@ class LiveMeetingViewModel(
     init {
         observeEvents()
         observeAiProxySpeech()
+    }
+
+    private var callStarted = false
+
+    fun startCall() {
+        if (callStarted) return
+        callStarted = true
         joinMeeting()
     }
 
@@ -76,14 +84,32 @@ class LiveMeetingViewModel(
     private fun joinMeeting() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            try {
-                meetingRepository.joinMeeting(meetingId)
-            } catch (e: Exception) {
-                Log.e("LiveMeetingVM", "Error executing REST joinMeeting: ${e.message}")
+            when (val result = meetingRepository.joinMeeting(meetingId)) {
+                is NetworkResult.Error -> {
+                    val message = result.error.message ?: "Unable to join meeting"
+                    Log.e("LiveMeetingVM", "Error executing REST joinMeeting: $message")
+                    callStarted = false
+                    _uiState.update { it.copy(isLoading = false, error = message) }
+                    return@launch
+                }
+                NetworkResult.Loading -> {
+                    callStarted = false
+                    _uiState.update { it.copy(isLoading = false, error = "Unable to join meeting") }
+                    return@launch
+                }
+                is NetworkResult.Success -> Unit
             }
             meetingWebSocketManager.subscribeToAiProxySpeech(meetingId)
-            meetingCallRepository.joinMeeting(meetingId)
-            _uiState.update { it.copy(isLoading = false) }
+            try {
+                meetingCallRepository.joinMeeting(meetingId)
+                _uiState.update { it.copy(isLoading = false) }
+            } catch (e: Exception) {
+                callStarted = false
+                Log.e("LiveMeetingVM", "Error starting WebRTC call: ${e.message}", e)
+                _uiState.update {
+                    it.copy(isLoading = false, error = "Unable to start camera and microphone: ${e.message}")
+                }
+            }
         }
     }
 
@@ -175,6 +201,8 @@ class LiveMeetingViewModel(
     }
 
     fun leaveMeeting() {
+        if (!callStarted) return
+        callStarted = false
         viewModelScope.launch {
             try {
                 meetingRepository.leaveMeeting(meetingId)

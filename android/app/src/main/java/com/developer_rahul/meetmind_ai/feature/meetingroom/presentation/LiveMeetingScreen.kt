@@ -88,6 +88,16 @@ fun LiveMeetingScreen(
     ) { permissions ->
         val cameraGranted = permissions[Manifest.permission.CAMERA] ?: false
         val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
+        if (cameraGranted && audioGranted) {
+            AudioDeviceManager.selectAudioDevice(context, "Speaker")
+            callViewModel.startCall()
+        } else {
+            Toast.makeText(
+                context,
+                "Camera and microphone permissions are required for live meetings.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     val screenShareLauncher = rememberLauncherForActivityResult(
@@ -111,11 +121,13 @@ fun LiveMeetingScreen(
     LaunchedEffect(Unit) {
         val hasCamera = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
         val hasAudio = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        
+        AudioDeviceManager.selectAudioDevice(context, "Speaker")
+
         if (!hasCamera || !hasAudio) {
             permissionLauncher.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
+        } else {
+            callViewModel.startCall()
         }
-        AudioDeviceManager.selectAudioDevice(context, "Speaker")
     }
 
     DisposableEffect(Unit) {

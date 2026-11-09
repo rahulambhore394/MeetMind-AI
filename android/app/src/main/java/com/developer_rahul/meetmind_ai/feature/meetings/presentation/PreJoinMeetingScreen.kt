@@ -35,6 +35,7 @@ import com.developer_rahul.meetmind_ai.core.media.audio.AudioDeviceManager
 import com.developer_rahul.meetmind_ai.core.ui.ViewModelFactory
 import com.developer_rahul.meetmind_ai.core.ui.components.*
 import com.developer_rahul.meetmind_ai.feature.meetingroom.presentation.AvatarPlaceholder
+import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.ParticipantStatus
 import org.webrtc.VideoTrack
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,7 +43,7 @@ import org.webrtc.VideoTrack
 fun PreJoinMeetingScreen(
     meetingId: String,
     onBack: () -> Unit,
-    onJoin: () -> Unit,
+    onJoin: (String) -> Unit,
     viewModel: MeetingViewModel = viewModel(factory = ViewModelFactory)
 ) {
     val context = LocalContext.current
@@ -97,7 +98,10 @@ fun PreJoinMeetingScreen(
 
     val meetingTitle = meeting?.title ?: "Live AI Meeting"
     val meetingCode = meeting?.meetingCode ?: "mm-${meetingId}"
-    val participantCount = uiState.participants.size.coerceAtLeast(1)
+    // The host is returned as a participant when already joined; otherwise the
+    // host is the implicit first participant on the pre-join screen.
+    val joinedParticipantCount = uiState.participants.count { it.status == ParticipantStatus.JOINED }
+    val participantCount = joinedParticipantCount.coerceAtLeast(1)
 
     // Pulse animation for mic audio meter check
     val infiniteTransition = rememberInfiniteTransition(label = "micMeter")
@@ -151,7 +155,9 @@ fun PreJoinMeetingScreen(
                 val joinButtonText = if (isRejoin) "Re-join Meeting Now 🚀" else "Join Meeting Now 🚀"
                 MeetMindButton(
                     text = joinButtonText,
-                    onClick = onJoin,
+                    onClick = {
+                        onJoin(meeting?.id?.takeIf { it > 0L }?.toString() ?: meetingId)
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .aiGlow(color = ElectricIndigo, radius = 16.dp)
@@ -470,5 +476,3 @@ private fun AudioChip(
         )
     }
 }
-
-
