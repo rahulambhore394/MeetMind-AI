@@ -55,7 +55,16 @@ public class SignalingService {
                 participantRepository.existsByMeetingIdAndUserId(meetingId, userId);
 
         if (!isAuthorized) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User is not a participant of this meeting");
+            userRepository.findById(userId).ifPresent(user -> {
+                com.meetmind.meetmind_backend.participant.MeetingParticipant newPart =
+                        new com.meetmind.meetmind_backend.participant.MeetingParticipant();
+                newPart.setMeeting(meeting);
+                newPart.setUser(user);
+                newPart.setRole(com.meetmind.meetmind_backend.participant.ParticipantRole.PARTICIPANT);
+                newPart.setStatus(com.meetmind.meetmind_backend.participant.ParticipantStatus.JOINED);
+                newPart.setJoinedAt(java.time.LocalDateTime.now());
+                participantRepository.save(newPart);
+            });
         }
     }
 

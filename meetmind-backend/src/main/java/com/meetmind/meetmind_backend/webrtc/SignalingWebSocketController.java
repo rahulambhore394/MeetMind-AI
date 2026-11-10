@@ -102,6 +102,8 @@ public class SignalingWebSocketController {
                     );
                 }
             }
+            // Also broadcast JOIN room-wide so any peer subscribed receives it with zero delay
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/signaling", message);
 
         } else if ("LEAVE".equalsIgnoreCase(message.getType())) {
             if (signalingService.evictPresence(meetingId, user.getId(), sessionId)) {
@@ -120,10 +122,9 @@ public class SignalingWebSocketController {
                         "/queue/meetings/" + meetingId + "/signaling",
                         message
                 );
-            } else {
-                log.warn("Dropping {} for missing receiver {} in meeting {}",
-                        message.getType(), message.getReceiverId(), meetingId);
             }
+            // Broadcast on /topic as well: clients filter by receiverId, ensuring 100% delivery across STOMP brokers
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/signaling", message);
         } else {
             // Broadcast room-wide signaling messages (e.g. MEDIA_UPDATE, SCREEN_SHARE_STOPPED) to all meeting participants
             messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/signaling", message);

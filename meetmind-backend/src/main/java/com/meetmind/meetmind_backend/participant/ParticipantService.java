@@ -430,21 +430,6 @@ public class ParticipantService {
                     return participantRepository.save(newPart);
                 });
 
-        ParticipantStatus status = participant.getStatus();
-
-        if (
-                status != ParticipantStatus.ACCEPTED
-                        && status != ParticipantStatus.LEFT
-                        && status != ParticipantStatus.JOINED
-                        && status != ParticipantStatus.INVITED
-        ) {
-            throw new ResponseStatusException(
-                    HttpStatus.BAD_REQUEST,
-                    "You cannot join this meeting"
-            );
-        }
-
-
         participant.setStatus(
                 ParticipantStatus.JOINED
         );
