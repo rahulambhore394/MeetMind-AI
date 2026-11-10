@@ -73,6 +73,27 @@ class MeetingIntelligenceViewModel(
         }
     }
 
+    fun generateIntelligence() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            when (val result = intelligenceRepository.triggerAnalysis(meetingId, 0L)) {
+                is NetworkResult.Success -> {
+                    _uiState.update { it.copy(
+                        isLoading = false,
+                        summary = result.data,
+                        status = result.data.status
+                    ) }
+                }
+                is NetworkResult.Error -> {
+                    _uiState.update { it.copy(isLoading = false, error = result.error.message) }
+                }
+                else -> {
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+        }
+    }
+
     fun updateActionItemStatus(actionItemId: Long, newStatus: String) {
         // Optimistic UI update for instant feedback
         _uiState.update { current ->

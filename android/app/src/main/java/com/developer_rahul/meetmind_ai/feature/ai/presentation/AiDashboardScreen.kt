@@ -1,5 +1,6 @@
 package com.developer_rahul.meetmind_ai.feature.ai.presentation
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextAlign
@@ -41,6 +43,7 @@ fun AiDashboardScreen(
         factory = provideMeetingIntelligenceViewModelFactory(meetingId.toLongOrNull() ?: -1L)
     )
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val summary = uiState.summary
     var selectedTab by remember { mutableStateOf(0) }
@@ -64,8 +67,52 @@ fun AiDashboardScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { viewModel.generateIntelligence() }) {
+                            Icon(Icons.Default.AutoAwesome, contentDescription = "Synthesize with AI", tint = NeonCyan)
+                        }
+                        if (summary != null) {
+                            IconButton(
+                                onClick = {
+                                    val shareText = buildString {
+                                        appendLine("🧠 MeetMind AI — Meeting Intelligence Summary")
+                                        appendLine("==========================================")
+                                        appendLine()
+                                        appendLine("📝 Executive Brief:")
+                                        appendLine(summary.summary)
+                                        appendLine()
+                                        if (summary.keyPoints.isNotEmpty()) {
+                                            appendLine("💡 Key Discussion Points:")
+                                            summary.keyPoints.forEach { appendLine("• $it") }
+                                            appendLine()
+                                        }
+                                        if (summary.decisions.isNotEmpty()) {
+                                            appendLine("⚖️ Strategic Decisions:")
+                                            summary.decisions.forEach { appendLine("• $it") }
+                                            appendLine()
+                                        }
+                                        if (summary.actionItems.isNotEmpty()) {
+                                            appendLine("✅ Action Items:")
+                                            summary.actionItems.forEach { item ->
+                                                val statusEmoji = if (item.status == "COMPLETED") "✔️" else "⏳"
+                                                val assignee = if (!item.assignedUser.isNullOrBlank()) "@${item.assignedUser}" else "Unassigned"
+                                                appendLine("$statusEmoji ${item.description} ($assignee${if (!item.dueDate.isNullOrBlank()) ", Due: ${item.dueDate}" else ""})")
+                                            }
+                                        }
+                                    }
+                                    val sendIntent = Intent().apply {
+                                        action = Intent.ACTION_SEND
+                                        putExtra(Intent.EXTRA_TEXT, shareText)
+                                        putExtra(Intent.EXTRA_SUBJECT, "Meeting Intelligence Summary")
+                                        type = "text/plain"
+                                    }
+                                    context.startActivity(Intent.createChooser(sendIntent, "Share Meeting Summary"))
+                                }
+                            ) {
+                                Icon(Icons.Default.Share, contentDescription = "Share", tint = TextPrimary)
+                            }
+                        }
                         IconButton(onClick = { viewModel.loadIntelligence() }) {
-                            Icon(Icons.Default.Refresh, null, tint = TextPrimary)
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = TextPrimary)
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundSurface)
@@ -98,7 +145,7 @@ fun AiDashboardScreen(
             } else if (uiState.error != null) {
                 ErrorState(message = uiState.error!!, onRetry = { viewModel.loadIntelligence() })
             } else if (summary == null) {
-                EmptyState()
+                EmptyState(onGenerate = { viewModel.generateIntelligence() })
             } else {
                 when (selectedTab) {
                     0 -> SummaryTab(summary)
@@ -1339,9 +1386,64 @@ fun ErrorState(message: String, onRetry: () -> Unit) {
 }
 
 @Composable
-fun EmptyState() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("No intelligence report available", color = TextSecondary)
+fun EmptyState(onGenerate: () -> Unit = {}) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        MeetMindCard {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Surface(
+                    modifier = Modifier.size(72.dp),
+                    shape = CircleShape,
+                    color = ElectricIndigo.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ElectricIndigo.copy(alpha = 0.3f))
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = ElectricIndigo,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                Text(
+                    "No Intelligence Report Yet",
+                    style = Typography.titleLarge,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    "Synthesize executive brief, action items, decisions, and analytics from your meeting speech transcript.",
+                    style = Typography.bodyMedium,
+                    color = TextSecondary,
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                MeetMindButton(
+                    text = "Synthesize with AI ✨",
+                    onClick = onGenerate,
+                    isAiAction = true
+                )
+            }
+        }
     }
 }
 

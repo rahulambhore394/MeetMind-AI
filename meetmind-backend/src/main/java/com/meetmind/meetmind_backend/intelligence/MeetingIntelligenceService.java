@@ -209,7 +209,7 @@ public class MeetingIntelligenceService {
     @Transactional
     public MeetingSummary autoGenerateSummaryOnMeetingEnd(Long meetingId) {
         log.info("MeetingIntelligenceService: Generating meeting summary on conclusion for meeting {}", meetingId);
-        return generateOrUpdateMeetingIntelligence(meetingId, false);
+        return generateOrUpdateMeetingIntelligence(meetingId, true);
     }
 
     @Transactional
@@ -227,10 +227,8 @@ public class MeetingIntelligenceService {
         if (transcript != null) {
             List<TranscriptSegment> segments = segmentRepository.findByTranscriptIdOrderBySegmentIndex(transcript.getId());
             if (!segments.isEmpty()) {
-                if (transcript.getFullText() == null || transcript.getFullText().isBlank()) {
-                    String fullText = segments.stream().map(TranscriptSegment::getText).collect(Collectors.joining(" "));
-                    transcript.setFullText(fullText);
-                }
+                String fullText = segments.stream().map(TranscriptSegment::getText).collect(Collectors.joining(" "));
+                transcript.setFullText(fullText);
                 transcript.setStatus(TranscriptionStatus.COMPLETED);
                 transcript = transcriptRepository.save(transcript);
 

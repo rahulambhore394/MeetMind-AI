@@ -1,5 +1,6 @@
 package com.developer_rahul.meetmind_ai.feature.meetings.presentation
 
+import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -15,14 +16,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.developer_rahul.meetmind_ai.core.designsystem.*
+import com.developer_rahul.meetmind_ai.core.ui.components.MeetMindButton
+import com.developer_rahul.meetmind_ai.core.ui.components.MeetMindCard
 import com.developer_rahul.meetmind_ai.core.ui.components.StatusChip
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.ActionItemDto
 import com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.ComprehensiveReportDto
-import com.developer_rahul.meetmind_ai.feature.meetings.data.repository.RealMeetingRepository
 import kotlinx.coroutines.launch
 
 @Composable
@@ -30,33 +34,68 @@ fun ComprehensiveReportScreen(
     meetingId: String,
     onBack: () -> Unit
 ) {
-    val repository = remember { com.developer_rahul.meetmind_ai.MeetMindApplication.instance.container.meetingRepository }
+    val context = LocalContext.current
+    val meetingRepository = remember { com.developer_rahul.meetmind_ai.MeetMindApplication.instance.container.meetingRepository }
+    val intelligenceRepository = remember { com.developer_rahul.meetmind_ai.MeetMindApplication.instance.container.intelligenceRepository }
+    val coroutineScope = rememberCoroutineScope()
     var report by remember { mutableStateOf<ComprehensiveReportDto?>(null) }
     var isLoading by remember { mutableStateOf(true) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(meetingId) {
+    fun loadReport() {
         val mid = meetingId.toLongOrNull()
         if (mid != null) {
-            try {
-                when (val result = repository.getComprehensiveReport(mid)) {
-                    is com.developer_rahul.meetmind_ai.core.network.model.NetworkResult.Success -> {
-                        report = result.data
+            isLoading = true
+            errorMessage = null
+            coroutineScope.launch {
+                try {
+                    when (val result = meetingRepository.getComprehensiveReport(mid)) {
+                        is com.developer_rahul.meetmind_ai.core.network.model.NetworkResult.Success -> {
+                            report = result.data
+                        }
+                        is com.developer_rahul.meetmind_ai.core.network.model.NetworkResult.Error -> {
+                            errorMessage = result.error.message
+                        }
+                        else -> {}
                     }
-                    else -> {}
+                } catch (e: Exception) {
+                    errorMessage = e.message ?: "Failed to load comprehensive report"
+                } finally {
+                    isLoading = false
                 }
-            } catch (_: Exception) {
-            } finally {
-                isLoading = false
             }
         } else {
             isLoading = false
+            errorMessage = "Invalid meeting ID"
         }
+    }
+
+    LaunchedEffect(meetingId) {
+        loadReport()
     }
 
     ComprehensiveReportScreen(
         onBack = onBack,
         report = report,
-        isLoading = isLoading
+        isLoading = isLoading,
+        errorMessage = errorMessage,
+        onRetry = { loadReport() },
+        onUpdateTaskStatus = { taskId, newStatus ->
+            val mid = meetingId.toLongOrNull()
+            if (mid != null) {
+                report = report?.let { r ->
+                    val updatedAll = r.allWorkAssignments.map { if (it.id == taskId) it.copy(status = newStatus) else it }
+                    val updatedMine = r.myAssignedTasks.map { if (it.id == taskId) it.copy(status = newStatus) else it }
+                    val updatedBreakdown = r.userTaskBreakdown.mapValues { (_, list) ->
+                        list.map { if (it.id == taskId) it.copy(status = newStatus) else it }
+                    }
+                    r.copy(allWorkAssignments = updatedAll, myAssignedTasks = updatedMine, userTaskBreakdown = updatedBreakdown)
+                }
+                coroutineScope.launch {
+                    intelligenceRepository.updateActionItemStatus(mid, taskId, newStatus)
+                }
+            }
+        }
     )
 }
 
@@ -66,8 +105,12 @@ fun ComprehensiveReportScreen(
     onBack: () -> Unit,
     report: ComprehensiveReportDto?,
     isLoading: Boolean = false,
+    errorMessage: String? = null,
+    onRetry: () -> Unit = {},
     onUpdateTaskStatus: (Long, String) -> Unit = { _, _ -> }
 ) {
+    val context = LocalContext.current
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -82,12 +125,59 @@ fun ComprehensiveReportScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back", tint = TextPrimary)
                     }
                 },
+                actions = {
+                    if (report != null) {
+                        IconButton(
+                            onClick = {
+                                val shareText = buildString {
+                                    appendLine("📊 Comprehensive Meeting Report: ${report.title}")
+                                    appendLine("Meeting Code: ${report.meetingCode ?: ""}")
+                                    appendLine("Host: ${report.hostName ?: "Host"}")
+                                    appendLine()
+                                    appendLine("📝 Executive Summary:")
+                                    appendLine(report.executiveSummary ?: "Meeting concluded.")
+                                    appendLine()
+                                    if (report.keyPoints.isNotEmpty()) {
+                                        appendLine("💡 Key Discussion Points:")
+                                        report.keyPoints.forEach { appendLine("• $it") }
+                                        appendLine()
+                                    }
+                                    if (report.decisions.isNotEmpty()) {
+                                        appendLine("⚖️ Decisions Made:")
+                                        report.decisions.forEach { appendLine("• $it") }
+                                        appendLine()
+                                    }
+                                    if (report.allWorkAssignments.isNotEmpty()) {
+                                        appendLine("✅ Work Assignments & Tasks:")
+                                        report.allWorkAssignments.forEach { task ->
+                                            val statusEmoji = if (task.status == "COMPLETED") "✔️" else "⏳"
+                                            val assignee = if (!task.assignedUser.isNull_or_blank()) "@${task.assignedUser}" else "Unassigned"
+                                            appendLine("$statusEmoji ${task.description} ($assignee${if (!task.dueDate.isNull_or_blank()) ", Due: ${task.dueDate}" else ""})")
+                                        }
+                                    }
+                                }
+                                val sendIntent = Intent().apply {
+                                    action = Intent.ACTION_SEND
+                                    putExtra(Intent.EXTRA_TEXT, shareText)
+                                    putExtra(Intent.EXTRA_SUBJECT, "Meeting Report: ${report.title}")
+                                    type = "text/plain"
+                                }
+                                context.startActivity(Intent.createChooser(sendIntent, "Share Meeting Report"))
+                            }
+                        ) {
+                            Icon(Icons.Default.Share, contentDescription = "Share Report", tint = TextPrimary)
+                        }
+                    }
+                    IconButton(onClick = onRetry) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = TextPrimary)
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = BackgroundSurface)
             )
         },
         containerColor = BackgroundSurface
     ) { padding ->
-        if (isLoading || report == null) {
+        if (isLoading) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -95,6 +185,53 @@ fun ComprehensiveReportScreen(
                 contentAlignment = Alignment.Center
             ) {
                 CircularProgressIndicator(color = ElectricIndigo)
+            }
+        } else if (report == null) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(24.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                MeetMindCard {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Surface(
+                            modifier = Modifier.size(64.dp),
+                            shape = CircleShape,
+                            color = ElectricIndigo.copy(alpha = 0.15f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, ElectricIndigo.copy(alpha = 0.3f))
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Analytics, contentDescription = null, tint = ElectricIndigo, modifier = Modifier.size(32.dp))
+                            }
+                        }
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            "Report Not Available Yet",
+                            style = Typography.titleMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            errorMessage ?: "The meeting intelligence report is being generated or no spoken utterances were recorded.",
+                            style = Typography.bodySmall,
+                            color = TextSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(20.dp))
+                        MeetMindButton(
+                            text = "Retry Report",
+                            onClick = onRetry
+                        )
+                    }
+                }
             }
         } else {
             LazyColumn(
