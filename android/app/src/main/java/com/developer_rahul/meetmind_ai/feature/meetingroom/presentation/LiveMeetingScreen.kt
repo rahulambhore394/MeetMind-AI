@@ -649,10 +649,12 @@ fun LiveMeetingScreen(
                         isHost = participant.role == ParticipantRole.HOST,
                         isOnline = true,
                         videoTrack = effectiveVideoTrack,
+                        sfuVideoTrack = if (isLocalUser) callState.localSfuVideoTrack else mediaState?.sfuVideoTrack,
                         isMicOn = if (isLocalUser) !isMuted else (mediaState?.audioEnabled ?: true),
-                        isVideoOn = if (isLocalUser) !isVideoOff else (mediaState?.videoEnabled ?: (mediaState?.videoTrack != null)),
+                        isVideoOn = if (isLocalUser) !isVideoOff else (mediaState?.videoEnabled ?: (mediaState?.videoTrack != null || mediaState?.sfuVideoTrack != null)),
                         isActiveSpeaker = if (isLocalUser) (!isMuted) else (isAiCurrentlySpeaking || (mediaState?.isSpeaking ?: false)),
-                        screenTrack = effectiveScreenTrack
+                        screenTrack = effectiveScreenTrack,
+                        sfuScreenTrack = if (isLocalUser) callState.localSfuScreenTrack else mediaState?.sfuScreenTrack
                     )
                     ParticipantVideoTile(
                         participant = uiParticipant,
@@ -671,7 +673,9 @@ fun LiveMeetingScreen(
                                 isHost = ((meeting ?: uiState.meetings.find { it.id.toString() == meetingId || it.meetingCode == meetingId })?.hostId == currentUserId && currentUserId > 0L) ||
                                          (currentUserId > 0L && uiState.participants.any { it.userId == currentUserId && it.role == ParticipantRole.HOST }),
                                 videoTrack = if (!isVideoOff) callState.localVideoTrack else null,
+                                sfuVideoTrack = if (!isVideoOff) callState.localSfuVideoTrack else null,
                                 screenTrack = if (callState.isScreenSharing) callState.localScreenTrack else null,
+                                sfuScreenTrack = if (callState.isScreenSharing) callState.localSfuScreenTrack else null,
                                 isMicOn = !isMuted,
                                 isVideoOn = !isVideoOff
                             )
@@ -901,10 +905,11 @@ fun LiveMeetingScreen(
             border = androidx.compose.foundation.BorderStroke(1.5.dp, GlassWhite)
         ) {
             Box(contentAlignment = Alignment.Center) {
-                if (callState.localVideoTrack != null && !isVideoOff) {
+                if ((callState.localVideoTrack != null || callState.localSfuVideoTrack != null) && !isVideoOff) {
                     VideoRenderer(
                         modifier = Modifier.fillMaxSize(),
                         videoTrack = callState.localVideoTrack,
+                        sfuVideoTrack = callState.localSfuVideoTrack,
                         isOverlay = true
                     )
                 } else {
@@ -1295,10 +1300,12 @@ fun ParticipantVideoTile(
             )
     ) {
         val cameraTrack = participant.videoTrack
-        if (cameraTrack != null && participant.isVideoOn) {
+        val sfuCameraTrack = participant.sfuVideoTrack
+        if ((cameraTrack != null || sfuCameraTrack != null) && participant.isVideoOn) {
             VideoRenderer(
                 modifier = Modifier.fillMaxSize(),
                 videoTrack = cameraTrack,
+                sfuVideoTrack = sfuCameraTrack,
                 isOverlay = isOverlay
             )
         } else {
@@ -1400,7 +1407,9 @@ data class Participant(
     val isHost: Boolean = false,
     val isOnline: Boolean = true,
     val videoTrack: VideoTrack? = null,
-    val screenTrack: VideoTrack? = null
+    val sfuVideoTrack: io.livekit.android.room.track.VideoTrack? = null,
+    val screenTrack: VideoTrack? = null,
+    val sfuScreenTrack: io.livekit.android.room.track.VideoTrack? = null
 )
 
 @Composable

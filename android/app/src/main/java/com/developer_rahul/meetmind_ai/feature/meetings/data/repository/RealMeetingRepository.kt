@@ -168,4 +168,13 @@ class RealMeetingRepository(
             NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
         }
     }
+
+    override suspend fun getMediaToken(meetingId: Long): NetworkResult<com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.MediaTokenResponseDto> {
+        return try {
+            val response = meetingApiService.getMediaToken(meetingId)
+            NetworkResult.Success(response)
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
 }

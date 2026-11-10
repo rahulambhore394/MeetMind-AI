@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 @RestController
-@RequestMapping("/api/meetings")
+@RequestMapping({"/api/meetings", "/api/v1/meetings"})
 public class MeetingController {
 
     private final MeetingService meetingService;
@@ -207,5 +207,19 @@ public class MeetingController {
         );
 
         return ResponseEntity.noContent().build();
+    }
+
+    // ==========================================
+    // MEDIA TOKEN (LiveKit SFU)
+    // ==========================================
+    @PostMapping("/{meetingId}/media-token")
+    public ResponseEntity<com.meetmind.meetmind_backend.meeting.dto.MediaTokenResponse> getMediaToken(
+            @PathVariable Long meetingId,
+            Authentication authentication
+    ) {
+        User currentUser = SecurityUtils.extractUser(authentication);
+        com.meetmind.meetmind_backend.meeting.dto.MediaTokenResponse response =
+                meetingService.getMediaToken(meetingId, currentUser.getId());
+        return ResponseEntity.ok(response);
     }
 }

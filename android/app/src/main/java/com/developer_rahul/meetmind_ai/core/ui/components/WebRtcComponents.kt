@@ -10,6 +10,7 @@ import com.developer_rahul.meetmind_ai.MeetMindApplication
 import io.getstream.webrtc.android.compose.VideoRenderer as StreamVideoRenderer
 import io.getstream.webrtc.android.compose.VideoScalingType
 import io.getstream.webrtc.android.ui.VideoTextureViewRenderer
+import io.livekit.android.compose.ui.VideoTrackView as LiveKitVideoTrackView
 import org.webrtc.RendererCommon
 import org.webrtc.VideoTrack
 
@@ -17,6 +18,7 @@ import org.webrtc.VideoTrack
 fun VideoRenderer(
     modifier: Modifier = Modifier,
     videoTrack: VideoTrack? = null,
+    sfuVideoTrack: io.livekit.android.room.track.VideoTrack? = null,
     isOverlay: Boolean = false,
     onSurfaceReady: (VideoTextureViewRenderer) -> Unit = {}
 ) {
@@ -25,7 +27,12 @@ fun VideoRenderer(
     }
 
     Box(modifier = modifier.background(Color.Black)) {
-        if (videoTrack != null) {
+        if (sfuVideoTrack != null) {
+            LiveKitVideoTrackView(
+                videoTrack = sfuVideoTrack,
+                modifier = Modifier.fillMaxSize()
+            )
+        } else if (videoTrack != null) {
             StreamVideoRenderer(
                 modifier = Modifier.fillMaxSize(),
                 videoTrack = videoTrack,

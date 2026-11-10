@@ -116,13 +116,25 @@ class LiveMeetingViewModel(
     private fun handleEvent(event: MeetingCallEvent) {
         when (event) {
             is MeetingCallEvent.LocalStreamReady -> {
-                _uiState.update { it.copy(localVideoTrack = event.videoTrack) }
+                _uiState.update { it.copy(localVideoTrack = event.videoTrack, localSfuVideoTrack = event.sfuVideoTrack) }
             }
             is MeetingCallEvent.LocalScreenStreamReady -> {
-                _uiState.update { it.copy(localScreenTrack = event.videoTrack, isScreenSharing = (event.videoTrack != null)) }
+                _uiState.update {
+                    it.copy(
+                        localScreenTrack = event.videoTrack,
+                        localSfuScreenTrack = event.sfuVideoTrack,
+                        isScreenSharing = (event.videoTrack != null || event.sfuVideoTrack != null)
+                    )
+                }
             }
             is MeetingCallEvent.RemoteStreamReady -> {
-                updateParticipantState(event.userId) { it.copy(videoTrack = event.videoTrack, videoEnabled = true) }
+                updateParticipantState(event.userId) {
+                    it.copy(
+                        videoTrack = event.videoTrack,
+                        sfuVideoTrack = event.sfuVideoTrack,
+                        videoEnabled = true
+                    )
+                }
             }
             is MeetingCallEvent.RemoteStreamRemoved -> {
                 removeParticipant(event.userId)
@@ -226,7 +238,9 @@ class LiveMeetingViewModel(
 data class LiveMeetingUiState(
     val isLoading: Boolean = false,
     val localVideoTrack: VideoTrack? = null,
+    val localSfuVideoTrack: io.livekit.android.room.track.VideoTrack? = null,
     val localScreenTrack: VideoTrack? = null,
+    val localSfuScreenTrack: io.livekit.android.room.track.VideoTrack? = null,
     val participants: Map<Long, ParticipantMediaState> = emptyMap(),
     val isScreenSharing: Boolean = false,
     val error: String? = null,

@@ -4,6 +4,9 @@ import android.util.Log
 import com.developer_rahul.meetmind_ai.core.network.token.TokenProvider
 import com.developer_rahul.meetmind_ai.core.network.websocket.MeetingWebSocketManager
 import com.developer_rahul.meetmind_ai.core.webrtc.WebRtcManager
+import com.developer_rahul.meetmind_ai.core.webrtc.sfu.LiveKitMediaManager
+import com.developer_rahul.meetmind_ai.feature.meetings.data.repository.MeetingRepository
+import com.developer_rahul.meetmind_ai.core.network.model.NetworkResult
 import com.developer_rahul.meetmind_ai.core.webrtc.data.remote.WebRtcApiService
 import com.developer_rahul.meetmind_ai.feature.meetingroom.domain.model.MeetingCallEvent
 import kotlinx.coroutines.*
@@ -15,7 +18,9 @@ class MeetingCallRepository(
     private val webRtcApiService: WebRtcApiService?,
     private val webSocketManager: MeetingWebSocketManager,
     private val webRtcManager: WebRtcManager,
-    private val tokenProvider: TokenProvider? = null
+    private val tokenProvider: TokenProvider? = null,
+    private val liveKitMediaManager: LiveKitMediaManager? = null,
+    private val meetingRepository: MeetingRepository? = null
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val peerConnections = ConcurrentHashMap<Long, PeerConnection>()
@@ -258,6 +263,63 @@ class MeetingCallRepository(
         currentMeetingId = meetingId
         localUserId = getCurrentUserId()
         isSfuMode = false
+
+        // Attempt LiveKit SFU connection first
+        if (liveKitMediaManager != null && meetingRepository != null) {
+            try {
+                Log.i("MeetingCallRepo", "Requesting LiveKit media token for meeting $meetingId...")
+                val tokenResult = meetingRepository.getMediaToken(meetingId)
+                if (tokenResult is NetworkResult.Success) {
+                    val mediaToken = tokenResult.data
+                    Log.i("MeetingCallRepo", "LiveKit token received. Connecting to SFU: ${mediaToken.rtcUrl}")
+                    val connected = liveKitMediaManager.connect(
+                        url = mediaToken.rtcUrl,
+                        token = mediaToken.token
+                    )
+                    if (connected) {
+                        isSfuMode = true
+                        Log.i("MeetingCallRepo", "Operating in high-scale LiveKit SFU mode for meeting $meetingId")
+
+                        // Connect application STOMP WebSocket for chat and intelligence events
+                        webSocketManager.connect()
+
+                        // Forward LiveKit tracks to MeetingCallEvents
+                        scope.launch {
+                            liveKitMediaManager.localVideoTrack.collect { track ->
+                                _events.emit(MeetingCallEvent.LocalStreamReady(sfuVideoTrack = track))
+                            }
+                        }
+
+                        scope.launch {
+                            liveKitMediaManager.remoteVideoTracks.collect { tracks ->
+                                tracks.forEach { (peerId, track) ->
+                                    _events.emit(MeetingCallEvent.RemoteStreamReady(peerId, sfuVideoTrack = track))
+                                }
+                            }
+                        }
+
+                        scope.launch {
+                            liveKitMediaManager.activeSpeakers.collect { speakers ->
+                                speakers.forEach { speakerId ->
+                                    _events.emit(MeetingCallEvent.MediaStateChanged(speakerId, isSpeaking = true))
+                                }
+                            }
+                        }
+
+                        scope.launch {
+                            liveKitMediaManager.error.collect { err ->
+                                _events.emit(MeetingCallEvent.Error(err))
+                            }
+                        }
+
+                        return
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("MeetingCallRepo", "LiveKit SFU setup failed (${e.message}), falling back to WebRTC mesh: ${e.message}")
+            }
+        }
+
         webSocketManager.connect()
         
         iceServers = try {
@@ -741,6 +803,10 @@ class MeetingCallRepository(
     }
 
     fun leaveMeeting() {
+        if (isSfuMode && liveKitMediaManager != null) {
+            liveKitMediaManager.disconnect()
+            isSfuMode = false
+        }
         val meetingId = currentMeetingId
         if (meetingId != null) {
             webSocketManager.unsubscribeFromSignaling(meetingId)
@@ -764,17 +830,29 @@ class MeetingCallRepository(
     }
 
     fun setAudioEnabled(enabled: Boolean) {
-        webRtcManager.setAudioEnabled(enabled)
-        sendMediaUpdate(audioEnabled = enabled)
+        if (isSfuMode && liveKitMediaManager != null) {
+            scope.launch { liveKitMediaManager.setMicrophoneEnabled(enabled) }
+        } else {
+            webRtcManager.setAudioEnabled(enabled)
+            sendMediaUpdate(audioEnabled = enabled)
+        }
     }
 
     fun setVideoEnabled(enabled: Boolean) {
-        webRtcManager.setVideoEnabled(enabled)
-        sendMediaUpdate(videoEnabled = enabled)
+        if (isSfuMode && liveKitMediaManager != null) {
+            scope.launch { liveKitMediaManager.setCameraEnabled(enabled) }
+        } else {
+            webRtcManager.setVideoEnabled(enabled)
+            sendMediaUpdate(videoEnabled = enabled)
+        }
     }
 
     fun switchCamera() {
-        webRtcManager.switchCamera()
+        if (isSfuMode && liveKitMediaManager != null) {
+            scope.launch { liveKitMediaManager.switchCamera() }
+        } else {
+            webRtcManager.switchCamera()
+        }
     }
 
     fun startScreenSharing(mediaProjectionData: android.content.Intent) {

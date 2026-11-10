@@ -173,7 +173,18 @@ class AppContainer(context: Context) {
         WebRtcManager(context, eglBase.eglBaseContext)
     }
 
+    val liveKitMediaManager: com.developer_rahul.meetmind_ai.core.webrtc.sfu.LiveKitMediaManager by lazy {
+        com.developer_rahul.meetmind_ai.core.webrtc.sfu.LiveKitMediaManager(context)
+    }
+
     val meetingCallRepository: MeetingCallRepository by lazy {
-        MeetingCallRepository(webRtcApiService, meetingWebSocketManager, webRtcManager, tokenProvider)
+        MeetingCallRepository(
+            webRtcApiService,
+            meetingWebSocketManager,
+            webRtcManager,
+            tokenProvider,
+            liveKitMediaManager,
+            meetingRepository
+        )
     }
 }

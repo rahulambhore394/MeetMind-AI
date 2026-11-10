@@ -10,6 +10,8 @@ data class ParticipantMediaState(
     val isSpeaking: Boolean = false,
     val connectionState: String = "CONNECTING",
     val videoTrack: VideoTrack? = null,
+    val sfuVideoTrack: io.livekit.android.room.track.VideoTrack? = null,
     val screenTrack: VideoTrack? = null,
+    val sfuScreenTrack: io.livekit.android.room.track.VideoTrack? = null,
     val isScreenSharing: Boolean = false
 )

@@ -5,6 +5,8 @@ package com.meetmind.meetmind_backend.meeting;
 import com.meetmind.meetmind_backend.meeting.dto.CreateMeetingRequest;
 import com.meetmind.meetmind_backend.meeting.dto.MeetingResponse;
 import com.meetmind.meetmind_backend.meeting.dto.UpdateMeetingRequest;
+import com.meetmind.meetmind_backend.meeting.dto.MediaTokenResponse;
+import com.meetmind.meetmind_backend.webrtc.LiveKitMediaService;
 import com.meetmind.meetmind_backend.participant.MeetingParticipant;
 import com.meetmind.meetmind_backend.participant.ParticipantRepository;
 import com.meetmind.meetmind_backend.participant.ParticipantRole;
@@ -42,6 +44,7 @@ public class MeetingService {
     private final UserRepository userRepository;
     private final ApplicationEventPublisher applicationEventPublisher;
     private final com.meetmind.meetmind_backend.notification.EmailService emailService;
+    private final LiveKitMediaService liveKitMediaService;
 
     public MeetingService(
             MeetingRepository meetingRepository,
@@ -49,7 +52,8 @@ public class MeetingService {
             ParticipantRepository participantRepository,
             MeetingEventPublisher eventPublisher,
             ApplicationEventPublisher applicationEventPublisher,
-            com.meetmind.meetmind_backend.notification.EmailService emailService
+            com.meetmind.meetmind_backend.notification.EmailService emailService,
+            LiveKitMediaService liveKitMediaService
     ) {
 
         this.meetingRepository =
@@ -69,6 +73,9 @@ public class MeetingService {
 
         this.emailService =
                 emailService;
+
+        this.liveKitMediaService =
+                liveKitMediaService;
     }
 
 
@@ -625,5 +632,28 @@ public class MeetingService {
                 log.warn("Failed to check or auto-end empty meeting {}: {}", meeting.getId(), e.getMessage());
             }
         }
+    }
+
+    // ==========================================
+    // MEDIA TOKEN (LiveKit SFU)
+    // ==========================================
+    public MediaTokenResponse getMediaToken(Long meetingId, Long userId) {
+        Meeting meeting = meetingRepository.findById(meetingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Meeting not found with id: " + meetingId));
+
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found with id: " + userId));
+
+        ParticipantRole role = ParticipantRole.PARTICIPANT;
+        if (meeting.getHost() != null && meeting.getHost().getId().equals(userId)) {
+            role = ParticipantRole.HOST;
+        } else {
+            java.util.Optional<MeetingParticipant> partOpt = participantRepository.findByMeetingIdAndUserId(meetingId, userId);
+            if (partOpt.isPresent()) {
+                role = partOpt.get().getRole();
+            }
+        }
+
+        return liveKitMediaService.generateMediaToken(meeting, user, role);
     }
 }

@@ -76,7 +76,9 @@ dependencies {
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
 
-    // WebRTC (GetStream official WebRTC Android)
+    // WebRTC & SFU Media (LiveKit SFU Android SDK & WebRTC)
+    implementation(libs.livekit.android)
+    implementation(libs.livekit.android.compose)
     implementation(libs.webrtc)
     implementation(libs.stream.webrtc.ui)
     implementation(libs.stream.webrtc.compose)

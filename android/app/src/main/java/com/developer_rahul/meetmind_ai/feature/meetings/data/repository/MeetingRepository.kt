@@ -23,5 +23,6 @@ interface MeetingRepository {
 
     suspend fun getAllMeetingReports(): NetworkResult<List<MeetingReportSummaryDto>>
     suspend fun getComprehensiveReport(meetingId: Long): NetworkResult<ComprehensiveReportDto>
+    suspend fun getMediaToken(meetingId: Long): NetworkResult<com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.MediaTokenResponseDto>
 }
 

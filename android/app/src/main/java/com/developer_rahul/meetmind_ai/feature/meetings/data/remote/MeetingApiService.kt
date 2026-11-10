@@ -58,4 +58,7 @@ interface MeetingApiService {
 
     @GET("api/meetings/{meetingId}/comprehensive-report")
     suspend fun getComprehensiveReport(@Path("meetingId") meetingId: Long): com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.ComprehensiveReportDto
+
+    @POST("api/meetings/{meetingId}/media-token")
+    suspend fun getMediaToken(@Path("meetingId") meetingId: Long): com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.MediaTokenResponseDto
 }
