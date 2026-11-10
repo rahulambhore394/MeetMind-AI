@@ -357,6 +357,8 @@ class MeetingCallRepository(
             return
         }
 
+        val myUserId = if (localUserId > 0L) localUserId else getCurrentUserId()
+
         if (message.type == "PEER_LIST") {
             val payload = message.payload
             if (!payload.isNullOrEmpty()) {
@@ -364,7 +366,7 @@ class MeetingCallRepository(
                     it.split(":").firstOrNull()?.toLongOrNull() 
                 }
                 for (id in peerIds) {
-                    if (id > 0L && id != localUserId && !peerConnections.containsKey(id)) {
+                    if (id > 0L && id != myUserId && !peerConnections.containsKey(id)) {
                         Log.d("MeetingCallRepo", "PEER_LIST: Preparing peer connection for $id")
                         createPeerConnection(id, isInitiator = false)
                     }
@@ -374,9 +376,8 @@ class MeetingCallRepository(
         }
 
         val peerId = message.senderId ?: return
-        if (peerId <= 0L || peerId == localUserId) return 
+        if (peerId <= 0L || peerId == myUserId) return 
 
-        val myUserId = if (localUserId > 0L) localUserId else getCurrentUserId()
         val targetReceiver = message.receiverId
         if (targetReceiver != null && targetReceiver > 0L && targetReceiver != myUserId) {
             return

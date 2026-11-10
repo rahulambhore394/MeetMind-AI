@@ -58,11 +58,13 @@ class LiveKitMediaManager(
                     handleRoomEvent(event)
                 }.launchIn(scope)
 
-                newRoom.connect(
-                    url = url,
-                    token = token,
-                    options = ConnectOptions(autoSubscribe = true)
-                )
+                kotlinx.coroutines.withTimeout(3000) {
+                    newRoom.connect(
+                        url = url,
+                        token = token,
+                        options = ConnectOptions(autoSubscribe = true)
+                    )
+                }
 
                 // Publish local tracks
                 if (enableAudio) {
@@ -79,8 +81,8 @@ class LiveKitMediaManager(
                 Log.i("LiveKitManager", "Connected successfully to LiveKit SFU room: ${newRoom.name}")
                 true
             } catch (e: Exception) {
-                Log.e("LiveKitManager", "Failed to connect to LiveKit SFU: ${e.message}", e)
-                _error.emit(e.message ?: "Failed to connect to media server")
+                Log.w("LiveKitManager", "LiveKit SFU not reachable (${e.message}), cleanly falling back to WebRTC mesh")
+                disconnect()
                 false
             }
         }

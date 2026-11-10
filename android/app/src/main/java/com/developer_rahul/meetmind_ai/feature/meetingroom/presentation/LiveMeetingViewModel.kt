@@ -84,20 +84,9 @@ class LiveMeetingViewModel(
     private fun joinMeeting() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            when (val result = meetingRepository.joinMeeting(meetingId)) {
-                is NetworkResult.Error -> {
-                    val message = result.error.message ?: "Unable to join meeting"
-                    Log.e("LiveMeetingVM", "Error executing REST joinMeeting: $message")
-                    callStarted = false
-                    _uiState.update { it.copy(isLoading = false, error = message) }
-                    return@launch
-                }
-                NetworkResult.Loading -> {
-                    callStarted = false
-                    _uiState.update { it.copy(isLoading = false, error = "Unable to join meeting") }
-                    return@launch
-                }
-                is NetworkResult.Success -> Unit
+            val result = meetingRepository.joinMeeting(meetingId)
+            if (result is NetworkResult.Error) {
+                Log.w("LiveMeetingVM", "REST joinMeeting non-fatal error: ${result.error.message}, proceeding to start media call...")
             }
             meetingWebSocketManager.subscribeToAiProxySpeech(meetingId)
             try {
