@@ -417,18 +417,37 @@ public class ParticipantService {
         }
 
 
+        boolean isHost = meeting.getHost().getId().equals(currentUserId);
         MeetingParticipant participant = participantRepository
                 .findByMeetingIdAndUserId(meetingId, currentUserId)
-                .orElseGet(() -> {
-                    User current = userRepository.findById(currentUserId)
-                            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
-                    MeetingParticipant newPart = new MeetingParticipant();
-                    newPart.setMeeting(meeting);
-                    newPart.setUser(current);
-                    newPart.setRole(meeting.getHost().getId().equals(currentUserId) ? ParticipantRole.HOST : ParticipantRole.PARTICIPANT);
-                    newPart.setStatus(ParticipantStatus.ACCEPTED);
-                    return participantRepository.save(newPart);
-                });
+                .orElse(null);
+
+        if (participant != null && participant.getStatus() == ParticipantStatus.REMOVED) {
+            throw new ResponseStatusException(
+                    HttpStatus.FORBIDDEN,
+                    "You were removed from this meeting by the host"
+            );
+        }
+
+        if (meeting.isLocked() && !isHost) {
+            if (participant == null || (participant.getRole() != ParticipantRole.HOST && participant.getRole() != ParticipantRole.CO_HOST && participant.getStatus() != ParticipantStatus.JOINED)) {
+                throw new ResponseStatusException(
+                        HttpStatus.FORBIDDEN,
+                        "This meeting has been locked by the host"
+                );
+            }
+        }
+
+        if (participant == null) {
+            User current = userRepository.findById(currentUserId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+            participant = new MeetingParticipant();
+            participant.setMeeting(meeting);
+            participant.setUser(current);
+            participant.setRole(isHost ? ParticipantRole.HOST : ParticipantRole.PARTICIPANT);
+            participant.setStatus(ParticipantStatus.ACCEPTED);
+            participant = participantRepository.save(participant);
+        }
 
         participant.setStatus(
                 ParticipantStatus.JOINED
@@ -660,5 +679,61 @@ public class ParticipantService {
                     "You are not part of this meeting"
             );
         }
+    }
+
+    // =====================================================
+    // REMOVE PARTICIPANT (HOST CONTROL)
+    // =====================================================
+
+    @Transactional
+    public void removeParticipant(Long meetingId, Long targetUserId, Long hostUserId) {
+        Meeting meeting = getMeeting(meetingId);
+        boolean isHost = meeting.getHost().getId().equals(hostUserId);
+        if (!isHost) {
+            MeetingParticipant hostPart = participantRepository.findByMeetingIdAndUserId(meetingId, hostUserId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Only host or co-host can remove participants"));
+            if (hostPart.getRole() != ParticipantRole.HOST && hostPart.getRole() != ParticipantRole.CO_HOST) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only host or co-host can remove participants");
+            }
+        }
+
+        if (meeting.getHost().getId().equals(targetUserId)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot remove the meeting host");
+        }
+
+        MeetingParticipant target = participantRepository.findByMeetingIdAndUserId(meetingId, targetUserId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Participant not found"));
+
+        target.setStatus(ParticipantStatus.REMOVED);
+        target.setLeftAt(LocalDateTime.now());
+        participantRepository.save(target);
+
+        MeetingEvent event = new MeetingEvent(
+                MeetingEventType.PARTICIPANT_LEFT,
+                meetingId,
+                targetUserId,
+                target.getUser().getName(),
+                target.getUser().getName() + " was removed by host"
+        );
+        eventPublisher.publish(meetingId, event);
+    }
+
+    // =====================================================
+    // UPDATE ROLE (HOST CONTROL)
+    // =====================================================
+
+    @Transactional
+    public ParticipantResponse updateRole(Long meetingId, Long targetUserId, ParticipantRole newRole, Long hostUserId) {
+        Meeting meeting = getMeeting(meetingId);
+        if (!meeting.getHost().getId().equals(hostUserId)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the meeting host can change participant roles");
+        }
+
+        MeetingParticipant target = participantRepository.findByMeetingIdAndUserId(meetingId, targetUserId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Participant not found"));
+
+        target.setRole(newRole);
+        MeetingParticipant saved = participantRepository.save(target);
+        return new ParticipantResponse(saved);
     }
 }

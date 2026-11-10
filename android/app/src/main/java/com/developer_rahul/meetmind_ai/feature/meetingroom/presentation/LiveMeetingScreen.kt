@@ -103,6 +103,15 @@ fun LiveMeetingScreen(
         (meeting?.id?.takeIf { it > 0L } ?: meetingId.toLongOrNull())?.toString() ?: meetingId
     }
 
+    val currentUserId = meetingViewModel.currentUserId
+    val meetingFromList = uiState.meetings.find { it.id.toString() == meetingId || it.meetingCode == meetingId }
+    val effectiveMeeting = meeting ?: meetingFromList
+    val isHostByMeeting = effectiveMeeting != null && currentUserId > 0L && effectiveMeeting.hostId == currentUserId
+    val isHostByParticipants = currentUserId > 0L && uiState.participants.any { 
+        it.userId == currentUserId && it.role == ParticipantRole.HOST 
+    }
+    val isHost = isHostByMeeting || isHostByParticipants
+
     LaunchedEffect(effectiveMeetingId) {
         if (effectiveMeetingId > 0L) {
             callViewModel.updateMeetingId(effectiveMeetingId)
@@ -197,7 +206,42 @@ fun LiveMeetingScreen(
     var showInviteDialog by remember { mutableStateOf(false) }
     var showChatSheet by remember { mutableStateOf(false) }
     var showAudioDeviceSheet by remember { mutableStateOf(false) }
+    var showParticipantsSheet by remember { mutableStateOf(false) }
+    var showHostControlsSheet by remember { mutableStateOf(false) }
+    var showMuteAllConfirmDialog by remember { mutableStateOf(false) }
+    var participantToRemove by remember { mutableStateOf<Participant?>(null) }
     val sheetState = rememberModalBottomSheetState()
+
+    // Host control reaction listeners
+    val hostNotification = callState.hostNotification
+    LaunchedEffect(hostNotification) {
+        if (!hostNotification.isNullOrBlank()) {
+            Toast.makeText(context, hostNotification, Toast.LENGTH_LONG).show()
+            callViewModel.clearHostNotification()
+        }
+    }
+
+    val isMutedByHost = callState.isMutedByHost
+    LaunchedEffect(isMutedByHost) {
+        if (isMutedByHost) {
+            isMuted = true
+        }
+    }
+
+    val isVideoStoppedByHost = callState.isVideoStoppedByHost
+    LaunchedEffect(isVideoStoppedByHost) {
+        if (isVideoStoppedByHost) {
+            isVideoOff = true
+        }
+    }
+
+    val wasRemovedByHost = callState.wasRemovedByHost
+    LaunchedEffect(wasRemovedByHost) {
+        if (wasRemovedByHost) {
+            Toast.makeText(context, "You were removed from the meeting by the host.", Toast.LENGTH_LONG).show()
+            onLeaveMeeting(effectiveMeetingIdString, formattedDuration)
+        }
+    }
 
     val recordingLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -356,15 +400,6 @@ fun LiveMeetingScreen(
     }
 
     if (showLeaveDialog) {
-        val currentUserId = meetingViewModel.currentUserId
-        val meetingFromList = uiState.meetings.find { it.id.toString() == meetingId || it.meetingCode == meetingId }
-        val effectiveMeeting = meeting ?: meetingFromList
-        
-        val isHostByMeeting = effectiveMeeting != null && currentUserId > 0L && effectiveMeeting.hostId == currentUserId
-        val isHostByParticipants = currentUserId > 0L && uiState.participants.any { 
-            it.userId == currentUserId && it.role == ParticipantRole.HOST 
-        }
-        val isHost = isHostByMeeting || isHostByParticipants
         val numericMeetingId = meetingId.toLongOrNull() ?: effectiveMeeting?.id ?: effectiveMeetingId.takeIf { it > 0L }
 
         if (isHost) {
@@ -455,7 +490,12 @@ fun LiveMeetingScreen(
             MoreControlsContent(
                 isRecording = isRecording,
                 isSharing = callState.isScreenSharing,
+                isHost = isHost,
                 selectedAudioDevice = callState.selectedAudioDevice,
+                onOpenHostControls = {
+                    showMoreSheet = false
+                    showHostControlsSheet = true
+                },
                 onToggleAudioDevice = {
                     showMoreSheet = false
                     showAudioDeviceSheet = true
@@ -483,9 +523,13 @@ fun LiveMeetingScreen(
                         callViewModel.stopScreenSharing()
                         com.developer_rahul.meetmind_ai.core.media.recording.RecordingService.stopService(context)
                     } else {
-                        com.developer_rahul.meetmind_ai.core.media.recording.RecordingService.startService(context)
-                        val mediaProjectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                        screenShareLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
+                        if (!isHost && !callState.allowScreenShare) {
+                            Toast.makeText(context, "Screen sharing has been disabled by the host", Toast.LENGTH_SHORT).show()
+                        } else {
+                            com.developer_rahul.meetmind_ai.core.media.recording.RecordingService.startService(context)
+                            val mediaProjectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                            screenShareLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
+                        }
                     }
                     showMoreSheet = false
                 },
@@ -507,7 +551,7 @@ fun LiveMeetingScreen(
                 },
                 onToggleParticipants = {
                     showMoreSheet = false
-                    onToggleParticipants(effectiveMeetingIdString)
+                    showParticipantsSheet = true
                 }
             )
         }
@@ -540,6 +584,8 @@ fun LiveMeetingScreen(
         ) {
             InMeetingChatSheetContent(
                 meetingId = effectiveMeetingIdString,
+                allowChat = callState.allowChat,
+                isHost = isHost,
                 onFullScreenChat = {
                     showChatSheet = false
                     onToggleChat(effectiveMeetingIdString)
@@ -647,6 +693,86 @@ fun LiveMeetingScreen(
             listOf(localUiParticipant)
         } else {
             listOf(localUiParticipant) + remoteParticipants.map { toUiParticipant(it) }
+        }
+
+        if (showMuteAllConfirmDialog) {
+            MuteAllConfirmDialog(
+                onDismiss = { showMuteAllConfirmDialog = false },
+                onConfirm = {
+                    showMuteAllConfirmDialog = false
+                    callViewModel.muteAllParticipants()
+                    Toast.makeText(context, "Muted all participants", Toast.LENGTH_SHORT).show()
+                }
+            )
+        }
+
+        participantToRemove?.let { target ->
+            RemoveParticipantConfirmDialog(
+                participantName = target.name,
+                onDismiss = { participantToRemove = null },
+                onConfirm = {
+                    val targetId = target.id.toLongOrNull() ?: 0L
+                    participantToRemove = null
+                    if (targetId > 0L) {
+                        callViewModel.removeParticipant(targetId)
+                        Toast.makeText(context, "Removed ${target.name}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        }
+
+        if (showParticipantsSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showParticipantsSheet = false },
+                containerColor = BackgroundSurface,
+                dragHandle = { BottomSheetDefaults.DragHandle(color = TextDisabled) }
+            ) {
+                InMeetingParticipantsSheetContent(
+                    participants = allUiParticipants,
+                    currentUserId = currentUserId,
+                    isHost = isHost,
+                    onMuteAll = { showMuteAllConfirmDialog = true },
+                    onMuteParticipant = { targetId ->
+                        callViewModel.muteParticipant(targetId)
+                        Toast.makeText(context, "Muted participant microphone", Toast.LENGTH_SHORT).show()
+                    },
+                    onStopParticipantVideo = { targetId ->
+                        callViewModel.stopParticipantVideo(targetId)
+                        Toast.makeText(context, "Turned off participant camera", Toast.LENGTH_SHORT).show()
+                    },
+                    onRemoveParticipant = { target ->
+                        participantToRemove = target
+                    },
+                    onOpenHostControls = {
+                        showParticipantsSheet = false
+                        showHostControlsSheet = true
+                    }
+                )
+            }
+        }
+
+        if (showHostControlsSheet) {
+            ModalBottomSheet(
+                onDismissRequest = { showHostControlsSheet = false },
+                containerColor = BackgroundSurface,
+                dragHandle = { BottomSheetDefaults.DragHandle(color = TextDisabled) }
+            ) {
+                HostControlsSheetContent(
+                    isLocked = callState.isMeetingLocked,
+                    allowScreenShare = callState.allowScreenShare,
+                    allowChat = callState.allowChat,
+                    allowUnmute = callState.allowUnmute,
+                    onLockToggled = { locked ->
+                        callViewModel.setMeetingLocked(locked)
+                        Toast.makeText(context, if (locked) "Meeting locked" else "Meeting unlocked", Toast.LENGTH_SHORT).show()
+                    },
+                    onMuteAll = { showMuteAllConfirmDialog = true },
+                    onPermissionsUpdated = { allowScreen, allowChat, allowUnmute ->
+                        callViewModel.updateHostPermissions(allowScreen, allowChat, allowUnmute)
+                        Toast.makeText(context, "Host permissions updated", Toast.LENGTH_SHORT).show()
+                    }
+                )
+            }
         }
 
         // Central Adaptive Video Stage
@@ -939,6 +1065,9 @@ fun LiveMeetingScreen(
                 recordingDurationMs = uiState.localRecordingState.durationMs,
                 selectedAudioDevice = callState.selectedAudioDevice,
                 totalParticipants = totalParticipants,
+                isLocked = callState.isMeetingLocked,
+                isHost = isHost,
+                onOpenHostControls = if (isHost) { { showHostControlsSheet = true } } else null,
                 onCopyMeetingCode = {
                     val code = meeting?.meetingCode ?: "mm-$meetingId"
                     clipboardManager.setText(AnnotatedString(code))
@@ -947,7 +1076,7 @@ fun LiveMeetingScreen(
                 onToggleAudioDevice = { showAudioDeviceSheet = true },
                 onFlipCamera = { callViewModel.switchCamera() },
                 onOpenChat = { showChatSheet = true },
-                onOpenParticipants = { onToggleParticipants(effectiveMeetingIdString) },
+                onOpenParticipants = { showParticipantsSheet = true },
                 onStopRecording = {
                     val id = meetingId.toLongOrNull() ?: meeting?.id ?: effectiveMeetingId.takeIf { it > 0L }
                     if (id != null && id > 0L) {
@@ -1052,9 +1181,13 @@ fun LiveMeetingScreen(
                 isScreenSharing = callState.isScreenSharing,
                 selectedAudioDevice = callState.selectedAudioDevice,
                 onToggleMic = {
-                    isMuted = !isMuted
-                    callViewModel.setAudioEnabled(!isMuted)
-                    Toast.makeText(context, if (isMuted) "Microphone Muted" else "Microphone Unmuted", Toast.LENGTH_SHORT).show()
+                    if (isMuted && !isHost && !callState.allowUnmute) {
+                        Toast.makeText(context, "The host has disabled unmuting for participants", Toast.LENGTH_SHORT).show()
+                    } else {
+                        isMuted = !isMuted
+                        callViewModel.setAudioEnabled(!isMuted)
+                        Toast.makeText(context, if (isMuted) "Microphone Muted" else "Microphone Unmuted", Toast.LENGTH_SHORT).show()
+                    }
                 },
                 onToggleVideo = {
                     isVideoOff = !isVideoOff
@@ -1067,9 +1200,13 @@ fun LiveMeetingScreen(
                         com.developer_rahul.meetmind_ai.core.media.recording.RecordingService.stopService(context)
                         Toast.makeText(context, "Screen Sharing Stopped", Toast.LENGTH_SHORT).show()
                     } else {
-                        com.developer_rahul.meetmind_ai.core.media.recording.RecordingService.startService(context)
-                        val mediaProjectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                        screenShareLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
+                        if (!isHost && !callState.allowScreenShare) {
+                            Toast.makeText(context, "Screen sharing has been disabled by the host", Toast.LENGTH_SHORT).show()
+                        } else {
+                            com.developer_rahul.meetmind_ai.core.media.recording.RecordingService.startService(context)
+                            val mediaProjectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                            screenShareLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
+                        }
                     }
                 },
                 onToggleAudioDevice = { showAudioDeviceSheet = true },
@@ -1176,7 +1313,9 @@ fun AudioDeviceSelectorSheet(
 fun MoreControlsContent(
     isRecording: Boolean,
     isSharing: Boolean,
+    isHost: Boolean = false,
     selectedAudioDevice: String = "Speaker",
+    onOpenHostControls: () -> Unit = {},
     onToggleAudioDevice: () -> Unit = {},
     onToggleRecording: () -> Unit,
     onInvitePeople: () -> Unit,
@@ -1195,6 +1334,15 @@ fun MoreControlsContent(
     ) {
         Text("Meeting Controls", style = Typography.headlineSmall, color = TextPrimary, fontWeight = FontWeight.Bold)
         Spacer(modifier = Modifier.height(20.dp))
+
+        if (isHost) {
+            ControlItem(
+                icon = Icons.Default.AdminPanelSettings,
+                title = "Host Controls",
+                color = Color(0xFFF59E0B),
+                onClick = onOpenHostControls
+            )
+        }
         
         ControlItem(
             icon = Icons.AutoMirrored.Filled.Chat,
@@ -1401,6 +1549,9 @@ fun TopMeetingBar(
     recordingDurationMs: Long,
     selectedAudioDevice: String,
     totalParticipants: Int,
+    isLocked: Boolean = false,
+    isHost: Boolean = false,
+    onOpenHostControls: (() -> Unit)? = null,
     onCopyMeetingCode: () -> Unit,
     onToggleAudioDevice: () -> Unit,
     onFlipCamera: () -> Unit,
@@ -1464,6 +1615,24 @@ fun TopMeetingBar(
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Icon(Icons.Default.ContentCopy, null, tint = NeonCyan, modifier = Modifier.size(12.dp))
+                    }
+                }
+
+                if (isLocked) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color(0xFFF59E0B).copy(alpha = 0.2f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.Lock, contentDescription = "Locked", tint = Color(0xFFF59E0B), modifier = Modifier.size(10.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
+                            Text("Locked", style = Typography.labelSmall, color = Color(0xFFF59E0B), fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
@@ -1555,6 +1724,19 @@ fun TopMeetingBar(
                         .bounceClick()
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat", tint = Color.White, modifier = Modifier.size(16.dp))
+                }
+
+                if (isHost && onOpenHostControls != null) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    IconButton(
+                        onClick = onOpenHostControls,
+                        modifier = Modifier
+                            .size(34.dp)
+                            .background(Color(0xFFF59E0B).copy(alpha = 0.15f), CircleShape)
+                            .bounceClick()
+                    ) {
+                        Icon(Icons.Default.AdminPanelSettings, contentDescription = "Host Controls", tint = Color(0xFFF59E0B), modifier = Modifier.size(17.dp))
+                    }
                 }
 
                 Spacer(modifier = Modifier.width(6.dp))
@@ -2258,6 +2440,8 @@ fun AvatarPlaceholder(name: String, isActiveSpeaker: Boolean = false, sizeDp: In
 fun InMeetingChatSheetContent(
     meetingId: String,
     onFullScreenChat: () -> Unit,
+    allowChat: Boolean = true,
+    isHost: Boolean = false,
     chatViewModel: ChatViewModel = viewModel(
         key = "InMeetingChat_$meetingId",
         factory = provideChatViewModelFactory(meetingId.toLongOrNull() ?: -1L)
@@ -2339,14 +2523,21 @@ fun InMeetingChatSheetContent(
 
         Spacer(Modifier.height(12.dp))
 
+        val isChatDisabled = !isHost && !allowChat
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedTextField(
-                value = uiState.pendingMessage,
-                onValueChange = chatViewModel::onMessageChange,
-                placeholder = { Text("Send message to everyone...", color = TextDisabled) },
+                value = if (isChatDisabled) "" else uiState.pendingMessage,
+                onValueChange = { if (!isChatDisabled) chatViewModel.onMessageChange(it) },
+                enabled = !isChatDisabled,
+                placeholder = {
+                    Text(
+                        if (isChatDisabled) "Chat is disabled by the host" else "Send message to everyone...",
+                        color = if (isChatDisabled) RoseRed else TextDisabled
+                    )
+                },
                 singleLine = true,
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(16.dp),
@@ -2354,15 +2545,17 @@ fun InMeetingChatSheetContent(
                     focusedBorderColor = NeonCyan,
                     unfocusedBorderColor = BorderColor,
                     focusedContainerColor = CardSurface,
-                    unfocusedContainerColor = CardSurface
+                    unfocusedContainerColor = CardSurface,
+                    disabledContainerColor = CardSurface.copy(alpha = 0.5f),
+                    disabledBorderColor = RoseRed.copy(alpha = 0.3f)
                 )
             )
             Spacer(modifier = Modifier.width(10.dp))
             Surface(
                 onClick = chatViewModel::sendMessage,
-                enabled = uiState.pendingMessage.isNotBlank(),
+                enabled = !isChatDisabled && uiState.pendingMessage.isNotBlank(),
                 shape = CircleShape,
-                color = if (uiState.pendingMessage.isNotBlank()) NeonCyan else GlassWhite,
+                color = if (!isChatDisabled && uiState.pendingMessage.isNotBlank()) NeonCyan else GlassWhite,
                 modifier = Modifier
                     .size(48.dp)
                     .bounceClick()
@@ -2371,9 +2564,521 @@ fun InMeetingChatSheetContent(
                     Icon(
                         Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Send",
-                        tint = if (uiState.pendingMessage.isNotBlank()) Color.Black else TextDisabled,
+                        tint = if (!isChatDisabled && uiState.pendingMessage.isNotBlank()) Color.Black else TextDisabled,
                         modifier = Modifier.size(20.dp)
                     )
+                }
+            }
+        }
+    }
+}
+
+// =========================================================================
+// HOST CONTROL DIALOGS & BOTTOM SHEETS
+// =========================================================================
+
+@Composable
+fun MuteAllConfirmDialog(
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Mute Everyone?", style = Typography.titleLarge, color = TextPrimary, fontWeight = FontWeight.Bold) },
+        text = {
+            Text(
+                "This will mute microphones for all participants in the meeting room.",
+                style = Typography.bodyMedium,
+                color = TextSecondary
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = RoseRed)
+            ) {
+                Text("Mute all", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextSecondary)
+            }
+        },
+        containerColor = BackgroundSurface
+    )
+}
+
+@Composable
+fun RemoveParticipantConfirmDialog(
+    participantName: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Remove Participant?", style = Typography.titleLarge, color = TextPrimary, fontWeight = FontWeight.Bold) },
+        text = {
+            Text(
+                "Are you sure you want to remove $participantName from this meeting? They will be disconnected immediately.",
+                style = Typography.bodyMedium,
+                color = TextSecondary
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onConfirm,
+                colors = ButtonDefaults.buttonColors(containerColor = RoseRed)
+            ) {
+                Text("Remove", color = Color.White, fontWeight = FontWeight.Bold)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel", color = TextSecondary)
+            }
+        },
+        containerColor = BackgroundSurface
+    )
+}
+
+@Composable
+fun HostControlsSheetContent(
+    isLocked: Boolean,
+    allowScreenShare: Boolean,
+    allowChat: Boolean,
+    allowUnmute: Boolean,
+    onLockToggled: (Boolean) -> Unit,
+    onMuteAll: () -> Unit,
+    onPermissionsUpdated: (Boolean, Boolean, Boolean) -> Unit
+) {
+    var screenShareState by remember(allowScreenShare) { mutableStateOf(allowScreenShare) }
+    var chatState by remember(allowChat) { mutableStateOf(allowChat) }
+    var unmuteState by remember(allowUnmute) { mutableStateOf(allowUnmute) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .navigationBarsPadding()
+    ) {
+        // Header
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color(0xFFF59E0B).copy(alpha = 0.15f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.AdminPanelSettings,
+                    contentDescription = null,
+                    tint = Color(0xFFF59E0B),
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    "Host Controls",
+                    style = Typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+                Text(
+                    "Manage meeting security and permissions",
+                    style = Typography.bodySmall,
+                    color = TextSecondary
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // Quick Action: Mute All
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF161B22),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        "Mute all participants",
+                        style = Typography.bodyMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        "Mute microphones for everyone in the room",
+                        style = Typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                Button(
+                    onClick = onMuteAll,
+                    colors = ButtonDefaults.buttonColors(containerColor = RoseRed.copy(alpha = 0.9f)),
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                ) {
+                    Icon(Icons.Default.MicOff, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Mute all", color = Color.White, style = Typography.labelMedium, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Meeting Security: Lock Meeting
+        Text(
+            "Meeting Security",
+            style = Typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = TextSecondary,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+        )
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF161B22),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = if (isLocked) Color(0xFFF59E0B) else TextSecondary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            "Lock meeting",
+                            style = Typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                        Text(
+                            if (isLocked) "Meeting locked. No new participants can join." else "When locked, new participants cannot join.",
+                            style = Typography.bodySmall,
+                            color = if (isLocked) Color(0xFFF59E0B) else TextSecondary
+                        )
+                    }
+                }
+                Switch(
+                    checked = isLocked,
+                    onCheckedChange = onLockToggled,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = Color(0xFFF59E0B)
+                    )
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Participant Permissions
+        Text(
+            "Let participants:",
+            style = Typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = TextSecondary,
+            modifier = Modifier.padding(start = 4.dp, bottom = 8.dp)
+        )
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF161B22),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(vertical = 4.dp)) {
+                // Share Screen
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.PresentToAll, null, tint = TextPrimary, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Share their screen", style = Typography.bodyMedium, color = TextPrimary)
+                    }
+                    Switch(
+                        checked = screenShareState,
+                        onCheckedChange = {
+                            screenShareState = it
+                            onPermissionsUpdated(screenShareState, chatState, unmuteState)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ElectricIndigo
+                        )
+                    )
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.06f), thickness = 0.5.dp)
+
+                // Send Chat Messages
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.AutoMirrored.Filled.Chat, null, tint = TextPrimary, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Send in-meeting chat messages", style = Typography.bodyMedium, color = TextPrimary)
+                    }
+                    Switch(
+                        checked = chatState,
+                        onCheckedChange = {
+                            chatState = it
+                            onPermissionsUpdated(screenShareState, chatState, unmuteState)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ElectricIndigo
+                        )
+                    )
+                }
+
+                HorizontalDivider(color = Color.White.copy(alpha = 0.06f), thickness = 0.5.dp)
+
+                // Turn on Microphone
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(modifier = Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Mic, null, tint = TextPrimary, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text("Turn on their microphone", style = Typography.bodyMedium, color = TextPrimary)
+                    }
+                    Switch(
+                        checked = unmuteState,
+                        onCheckedChange = {
+                            unmuteState = it
+                            onPermissionsUpdated(screenShareState, chatState, unmuteState)
+                        },
+                        colors = SwitchDefaults.colors(
+                            checkedThumbColor = Color.White,
+                            checkedTrackColor = ElectricIndigo
+                        )
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+fun InMeetingParticipantsSheetContent(
+    participants: List<Participant>,
+    currentUserId: Long,
+    isHost: Boolean,
+    onMuteAll: () -> Unit,
+    onMuteParticipant: (Long) -> Unit,
+    onStopParticipantVideo: (Long) -> Unit,
+    onRemoveParticipant: (Participant) -> Unit,
+    onOpenHostControls: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(0.75f)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .navigationBarsPadding()
+    ) {
+        // Top Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(ElectricIndigo.copy(alpha = 0.2f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.People, null, tint = ElectricIndigo, modifier = Modifier.size(20.dp))
+                }
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text("Participants (${participants.size})", style = Typography.titleLarge, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Text("In this meeting", style = Typography.labelSmall, color = TextSecondary)
+                }
+            }
+
+            if (isHost) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onOpenHostControls) {
+                        Icon(Icons.Default.AdminPanelSettings, "Host Controls", tint = Color(0xFFF59E0B))
+                    }
+                    TextButton(onClick = onMuteAll) {
+                        Icon(Icons.Default.MicOff, null, tint = RoseRed, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Mute all", color = RoseRed, style = Typography.labelMedium, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        LazyColumn(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(participants, key = { it.id }) { participant ->
+                val targetUserId = participant.id.toLongOrNull() ?: 0L
+                val isMe = (currentUserId > 0L && targetUserId == currentUserId) || participant.name.contains("(You)")
+                var menuExpanded by remember { mutableStateOf(false) }
+
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFF161B22),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.06f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Avatar
+                        AvatarPlaceholder(name = participant.name, isActiveSpeaker = participant.isActiveSpeaker, sizeDp = 40)
+                        Spacer(Modifier.width(12.dp))
+
+                        // Name & Role
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    participant.name,
+                                    style = Typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = TextPrimary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (isMe) {
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        "(You)",
+                                        style = Typography.labelSmall,
+                                        color = NeonCyan,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                            if (participant.isHost) {
+                                Text(
+                                    "Meeting Host",
+                                    style = Typography.labelSmall,
+                                    color = Color(0xFFF59E0B),
+                                    fontWeight = FontWeight.Medium
+                                )
+                            } else if (participant.isAiRep) {
+                                Text(
+                                    "AI Representative",
+                                    style = Typography.labelSmall,
+                                    color = NeonCyan,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        // Media Status Icons
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                if (participant.isMicOn) Icons.Default.Mic else Icons.Default.MicOff,
+                                contentDescription = if (participant.isMicOn) "Mic on" else "Mic muted",
+                                tint = if (participant.isMicOn) EmeraldGreen else RoseRed,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Icon(
+                                if (participant.isVideoOn) Icons.Default.Videocam else Icons.Default.VideocamOff,
+                                contentDescription = if (participant.isVideoOn) "Camera on" else "Camera off",
+                                tint = if (participant.isVideoOn) Color.White else TextSecondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+
+                            // Host Actions Menu
+                            if (isHost && !isMe && !participant.isHost && !participant.isAiRep) {
+                                Spacer(Modifier.width(6.dp))
+                                Box {
+                                    IconButton(
+                                        onClick = { menuExpanded = true },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Default.MoreVert, "Actions", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                                    }
+                                    DropdownMenu(
+                                        expanded = menuExpanded,
+                                        onDismissRequest = { menuExpanded = false },
+                                        modifier = Modifier.background(Color(0xFF1F242C))
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Mute microphone", color = TextPrimary) },
+                                            leadingIcon = { Icon(Icons.Default.MicOff, null, tint = TextPrimary) },
+                                            onClick = {
+                                                menuExpanded = false
+                                                onMuteParticipant(targetUserId)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Turn off camera", color = TextPrimary) },
+                                            leadingIcon = { Icon(Icons.Default.VideocamOff, null, tint = TextPrimary) },
+                                            onClick = {
+                                                menuExpanded = false
+                                                onStopParticipantVideo(targetUserId)
+                                            }
+                                        )
+                                        HorizontalDivider(color = Color.White.copy(alpha = 0.1f))
+                                        DropdownMenuItem(
+                                            text = { Text("Remove from meeting", color = RoseRed, fontWeight = FontWeight.Bold) },
+                                            leadingIcon = { Icon(Icons.Default.PersonRemove, null, tint = RoseRed) },
+                                            onClick = {
+                                                menuExpanded = false
+                                                onRemoveParticipant(participant)
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

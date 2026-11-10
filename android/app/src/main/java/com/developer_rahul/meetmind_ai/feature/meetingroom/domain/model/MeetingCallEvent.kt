@@ -39,4 +39,15 @@ sealed interface MeetingCallEvent {
     data class ScreenShareStopped(val userId: Long) : MeetingCallEvent
 
     data class Error(val message: String) : MeetingCallEvent
+
+    // Host Control Events
+    data class HostMuted(val targetUserId: Long, val isMuteAll: Boolean) : MeetingCallEvent
+    data class HostVideoStopped(val targetUserId: Long) : MeetingCallEvent
+    data class HostRemoved(val targetUserId: Long) : MeetingCallEvent
+    data class HostLockChanged(val isLocked: Boolean) : MeetingCallEvent
+    data class HostPermissionsUpdated(
+        val allowScreenShare: Boolean,
+        val allowChat: Boolean,
+        val allowUnmute: Boolean
+    ) : MeetingCallEvent
 }

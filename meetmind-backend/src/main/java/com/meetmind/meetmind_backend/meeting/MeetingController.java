@@ -222,4 +222,18 @@ public class MeetingController {
                 meetingService.getMediaToken(meetingId, currentUser.getId());
         return ResponseEntity.ok(response);
     }
+
+    // ==========================================
+    // LOCK / UNLOCK MEETING (HOST CONTROL)
+    // ==========================================
+    @PatchMapping("/{meetingId}/lock")
+    public ResponseEntity<MeetingResponse> lockMeeting(
+            @PathVariable Long meetingId,
+            @RequestParam(defaultValue = "true") boolean locked,
+            Authentication authentication
+    ) {
+        User currentUser = SecurityUtils.extractUser(authentication);
+        MeetingResponse response = meetingService.setMeetingLocked(meetingId, locked, currentUser.getId());
+        return ResponseEntity.ok(response);
+    }
 }

@@ -13,6 +13,7 @@ data class Meeting(
     val createdAt: String,
     val status: MeetingStatus,
     val meetingCode: String? = null,
+    val isLocked: Boolean = false,
     val hasJoinedBefore: Boolean = false,
     val userParticipantStatus: String? = null
 )

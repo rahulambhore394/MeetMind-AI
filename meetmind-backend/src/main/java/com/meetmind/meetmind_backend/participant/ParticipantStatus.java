@@ -8,5 +8,6 @@ public enum ParticipantStatus {
     ACCEPTED,
     DECLINED,
     JOINED,
-    LEFT
+    LEFT,
+    REMOVED
 }

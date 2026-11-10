@@ -110,6 +110,55 @@ public class SignalingWebSocketController {
                 messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/signaling", message);
             }
 
+        } else if (message.getType() != null && message.getType().toUpperCase().startsWith("HOST_")) {
+            // Verify host authorization
+            if (!signalingService.isHostOrCoHost(meetingId, user.getId())) {
+                log.warn("Unauthorized host command attempt '{}': user {} is not host in meeting {}",
+                        message.getType(), user.getId(), meetingId);
+                return;
+            }
+
+            log.info("Host command '{}' received from host {} for meeting {}, payload={}",
+                    message.getType(), user.getId(), meetingId, message.getPayload());
+
+            // If it's HOST_REMOVE, evict target user presence from signaling state
+            if ("HOST_REMOVE".equalsIgnoreCase(message.getType())) {
+                try {
+                    Long targetId = Long.parseLong(message.getPayload().trim());
+                    signalingService.evictUserPresence(meetingId, targetId);
+                    User targetUser = userRepository.findById(targetId).orElse(null);
+                    if (targetUser != null) {
+                        messagingTemplate.convertAndSendToUser(
+                                targetUser.getEmail(),
+                                "/queue/meetings/" + meetingId + "/signaling",
+                                message
+                        );
+                    }
+                } catch (Exception e) {
+                    log.warn("Error processing HOST_REMOVE for payload {}: {}", message.getPayload(), e.getMessage());
+                }
+            } else if ("HOST_MUTE".equalsIgnoreCase(message.getType()) || "HOST_STOP_VIDEO".equalsIgnoreCase(message.getType())) {
+                try {
+                    String payload = message.getPayload() != null ? message.getPayload().trim() : "";
+                    if (!payload.equalsIgnoreCase("ALL")) {
+                        Long targetId = Long.parseLong(payload);
+                        User targetUser = userRepository.findById(targetId).orElse(null);
+                        if (targetUser != null) {
+                            messagingTemplate.convertAndSendToUser(
+                                    targetUser.getEmail(),
+                                    "/queue/meetings/" + meetingId + "/signaling",
+                                    message
+                            );
+                        }
+                    }
+                } catch (Exception e) {
+                    log.debug("Target-specific host command delivery error: {}", e.getMessage());
+                }
+            }
+
+            // Always broadcast host commands room-wide over /topic
+            messagingTemplate.convertAndSend("/topic/meetings/" + meetingId + "/signaling", message);
+
         } else if (message.getReceiverId() != null) {
             // Direct message (OFFER, ANSWER, ICE_CANDIDATE)
             signalingService.validateParticipant(meetingId, message.getReceiverId());

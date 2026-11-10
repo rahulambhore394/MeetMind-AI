@@ -177,4 +177,31 @@ class RealMeetingRepository(
             NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
         }
     }
+
+    override suspend fun lockMeeting(meetingId: Long, locked: Boolean): NetworkResult<Meeting> {
+        return try {
+            val response = meetingApiService.lockMeeting(meetingId, locked)
+            NetworkResult.Success(response.toDomain())
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun removeParticipant(meetingId: Long, userId: Long): NetworkResult<Unit> {
+        return try {
+            meetingApiService.removeParticipant(meetingId, userId)
+            NetworkResult.Success(Unit)
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun updateParticipantRole(meetingId: Long, userId: Long, role: String): NetworkResult<Participant> {
+        return try {
+            val response = meetingApiService.updateParticipantRole(meetingId, userId, role)
+            NetworkResult.Success(response.toDomain())
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
 }

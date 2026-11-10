@@ -267,4 +267,35 @@ public class ParticipantController {
                 )
         );
     }
+
+    // =====================================================
+    // REMOVE PARTICIPANT (HOST CONTROL)
+    // =====================================================
+
+    @DeleteMapping("/{userId}")
+    public ResponseEntity<Void> removeParticipant(
+            @PathVariable Long meetingId,
+            @PathVariable Long userId,
+            Authentication authentication
+    ) {
+        User currentUser = SecurityUtils.extractUser(authentication);
+        participantService.removeParticipant(meetingId, userId, currentUser.getId());
+        return ResponseEntity.noContent().build();
+    }
+
+    // =====================================================
+    // UPDATE ROLE (HOST CONTROL)
+    // =====================================================
+
+    @PatchMapping("/{userId}/role")
+    public ResponseEntity<ParticipantResponse> updateParticipantRole(
+            @PathVariable Long meetingId,
+            @PathVariable Long userId,
+            @RequestParam ParticipantRole role,
+            Authentication authentication
+    ) {
+        User currentUser = SecurityUtils.extractUser(authentication);
+        ParticipantResponse response = participantService.updateRole(meetingId, userId, role, currentUser.getId());
+        return ResponseEntity.ok(response);
+    }
 }

@@ -22,6 +22,7 @@ public class MeetingResponse implements java.io.Serializable {
     private LocalDateTime startedAt;
     private LocalDateTime endedAt;
     private LocalDateTime createdAt;
+    private Boolean isLocked = false;
     private Boolean hasJoinedBefore = false;
     private String userParticipantStatus;
 
@@ -44,8 +45,13 @@ public class MeetingResponse implements java.io.Serializable {
         this.endedAt = meeting.getEndedAt();
         this.createdAt = meeting.getCreatedAt();
         this.status = meeting.getStatus().name();
+        this.isLocked = meeting.isLocked();
         this.hasJoinedBefore = hasJoinedBefore != null ? hasJoinedBefore : false;
         this.userParticipantStatus = userParticipantStatus;
+    }
+
+    public Boolean getIsLocked() {
+        return isLocked;
     }
 
     public Boolean getHasJoinedBefore() {

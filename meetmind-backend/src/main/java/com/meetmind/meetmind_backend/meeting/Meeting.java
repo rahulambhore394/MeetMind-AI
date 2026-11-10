@@ -43,8 +43,19 @@ public class Meeting {
     @Column(name = "empty_since")
     private LocalDateTime emptySince;
 
+    @Column(name = "is_locked", nullable = false)
+    private boolean isLocked = false;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
+
+    public boolean isLocked() {
+        return isLocked;
+    }
+
+    public void setLocked(boolean locked) {
+        isLocked = locked;
+    }
 
     public LocalDateTime getEmptySince() {
         return emptySince;

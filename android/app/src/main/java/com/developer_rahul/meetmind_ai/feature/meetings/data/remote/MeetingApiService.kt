@@ -61,4 +61,23 @@ interface MeetingApiService {
 
     @POST("api/meetings/{meetingId}/media-token")
     suspend fun getMediaToken(@Path("meetingId") meetingId: Long): com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.MediaTokenResponseDto
+
+    @PATCH("api/meetings/{meetingId}/lock")
+    suspend fun lockMeeting(
+        @Path("meetingId") meetingId: Long,
+        @Query("locked") locked: Boolean
+    ): MeetingResponseDto
+
+    @DELETE("api/meetings/{meetingId}/participants/{userId}")
+    suspend fun removeParticipant(
+        @Path("meetingId") meetingId: Long,
+        @Path("userId") userId: Long
+    )
+
+    @PATCH("api/meetings/{meetingId}/participants/{userId}/role")
+    suspend fun updateParticipantRole(
+        @Path("meetingId") meetingId: Long,
+        @Path("userId") userId: Long,
+        @Query("role") role: String
+    ): ParticipantResponseDto
 }

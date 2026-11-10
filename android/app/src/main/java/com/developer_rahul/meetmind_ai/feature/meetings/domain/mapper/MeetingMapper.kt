@@ -22,6 +22,7 @@ fun MeetingResponseDto.toDomain(): Meeting {
             MeetingStatus.UNKNOWN
         },
         meetingCode = meetingCode,
+        isLocked = isLocked ?: false,
         hasJoinedBefore = hasJoinedBefore ?: false,
         userParticipantStatus = userParticipantStatus
     )

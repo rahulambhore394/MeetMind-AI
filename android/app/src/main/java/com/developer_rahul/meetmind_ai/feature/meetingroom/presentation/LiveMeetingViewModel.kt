@@ -141,7 +141,7 @@ class LiveMeetingViewModel(
                 }
             }
             is MeetingCallEvent.RemoteStreamRemoved -> {
-                removeParticipant(event.userId)
+                removeParticipantFromMap(event.userId)
             }
             is MeetingCallEvent.MediaStateChanged -> {
                 updateParticipantState(event.userId) {
@@ -176,6 +176,48 @@ class LiveMeetingViewModel(
             is MeetingCallEvent.Error -> {
                 _uiState.update { it.copy(error = event.message) }
             }
+            is MeetingCallEvent.HostMuted -> {
+                _uiState.update {
+                    it.copy(
+                        isMutedByHost = true,
+                        hostNotification = if (event.isMuteAll) "The host muted everyone's microphone" else "The host muted your microphone"
+                    )
+                }
+            }
+            is MeetingCallEvent.HostVideoStopped -> {
+                _uiState.update {
+                    it.copy(
+                        isVideoStoppedByHost = true,
+                        hostNotification = "The host turned off your camera"
+                    )
+                }
+            }
+            is MeetingCallEvent.HostRemoved -> {
+                _uiState.update {
+                    it.copy(
+                        wasRemovedByHost = true,
+                        hostNotification = "You were removed from the meeting by the host"
+                    )
+                }
+                leaveMeeting()
+            }
+            is MeetingCallEvent.HostLockChanged -> {
+                _uiState.update {
+                    it.copy(
+                        isMeetingLocked = event.isLocked,
+                        hostNotification = if (event.isLocked) "Meeting locked by host" else "Meeting unlocked by host"
+                    )
+                }
+            }
+            is MeetingCallEvent.HostPermissionsUpdated -> {
+                _uiState.update {
+                    it.copy(
+                        allowScreenShare = event.allowScreenShare,
+                        allowChat = event.allowChat,
+                        allowUnmute = event.allowUnmute
+                    )
+                }
+            }
         }
     }
 
@@ -188,12 +230,63 @@ class LiveMeetingViewModel(
         }
     }
 
-    private fun removeParticipant(userId: Long) {
+    private fun removeParticipantFromMap(userId: Long) {
         _uiState.update { state ->
             val updatedParticipants = state.participants.toMutableMap()
             updatedParticipants.remove(userId)
             state.copy(participants = updatedParticipants)
         }
+    }
+
+    fun muteParticipant(userId: Long) {
+        meetingCallRepository.sendHostMute(userId)
+    }
+
+    fun muteAllParticipants() {
+        meetingCallRepository.sendHostMuteAll()
+    }
+
+    fun stopParticipantVideo(userId: Long) {
+        meetingCallRepository.sendHostStopVideo(userId)
+    }
+
+    fun removeParticipant(userId: Long) {
+        viewModelScope.launch {
+            try {
+                meetingRepository.removeParticipant(activeMeetingId, userId)
+            } catch (e: Exception) {
+                Log.e("LiveMeetingVM", "Error executing REST removeParticipant: ${e.message}")
+            }
+            meetingCallRepository.sendHostRemove(userId)
+            removeParticipantFromMap(userId)
+        }
+    }
+
+    fun setMeetingLocked(locked: Boolean) {
+        viewModelScope.launch {
+            try {
+                meetingRepository.lockMeeting(activeMeetingId, locked)
+            } catch (e: Exception) {
+                Log.e("LiveMeetingVM", "Error executing REST lockMeeting: ${e.message}")
+            }
+            meetingCallRepository.sendHostLock(locked)
+            _uiState.update { it.copy(isMeetingLocked = locked) }
+        }
+    }
+
+    fun updateHostPermissions(allowScreenShare: Boolean, allowChat: Boolean, allowUnmute: Boolean) {
+        meetingCallRepository.sendHostPermissions(allowScreenShare, allowChat, allowUnmute)
+        _uiState.update {
+            it.copy(
+                allowScreenShare = allowScreenShare,
+                allowChat = allowChat,
+                allowUnmute = allowUnmute
+            )
+        }
+    }
+
+    fun clearHostNotification() {
+        _uiState.update { it.copy(hostNotification = null) }
     }
 
     fun setAudioEnabled(enabled: Boolean) {
@@ -265,5 +358,13 @@ data class LiveMeetingUiState(
     val isScreenSharing: Boolean = false,
     val error: String? = null,
     val activeAiSpeech: AiProxySpeechDto? = null,
-    val selectedAudioDevice: String = "Speaker"
+    val selectedAudioDevice: String = "Speaker",
+    val isMeetingLocked: Boolean = false,
+    val allowScreenShare: Boolean = true,
+    val allowChat: Boolean = true,
+    val allowUnmute: Boolean = true,
+    val isMutedByHost: Boolean = false,
+    val isVideoStoppedByHost: Boolean = false,
+    val wasRemovedByHost: Boolean = false,
+    val hostNotification: String? = null
 )

@@ -51,8 +51,24 @@ public class SignalingService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Meeting is not live");
         }
 
-        boolean isAuthorized = meeting.getHost().getId().equals(userId) ||
-                participantRepository.existsByMeetingIdAndUserId(meetingId, userId);
+        boolean isHost = meeting.getHost().getId().equals(userId);
+        java.util.Optional<com.meetmind.meetmind_backend.participant.MeetingParticipant> existingPart =
+                participantRepository.findByMeetingIdAndUserId(meetingId, userId);
+
+        if (existingPart.isPresent() && existingPart.get().getStatus() == com.meetmind.meetmind_backend.participant.ParticipantStatus.REMOVED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You have been removed from this meeting by the host");
+        }
+
+        if (meeting.isLocked() && !isHost) {
+            if (existingPart.isEmpty() ||
+                (existingPart.get().getRole() != com.meetmind.meetmind_backend.participant.ParticipantRole.HOST &&
+                 existingPart.get().getRole() != com.meetmind.meetmind_backend.participant.ParticipantRole.CO_HOST &&
+                 existingPart.get().getStatus() != com.meetmind.meetmind_backend.participant.ParticipantStatus.JOINED)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "This meeting has been locked by the host");
+            }
+        }
+
+        boolean isAuthorized = isHost || existingPart.isPresent();
 
         if (!isAuthorized) {
             userRepository.findById(userId).ifPresent(user -> {
@@ -65,6 +81,38 @@ public class SignalingService {
                 newPart.setJoinedAt(java.time.LocalDateTime.now());
                 participantRepository.save(newPart);
             });
+        }
+    }
+
+    public boolean isHostOrCoHost(Long meetingId, Long userId) {
+        Meeting meeting = meetingRepository.findById(meetingId).orElse(null);
+        if (meeting == null) return false;
+        if (meeting.getHost() != null && meeting.getHost().getId().equals(userId)) {
+            return true;
+        }
+        return participantRepository.findByMeetingIdAndUserId(meetingId, userId)
+                .map(p -> p.getRole() == com.meetmind.meetmind_backend.participant.ParticipantRole.HOST ||
+                          p.getRole() == com.meetmind.meetmind_backend.participant.ParticipantRole.CO_HOST)
+                .orElse(false);
+    }
+
+    public void evictUserPresence(Long meetingId, Long userId) {
+        Map<Long, Set<String>> localMeetingPresence = memoryPresence.get(meetingId);
+        if (localMeetingPresence != null) {
+            localMeetingPresence.remove(userId);
+        }
+        try {
+            String presenceKey = "meeting:signaling:presence:" + meetingId;
+            Set<String> members = redisTemplate.opsForSet().members(presenceKey);
+            if (members != null) {
+                for (String member : members) {
+                    if (member.startsWith(userId + ":")) {
+                        redisTemplate.opsForSet().remove(presenceKey, member);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("Redis error on evictUserPresence for user {} in meeting {}: {}", userId, meetingId, e.getMessage());
         }
     }
 

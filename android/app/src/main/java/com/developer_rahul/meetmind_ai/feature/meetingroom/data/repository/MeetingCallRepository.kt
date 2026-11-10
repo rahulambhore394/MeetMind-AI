@@ -429,6 +429,61 @@ class MeetingCallRepository(
             "LEAVE" -> {
                 removePeerConnection(peerId)
             }
+            "HOST_MUTE" -> {
+                val payload = message.payload ?: ""
+                val isAll = payload.equals("ALL", ignoreCase = true)
+                val targetId = payload.toLongOrNull() ?: 0L
+                if (isAll || targetId == myUserId) {
+                    setAudioEnabled(false)
+                }
+                scope.launch {
+                    _events.emit(MeetingCallEvent.HostMuted(targetUserId = if (isAll) 0L else targetId, isMuteAll = isAll))
+                }
+            }
+            "HOST_STOP_VIDEO" -> {
+                val targetId = message.payload?.toLongOrNull() ?: 0L
+                if (targetId == myUserId) {
+                    setVideoEnabled(false)
+                }
+                scope.launch {
+                    _events.emit(MeetingCallEvent.HostVideoStopped(targetUserId = targetId))
+                }
+            }
+            "HOST_REMOVE" -> {
+                val targetId = message.payload?.toLongOrNull() ?: 0L
+                if (targetId == myUserId) {
+                    scope.launch {
+                        _events.emit(MeetingCallEvent.HostRemoved(targetUserId = targetId))
+                    }
+                } else {
+                    removePeerConnection(targetId)
+                    scope.launch {
+                        _events.emit(MeetingCallEvent.RemoteStreamRemoved(targetId))
+                    }
+                }
+            }
+            "HOST_LOCK" -> {
+                val isLocked = message.payload?.toBooleanStrictOrNull() ?: true
+                scope.launch {
+                    _events.emit(MeetingCallEvent.HostLockChanged(isLocked))
+                }
+            }
+            "HOST_PERMISSIONS" -> {
+                val raw = message.payload ?: ""
+                val map = raw.split(",").associate {
+                    val p = it.split(":")
+                    p[0].trim() to (p.getOrNull(1)?.trim()?.toBooleanStrictOrNull() ?: true)
+                }
+                scope.launch {
+                    _events.emit(
+                        MeetingCallEvent.HostPermissionsUpdated(
+                            allowScreenShare = map["allowScreenShare"] ?: true,
+                            allowChat = map["allowChat"] ?: true,
+                            allowUnmute = map["allowUnmute"] ?: true
+                        )
+                    )
+                }
+            }
         }
     }
 
@@ -951,5 +1006,36 @@ class MeetingCallRepository(
         if (payload.isNotEmpty()) {
             webSocketManager.sendSignalingMessage(meetingId, "MEDIA_UPDATE", payload)
         }
+    }
+
+    fun sendHostMute(targetUserId: Long) {
+        val meetingId = currentMeetingId ?: return
+        webSocketManager.sendSignalingMessage(meetingId, "HOST_MUTE", targetUserId.toString(), targetUserId)
+    }
+
+    fun sendHostMuteAll() {
+        val meetingId = currentMeetingId ?: return
+        webSocketManager.sendSignalingMessage(meetingId, "HOST_MUTE", "ALL")
+    }
+
+    fun sendHostStopVideo(targetUserId: Long) {
+        val meetingId = currentMeetingId ?: return
+        webSocketManager.sendSignalingMessage(meetingId, "HOST_STOP_VIDEO", targetUserId.toString(), targetUserId)
+    }
+
+    fun sendHostRemove(targetUserId: Long) {
+        val meetingId = currentMeetingId ?: return
+        webSocketManager.sendSignalingMessage(meetingId, "HOST_REMOVE", targetUserId.toString(), targetUserId)
+    }
+
+    fun sendHostLock(locked: Boolean) {
+        val meetingId = currentMeetingId ?: return
+        webSocketManager.sendSignalingMessage(meetingId, "HOST_LOCK", locked.toString())
+    }
+
+    fun sendHostPermissions(allowScreenShare: Boolean, allowChat: Boolean, allowUnmute: Boolean) {
+        val meetingId = currentMeetingId ?: return
+        val payload = "allowScreenShare:$allowScreenShare,allowChat:$allowChat,allowUnmute:$allowUnmute"
+        webSocketManager.sendSignalingMessage(meetingId, "HOST_PERMISSIONS", payload)
     }
 }

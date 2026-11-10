@@ -656,4 +656,26 @@ public class MeetingService {
 
         return liveKitMediaService.generateMediaToken(meeting, user, role);
     }
+
+    // ==========================================
+    // LOCK / UNLOCK MEETING (HOST CONTROL)
+    // ==========================================
+    @Transactional
+    public MeetingResponse setMeetingLocked(Long meetingId, boolean locked, Long userId) {
+        Meeting meeting = meetingRepository.findById(meetingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Meeting not found with id: " + meetingId));
+
+        boolean isHost = meeting.getHost().getId().equals(userId);
+        if (!isHost) {
+            MeetingParticipant part = participantRepository.findByMeetingIdAndUserId(meetingId, userId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.FORBIDDEN, "Only host or co-host can lock or unlock the meeting"));
+            if (part.getRole() != ParticipantRole.HOST && part.getRole() != ParticipantRole.CO_HOST) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only host or co-host can lock or unlock the meeting");
+            }
+        }
+
+        meeting.setLocked(locked);
+        Meeting saved = meetingRepository.save(meeting);
+        return new MeetingResponse(saved);
+    }
 }

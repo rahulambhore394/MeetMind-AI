@@ -14,6 +14,7 @@ data class Participant(
 
 enum class ParticipantRole {
     HOST,
+    CO_HOST,
     PARTICIPANT,
     AUTOMATED_AGENT,
     AI_REPRESENTATIVE,
