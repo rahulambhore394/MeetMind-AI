@@ -1,0 +1,19 @@
+user_intent:
+  raw_request: "Analyze complete project"
+  inferred_acceptance: ["produce a complete source-anchored architecture analysis", "do not modify application implementation"]
+  cleanup_required: false
+strategy: phased
+runtime_reachable:
+  - meetmind-backend/src/main/java/com/meetmind/meetmind_backend/MeetmindBackendApplication.java
+  - android/app/src/main/AndroidManifest.xml
+must_rewrite: []
+copy_as_is: []
+legacy_allowed_to_remain:
+  - "All application source and configuration files; this request is analysis-only."
+defer_cleanup:
+  - "No migration or cleanup scope was requested."
+full_rewrite_reason: null
+implementation_rule: >
+  This artifact records analysis scope only. If a later migration is requested,
+  derive implementation scope from an updated must_rewrite list rather than from
+  source_anchors or the full repository inventory.

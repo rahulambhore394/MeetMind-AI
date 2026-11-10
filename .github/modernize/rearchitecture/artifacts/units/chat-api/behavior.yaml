@@ -1,0 +1,7 @@
+unit: chat-api
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/chat/ChatController.java:48", effect: "persists and broadcasts a meeting chat message", must_preserve: true}
+branches: []
+error_paths:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/chat/ChatController.java:26", trigger: "caller not a meeting participant", outcome: "chat request rejected", contract: "authorization/error response", must_preserve: true}
+concurrency: {model: sync, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/chat/ChatService.java:29", scope: "message persistence and event publication", isolation: "default", must_preserve: true}}

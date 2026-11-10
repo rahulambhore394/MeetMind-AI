@@ -1,0 +1,4 @@
+unit: recording-consumer
+bindings:
+  - {type: listener, name: "@KafkaListener", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingProcessingConsumer.java:29", target: "RecordingProcessingConsumer", must_appear_in_target: true, notes: "Kafka recording binding."}
+runtime_config: []

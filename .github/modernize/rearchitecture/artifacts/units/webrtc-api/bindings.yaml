@@ -1,0 +1,5 @@
+unit: webrtc-api
+bindings:
+  - {type: route-declaration, name: "@RequestMapping('/api/webrtc')", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/webrtc/WebRtcController.java:11", target: "WebRtcController", must_appear_in_target: true, notes: "ICE server configuration endpoint."}
+runtime_config:
+  - {key: webrtc.ice-servers, source_loc: "meetmind-backend/src/main/resources/application.properties:37", source: properties-file, default_value: "Google STUN servers", must_appear_in_target: true, notes: "ICE server list."}

@@ -1,0 +1,4 @@
+unit: ai-proxy-websocket
+bindings:
+  - {type: route-declaration, name: "@MessageMapping('/meetings/{meetingId}/ai-proxy/ask')", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/representative/AiProxyWebSocketController.java:30", target: "AiProxyWebSocketController", must_appear_in_target: true, notes: "AI proxy destination."}
+runtime_config: []

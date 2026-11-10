@@ -1,0 +1,4 @@
+unit: intelligence-consumer
+commit: false
+candidate_splits:
+  - {id: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/IntelligenceConsumer.java:40", drivers: [protocol_split], rationale: "Kafka event handling and provider selection can evolve on separate integration boundaries.", source_slice: {file: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/IntelligenceConsumer.java", lines: [40, 40]}}

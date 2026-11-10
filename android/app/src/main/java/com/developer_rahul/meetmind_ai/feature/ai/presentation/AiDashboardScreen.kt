@@ -36,7 +36,10 @@ import kotlinx.serialization.json.JsonPrimitive
 fun AiDashboardScreen(
     meetingId: String,
     onBack: () -> Unit,
-    viewModel: MeetingIntelligenceViewModel = viewModel(factory = provideMeetingIntelligenceViewModelFactory(meetingId.toLongOrNull() ?: -1L))
+    viewModel: MeetingIntelligenceViewModel = viewModel(
+        key = "AiDashboardScreen_$meetingId",
+        factory = provideMeetingIntelligenceViewModelFactory(meetingId.toLongOrNull() ?: -1L)
+    )
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val summary = uiState.summary

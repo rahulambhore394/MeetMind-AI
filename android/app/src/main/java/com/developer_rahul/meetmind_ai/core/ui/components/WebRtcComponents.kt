@@ -10,6 +10,7 @@ import com.developer_rahul.meetmind_ai.MeetMindApplication
 import io.getstream.webrtc.android.compose.VideoRenderer as StreamVideoRenderer
 import io.getstream.webrtc.android.compose.VideoScalingType
 import io.getstream.webrtc.android.ui.VideoTextureViewRenderer
+import io.livekit.android.compose.ui.ScaleType
 import io.livekit.android.compose.ui.VideoTrackView as LiveKitVideoTrackView
 import org.webrtc.RendererCommon
 import org.webrtc.VideoTrack
@@ -25,11 +26,15 @@ fun VideoRenderer(
     val eglBaseContext = remember {
         MeetMindApplication.instance.container.webRtcManager.eglBaseContext
     }
+    val currentRoom by MeetMindApplication.instance.container.liveKitMediaManager.currentRoom.collectAsState()
 
     Box(modifier = modifier.background(Color.Black)) {
-        if (sfuVideoTrack != null) {
+        if (sfuVideoTrack != null && currentRoom != null) {
             LiveKitVideoTrackView(
                 videoTrack = sfuVideoTrack,
+                passedRoom = currentRoom,
+                mirror = isOverlay,
+                scaleType = ScaleType.Fill,
                 modifier = Modifier.fillMaxSize()
             )
         } else if (videoTrack != null) {

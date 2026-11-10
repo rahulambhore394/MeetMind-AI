@@ -28,7 +28,10 @@ import com.developer_rahul.meetmind_ai.feature.transcript.domain.model.Transcrip
 fun TranscriptScreen(
     meetingId: String,
     onBack: () -> Unit,
-    viewModel: TranscriptViewModel = viewModel(factory = provideTranscriptViewModelFactory(meetingId.toLongOrNull() ?: -1L))
+    viewModel: TranscriptViewModel = viewModel(
+        key = "TranscriptScreen_$meetingId",
+        factory = provideTranscriptViewModelFactory(meetingId.toLongOrNull() ?: -1L)
+    )
 ) {
     val uiState by viewModel.uiState.collectAsState()
     var isSearchActive by remember { mutableStateOf(false) }

@@ -1,0 +1,4 @@
+unit: translation-websocket
+bindings:
+  - {type: route-declaration, name: "@MessageMapping('/meetings/{meetingId}/translate')", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/translation/TranslationWebSocketController.java:34", target: "TranslationWebSocketController", must_appear_in_target: true, notes: "Live translation destination."}
+runtime_config: []

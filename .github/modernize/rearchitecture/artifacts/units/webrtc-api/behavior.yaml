@@ -1,0 +1,5 @@
+unit: webrtc-api
+side_effects: []
+branches: []
+error_paths: []
+concurrency: {model: sync, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/webrtc/WebRtcController.java:19", scope: "none; read-only configuration response", isolation: "n/a", must_preserve: true}}

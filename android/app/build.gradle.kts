@@ -17,15 +17,15 @@ android {
         multiDexEnabled = true
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "BASE_URL", "\"https://meetmind-backend-s3yy.onrender.com/\"")
+        buildConfigField("String", "BASE_URL", "\"http://10.232.5.113:8080/\"")
     }
 
     buildTypes {
         debug {
-            buildConfigField("String", "BASE_URL", "\"https://meetmind-backend-s3yy.onrender.com/\"")
+            buildConfigField("String", "BASE_URL", "\"http://10.232.5.113:8080/\"")
         }
         release {
-            buildConfigField("String", "BASE_URL", "\"https://meetmind-backend-s3yy.onrender.com/\"")
+            buildConfigField("String", "BASE_URL", "\"http://10.232.5.113:8080/\"")
             isMinifyEnabled = false
             signingConfig = signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

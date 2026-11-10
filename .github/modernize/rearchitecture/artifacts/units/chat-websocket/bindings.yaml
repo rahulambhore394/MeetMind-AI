@@ -1,0 +1,4 @@
+unit: chat-websocket
+bindings:
+  - {type: route-declaration, name: "@MessageMapping('/chat.send')", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/chat/ChatWebSocketController.java:43", target: "ChatWebSocketController", must_appear_in_target: true, notes: "STOMP application destination."}
+runtime_config: []

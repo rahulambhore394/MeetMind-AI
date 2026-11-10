@@ -1,0 +1,4 @@
+unit: translation-api
+commit: false
+candidate_splits:
+  - {id: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/translation/TranslationController.java:30-66", drivers: [protocol_split], rationale: "Persisted translation history and live translation submission are separate interaction protocols.", source_slice: {file: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/translation/TranslationController.java", lines: [30, 66]}}

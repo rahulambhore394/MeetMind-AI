@@ -1,0 +1,7 @@
+unit: transcript-api
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptController.java:51", effect: "triggers asynchronous transcription", must_preserve: true}
+branches: []
+error_paths:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptController.java:25", trigger: "transcript not found or unavailable", outcome: "not-found/error response", contract: "existing HTTP error mapping", must_preserve: true}
+concurrency: {model: async, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptionService.java:25", scope: "transcript status and segment persistence", isolation: "default", must_preserve: true}}

@@ -1,0 +1,41 @@
+flows:
+  - name: "JWT authentication context"
+    medium: http-header
+    key: "Authorization: Bearer <JWT>"
+    writer: {unit: auth-api, source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/auth/AuthController.java:50"}
+    reader: {unit: user-api, source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/common/SecurityUtils.java:1"}
+    pairing: matched
+    must_preserve: true
+    must_confirm: null
+    verification_hint: "Authenticate then call a protected /api/users/me endpoint."
+    notes: "Same token is consumed by all protected REST and WebSocket surfaces."
+  - name: "Kafka event envelope"
+    medium: database
+    key: "eventId/correlationId/meetingId"
+    writer: {unit: meetings-api, source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/KafkaEventPublisher.java:79"}
+    reader: {unit: event-consumers, source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/NotificationConsumer.java:43"}
+    pairing: dynamic-key
+    must_preserve: true
+    must_confirm: runtime
+    verification_hint: "Trace a meeting event through Kafka to consumer side effects and DLT on failure."
+    notes: "Topic and event-type routing are selected dynamically by event class."
+  - name: "STOMP authenticated principal"
+    medium: framework-context
+    key: "Principal"
+    writer: {unit: signaling-websocket, source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/websocket/WebSocketAuthInterceptor.java:51"}
+    reader: {unit: chat-websocket, source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/chat/ChatWebSocketController.java:43"}
+    pairing: matched
+    must_preserve: true
+    must_confirm: null
+    verification_hint: "Connect with JWT and send a message; verify sender identity and destination authorization."
+    notes: "Principal is injected by the STOMP interceptor and used by message handlers."
+  - name: "Android persisted auth token"
+    medium: static
+    key: "auth token"
+    writer: {unit: android-client, source_loc: "android/app/src/main/java/com/developer_rahul/meetmind_ai/feature/auth/data/repository/RealAuthRepository.kt:1"}
+    reader: {unit: android-client, source_loc: "android/app/src/main/java/com/developer_rahul/meetmind_ai/core/di/AppContainer.kt:1"}
+    pairing: dynamic-key
+    must_preserve: true
+    must_confirm: runtime
+    verification_hint: "Restart the app after login and verify protected API calls remain authenticated."
+    notes: "Secure storage and OkHttp interceptor wiring are outside a single feature unit."

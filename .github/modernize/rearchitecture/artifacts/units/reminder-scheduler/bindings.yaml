@@ -1,0 +1,4 @@
+unit: reminder-scheduler
+bindings:
+  - {type: listener, name: "@Scheduled(fixedRate = 60000)", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/ReminderScheduler.java:35", target: "ReminderScheduler", must_appear_in_target: true, notes: "Runs every minute via @EnableScheduling."}
+runtime_config: []

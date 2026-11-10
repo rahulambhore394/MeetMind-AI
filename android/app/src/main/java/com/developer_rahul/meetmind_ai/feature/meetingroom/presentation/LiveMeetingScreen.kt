@@ -72,17 +72,39 @@ import org.webrtc.VideoTrack
 @Composable
 fun LiveMeetingScreen(
     meetingId: String,
-    onLeaveMeeting: (duration: String) -> Unit,
-    onToggleChat: () -> Unit,
-    onToggleParticipants: () -> Unit,
-    onViewTranscript: () -> Unit = {},
-    onViewIntelligence: () -> Unit = {},
+    onLeaveMeeting: (meetingId: String, duration: String) -> Unit,
+    onToggleChat: (meetingId: String) -> Unit,
+    onToggleParticipants: (meetingId: String) -> Unit,
+    onViewTranscript: (meetingId: String) -> Unit = {},
+    onViewIntelligence: (meetingId: String) -> Unit = {},
     meetingViewModel: MeetingViewModel = viewModel(factory = ViewModelFactory),
     callViewModel: LiveMeetingViewModel = viewModel(factory = provideLiveMeetingViewModelFactory(meetingId.toLongOrNull() ?: -1L)),
     translationViewModel: LiveTranslationViewModel = viewModel(factory = provideLiveTranslationViewModelFactory(meetingId.toLongOrNull() ?: -1L))
 ) {
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
+
+    val uiState by meetingViewModel.uiState.collectAsState()
+    val callState by callViewModel.uiState.collectAsState()
+    val translationState by translationViewModel.uiState.collectAsState()
+    val recentSubtitles by translationViewModel.subtitles.collectAsState()
+
+    val meeting = uiState.selectedMeeting
+    val isRecording = uiState.isRecording
+
+    val effectiveMeetingId = remember(meeting?.id, meetingId) {
+        meeting?.id?.takeIf { it > 0L } ?: meetingId.toLongOrNull() ?: -1L
+    }
+    val effectiveMeetingIdString = remember(meeting?.id, meetingId) {
+        (meeting?.id?.takeIf { it > 0L } ?: meetingId.toLongOrNull())?.toString() ?: meetingId
+    }
+
+    LaunchedEffect(effectiveMeetingId) {
+        if (effectiveMeetingId > 0L) {
+            callViewModel.updateMeetingId(effectiveMeetingId)
+            translationViewModel.updateMeetingId(effectiveMeetingId)
+        }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -90,7 +112,7 @@ fun LiveMeetingScreen(
         val audioGranted = permissions[Manifest.permission.RECORD_AUDIO] ?: false
         if (cameraGranted && audioGranted) {
             AudioDeviceManager.selectAudioDevice(context, "Speaker")
-            callViewModel.startCall()
+            callViewModel.startCall(effectiveMeetingId.takeIf { it > 0L })
         } else {
             Toast.makeText(
                 context,
@@ -126,7 +148,7 @@ fun LiveMeetingScreen(
         if (!hasCamera || !hasAudio) {
             permissionLauncher.launch(arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO))
         } else {
-            callViewModel.startCall()
+            callViewModel.startCall(effectiveMeetingId.takeIf { it > 0L })
         }
     }
 
@@ -136,14 +158,6 @@ fun LiveMeetingScreen(
         }
     }
 
-    val uiState by meetingViewModel.uiState.collectAsState()
-    val callState by callViewModel.uiState.collectAsState()
-    val translationState by translationViewModel.uiState.collectAsState()
-    val recentSubtitles by translationViewModel.subtitles.collectAsState()
-
-    val meeting = uiState.selectedMeeting
-    val isRecording = uiState.isRecording
-    
     var isMuted by remember { mutableStateOf(false) }
     var isVideoOff by remember { mutableStateOf(false) }
     
@@ -166,7 +180,7 @@ fun LiveMeetingScreen(
         if (meeting?.status == MeetingStatus.ENDED) {
             Toast.makeText(context, "The host has ended this meeting for everyone.", Toast.LENGTH_LONG).show()
             callViewModel.leaveMeeting()
-            onLeaveMeeting(formattedDuration)
+            onLeaveMeeting(effectiveMeetingIdString, formattedDuration)
         }
     }
 
@@ -184,7 +198,7 @@ fun LiveMeetingScreen(
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
             val data = result.data
-            val id = meetingId.toLongOrNull() ?: meeting?.id
+            val id = effectiveMeetingId.takeIf { it > 0L } ?: meeting?.id
             if (data != null && id != null && id > 0L) {
                 meetingViewModel.startRecording(id, data)
             } else {
@@ -345,7 +359,7 @@ fun LiveMeetingScreen(
             it.userId == currentUserId && it.role == ParticipantRole.HOST 
         }
         val isHost = isHostByMeeting || isHostByParticipants
-        val numericMeetingId = meetingId.toLongOrNull() ?: effectiveMeeting?.id
+        val numericMeetingId = meetingId.toLongOrNull() ?: effectiveMeeting?.id ?: effectiveMeetingId.takeIf { it > 0L }
 
         if (isHost) {
             HostLeaveOrEndDialog(
@@ -356,7 +370,7 @@ fun LiveMeetingScreen(
                         meetingViewModel.leaveMeeting(numericMeetingId)
                     }
                     callViewModel.leaveMeeting()
-                    onLeaveMeeting(formattedDuration)
+                    onLeaveMeeting(effectiveMeetingIdString, formattedDuration)
                 },
                 onEndForEveryone = {
                     showLeaveDialog = false
@@ -364,7 +378,7 @@ fun LiveMeetingScreen(
                         meetingViewModel.endMeeting(numericMeetingId)
                     }
                     callViewModel.leaveMeeting()
-                    onLeaveMeeting(formattedDuration)
+                    onLeaveMeeting(effectiveMeetingIdString, formattedDuration)
                 }
             )
         } else {
@@ -376,14 +390,14 @@ fun LiveMeetingScreen(
                         meetingViewModel.leaveMeeting(numericMeetingId)
                     }
                     callViewModel.leaveMeeting()
-                    onLeaveMeeting(formattedDuration)
+                    onLeaveMeeting(effectiveMeetingIdString, formattedDuration)
                 }
             )
         }
     }
 
     if (showRecordingConsent) {
-        val id = meetingId.toLongOrNull() ?: meeting?.id
+        val id = meetingId.toLongOrNull() ?: meeting?.id ?: effectiveMeetingId.takeIf { it > 0L }
         RecordingConsentDialog(
             onDismiss = { showRecordingConsent = false },
             onConfirmScreenAndAudio = {
@@ -475,11 +489,11 @@ fun LiveMeetingScreen(
                 },
                 onViewTranscript = { 
                     showMoreSheet = false 
-                    onViewTranscript()
+                    onViewTranscript(effectiveMeetingIdString)
                 },
                 onAiInsights = { 
                     showMoreSheet = false 
-                    onViewIntelligence()
+                    onViewIntelligence(effectiveMeetingIdString)
                 },
                 onToggleChat = {
                     showMoreSheet = false
@@ -487,7 +501,7 @@ fun LiveMeetingScreen(
                 },
                 onToggleParticipants = {
                     showMoreSheet = false
-                    onToggleParticipants()
+                    onToggleParticipants(effectiveMeetingIdString)
                 }
             )
         }
@@ -519,10 +533,10 @@ fun LiveMeetingScreen(
             dragHandle = { BottomSheetDefaults.DragHandle(color = TextDisabled) }
         ) {
             InMeetingChatSheetContent(
-                meetingId = meetingId,
+                meetingId = effectiveMeetingIdString,
                 onFullScreenChat = {
                     showChatSheet = false
-                    onToggleChat()
+                    onToggleChat(effectiveMeetingIdString)
                 }
             )
         }
@@ -566,16 +580,27 @@ fun LiveMeetingScreen(
         val participantsList = activeParticipants.distinctBy { it.userId ?: it.id }
         val totalParticipants = participantsList.size.coerceAtLeast(1)
 
-        val localScreenTrack = if (callState.isScreenSharing) callState.localScreenTrack else null
+        val localP2pScreen = if (callState.isScreenSharing) callState.localScreenTrack else null
+        val localSfuScreen = if (callState.isScreenSharing) callState.localSfuScreenTrack else null
         val remoteScreenTrack = callState.participants.values.mapNotNull { it.screenTrack }.firstOrNull()
-        val activeScreenShareTrack = localScreenTrack ?: remoteScreenTrack
+        val remoteSfuScreenTrack = callState.participants.values.mapNotNull { it.sfuScreenTrack }.firstOrNull()
+        val activeP2pScreenTrack = localP2pScreen ?: remoteScreenTrack
+        val activeSfuScreenTrack = localSfuScreen ?: remoteSfuScreenTrack
+        val hasActiveScreenShare = activeP2pScreenTrack != null || activeSfuScreenTrack != null
+
+        val remoteParticipants = participantsList.filter { participant ->
+            val isLocal = (currentUserId > 0L && participant.userId == currentUserId) ||
+                          (participant.name.endsWith("(You)", ignoreCase = true) || participant.name.equals("You", ignoreCase = true))
+            !isLocal
+        }
+        val displayParticipants = if (remoteParticipants.isNotEmpty()) remoteParticipants else participantsList
 
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = if (activeScreenShareTrack != null) 75.dp else 0.dp)
+                .padding(top = if (hasActiveScreenShare) 75.dp else 0.dp)
         ) {
-            if (activeScreenShareTrack != null) {
+            if (hasActiveScreenShare) {
                 // Prominent Screen Share Hero View
                 Box(
                     modifier = Modifier
@@ -588,7 +613,8 @@ fun LiveMeetingScreen(
                 ) {
                     VideoRenderer(
                         modifier = Modifier.fillMaxSize(),
-                        videoTrack = activeScreenShareTrack,
+                        videoTrack = activeP2pScreenTrack,
+                        sfuVideoTrack = activeSfuScreenTrack,
                         isOverlay = true
                     )
                     Surface(
@@ -621,7 +647,7 @@ fun LiveMeetingScreen(
                     .fillMaxWidth()
                     .weight(1f),
                 contentPadding = PaddingValues(
-                    top = if (activeScreenShareTrack != null) 6.dp else 115.dp,
+                    top = if (hasActiveScreenShare) 6.dp else 115.dp,
                     bottom = 120.dp,
                     start = 12.dp,
                     end = 12.dp
@@ -629,8 +655,8 @@ fun LiveMeetingScreen(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                itemsIndexed(participantsList) { index, participant ->
-                    val mediaState = callState.participants[participant.userId]
+                itemsIndexed(displayParticipants) { index, participant ->
+                    val mediaState = callState.participants[participant.userId] ?: callState.participants[participant.id]
                     val isLocalUser = (currentUserId > 0L && participant.userId == currentUserId) ||
                                       (participant.name.endsWith("(You)", ignoreCase = true) || participant.name.equals("You", ignoreCase = true))
 
@@ -649,7 +675,7 @@ fun LiveMeetingScreen(
                         isHost = participant.role == ParticipantRole.HOST,
                         isOnline = true,
                         videoTrack = effectiveVideoTrack,
-                        sfuVideoTrack = if (isLocalUser) callState.localSfuVideoTrack else mediaState?.sfuVideoTrack,
+                        sfuVideoTrack = if (isLocalUser) (if (!isVideoOff) callState.localSfuVideoTrack else null) else mediaState?.sfuVideoTrack,
                         isMicOn = if (isLocalUser) !isMuted else (mediaState?.audioEnabled ?: true),
                         isVideoOn = if (isLocalUser) !isVideoOff else (mediaState?.videoEnabled ?: (mediaState?.videoTrack != null || mediaState?.sfuVideoTrack != null)),
                         isActiveSpeaker = if (isLocalUser) (!isMuted) else (isAiCurrentlySpeaking || (mediaState?.isSpeaking ?: false)),
@@ -765,9 +791,10 @@ fun LiveMeetingScreen(
                     if (isRecording) {
                         Surface(
                             onClick = {
-                                val id = meetingId.toLongOrNull() ?: meeting?.id
+                                val id = meetingId.toLongOrNull() ?: meeting?.id ?: effectiveMeetingId.takeIf { it > 0L }
                                 if (id != null && id > 0L) {
                                     meetingViewModel.stopRecording(id)
+                                    com.developer_rahul.meetmind_ai.core.media.recording.RecordingService.stopService(context)
                                     Toast.makeText(context, "Stopping recording & uploading...", Toast.LENGTH_SHORT).show()
                                 }
                             },
@@ -812,7 +839,7 @@ fun LiveMeetingScreen(
 
                     // Participants Counter Button in Top Bar
                     Surface(
-                        onClick = onToggleParticipants,
+                        onClick = { onToggleParticipants(effectiveMeetingIdString) },
                         shape = CircleShape,
                         color = ElectricIndigo.copy(alpha = 0.25f),
                         border = androidx.compose.foundation.BorderStroke(1.dp, ElectricIndigo.copy(alpha = 0.5f)),
@@ -894,9 +921,10 @@ fun LiveMeetingScreen(
         }
 
         // Floating Local Preview (You) - Positioned cleanly above Bottom Controls
-        Surface(
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
+        if (remoteParticipants.isNotEmpty()) {
+            Surface(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
                 .padding(bottom = 120.dp, end = 16.dp)
                 .size(width = 100.dp, height = 140.dp)
                 .shadow(16.dp, RoundedCornerShape(20.dp)),
@@ -949,6 +977,8 @@ fun LiveMeetingScreen(
                     Text("You", style = Typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
                 }
             }
+        }
+
         }
 
         if (translationState.subtitlesEnabled) {
@@ -1732,9 +1762,19 @@ fun AvatarPlaceholder(name: String, isActiveSpeaker: Boolean = false, sizeDp: In
 fun InMeetingChatSheetContent(
     meetingId: String,
     onFullScreenChat: () -> Unit,
-    chatViewModel: ChatViewModel = viewModel(factory = provideChatViewModelFactory(meetingId.toLongOrNull() ?: -1L))
+    chatViewModel: ChatViewModel = viewModel(
+        key = "InMeetingChat_$meetingId",
+        factory = provideChatViewModelFactory(meetingId.toLongOrNull() ?: -1L)
+    )
 ) {
     val uiState by chatViewModel.uiState.collectAsState()
+
+    LaunchedEffect(meetingId) {
+        val numId = meetingId.toLongOrNull() ?: -1L
+        if (numId > 0L) {
+            chatViewModel.updateMeetingId(numId)
+        }
+    }
 
     Column(
         modifier = Modifier

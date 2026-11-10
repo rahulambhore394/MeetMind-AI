@@ -1,0 +1,8 @@
+unit: transcription-consumer
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptionConsumer.java:45", effect: "consumes recording event, runs provider, persists transcript segments, notifies clients", must_preserve: true}
+branches:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/VoskTranscriptionProvider.java:47", condition: "configured language/model", behavior: "select language-specific offline model", must_preserve: true}
+error_paths:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptionConsumer.java:45", trigger: "provider or Kafka failure", outcome: "retry/error handling path", contract: "configured Kafka error handler/DLT", must_preserve: true}
+concurrency: {model: thread-pool, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptionService.java:25", scope: "transcript and segment persistence", isolation: "default", must_preserve: true}}

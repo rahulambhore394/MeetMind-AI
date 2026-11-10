@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.shareIn
+import kotlinx.coroutines.launch
 
 class RealChatRepository(
     private val chatApiService: ChatApiService,
@@ -44,6 +45,19 @@ class RealChatRepository(
     override fun sendMessage(meetingId: Long, content: String) {
         webSocketManager.connect()
         webSocketManager.sendChatMessage(meetingId, content)
+        repositoryScope.launch {
+            try {
+                chatApiService.sendMessage(
+                    meetingId = meetingId,
+                    request = com.developer_rahul.meetmind_ai.feature.chat.data.remote.dto.ChatMessageRequestDto(
+                        meetingId = meetingId,
+                        message = content
+                    )
+                )
+            } catch (e: Exception) {
+                // Non-fatal: WebSocket STOMP delivers the message
+            }
+        }
     }
 
     override fun subscribeToChat(meetingId: Long) {

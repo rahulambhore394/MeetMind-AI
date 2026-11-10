@@ -1,0 +1,5 @@
+unit: translation-api
+bindings:
+  - {type: route-declaration, name: "@RequestMapping('/api/meetings/{meetingId}/translations')", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/translation/TranslationController.java:12", target: "TranslationController", must_appear_in_target: true, notes: "Translation routes."}
+runtime_config:
+  - {key: translation.provider, source_loc: "meetmind-backend/src/main/resources/application.properties:49", source: properties-file, default_value: "local", must_appear_in_target: true, notes: "Translation provider."}

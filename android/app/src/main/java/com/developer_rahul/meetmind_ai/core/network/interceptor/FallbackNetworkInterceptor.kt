@@ -43,8 +43,8 @@ class FallbackNetworkInterceptor : Interceptor {
             Log.w("FallbackNetwork", "Primary host $originalHost failed: ${e.message}")
         }
 
-        // 3. Fallback candidates: 127.0.0.1 (USB adb reverse), Wi-Fi candidates, Emulator
-        val fallbackHosts = listOf("10.232.5.113", "127.0.0.1", "10.70.43.223", "10.70.42.235", "192.168.137.188", "10.0.2.2")
+        // 3. Fallback candidates: 10.232.5.113 (Wi-Fi), 127.0.0.1 (USB adb reverse), 10.0.2.2 (Emulator)
+        val fallbackHosts = listOf("10.232.5.113", "127.0.0.1", "10.0.2.2")
             .filter { it != originalHost }
 
         for (fallbackHost in fallbackHosts) {
@@ -63,21 +63,6 @@ class FallbackNetworkInterceptor : Interceptor {
             }
         }
 
-        // 4. Last resort: fall back to cloud onrender if running local debug but machine/IP unreachable
-        try {
-            val cloudUrl = originalRequest.url.newBuilder()
-                .scheme("https")
-                .host("meetmind-backend-s3yy.onrender.com")
-                .port(443)
-                .build()
-            val cloudRequest = originalRequest.newBuilder().url(cloudUrl).build()
-            val response = chain.proceed(cloudRequest)
-            HostManager.setActiveHost("meetmind-backend-s3yy.onrender.com")
-            return response
-        } catch (_: IOException) {
-            // All candidates exhausted
-        }
-
-        throw IOException("Failed to connect to $originalHost or any fallback hosts.")
+        throw IOException("Failed to connect to $originalHost or local fallback hosts (10.232.5.113, 127.0.0.1).")
     }
 }

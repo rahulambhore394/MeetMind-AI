@@ -1,0 +1,9 @@
+unit: participant-api
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/participant/ParticipantController.java:218", effect: "creates participant membership and publishes joined event", must_preserve: true}
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/participant/ParticipantController.java:247", effect: "leaves meeting and publishes left event", must_preserve: true}
+branches:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/participant/ParticipantController.java:127", condition: "host accepts participant", behavior: "transition participant state", must_preserve: true}
+error_paths:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/participant/ParticipantController.java:42", trigger: "invalid meeting or participant", outcome: "reject operation", contract: "existing validation/not-found response", must_preserve: true}
+concurrency: {model: sync, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/participant/ParticipantService.java:29", scope: "membership state update and event publication", isolation: "default", must_preserve: true}}

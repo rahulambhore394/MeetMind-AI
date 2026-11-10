@@ -1,0 +1,6 @@
+unit: reminder-scheduler
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/ReminderScheduler.java:35", effect: "scans due meetings and sends reminder notifications", must_preserve: true}
+branches: []
+error_paths: []
+concurrency: {model: thread-pool, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/ReminderScheduler.java:35", scope: "due reminder selection and notification creation", isolation: "default", must_preserve: true}}

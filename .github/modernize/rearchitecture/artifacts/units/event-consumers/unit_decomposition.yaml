@@ -1,0 +1,4 @@
+unit: event-consumers
+commit: false
+candidate_splits:
+  - {id: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/NotificationConsumer.java:27-43", drivers: [concern_split], rationale: "Notification, audit, analytics, and DLT consumers have distinct side effects and operational ownership.", source_slice: {file: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/NotificationConsumer.java", lines: [27, 43]}}

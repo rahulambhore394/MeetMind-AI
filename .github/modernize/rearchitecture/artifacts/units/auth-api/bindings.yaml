@@ -1,0 +1,6 @@
+unit: auth-api
+bindings:
+  - {type: route-declaration, name: "@RestController + @RequestMapping('/api/auth')", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/auth/AuthController.java:18", target: "AuthController", must_appear_in_target: true, notes: "Public auth endpoints."}
+runtime_config:
+  - {key: jwt.secret, source_loc: "meetmind-backend/src/main/resources/application.properties:31", source: env, default_value: "development fallback present", must_appear_in_target: true, notes: "JWT signing secret."}
+  - {key: jwt.expiration, source_loc: "meetmind-backend/src/main/resources/application.properties:32", source: env, default_value: "86400000", must_appear_in_target: true, notes: "JWT lifetime."}

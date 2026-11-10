@@ -1,0 +1,4 @@
+unit: participant-api
+commit: false
+candidate_splits:
+  - {id: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/participant/ParticipantController.java:42-247", drivers: [lifecycle_split], rationale: "Invitation approval and live join/leave presence are separate participant lifecycles.", source_slice: {file: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/participant/ParticipantController.java", lines: [42, 247]}}

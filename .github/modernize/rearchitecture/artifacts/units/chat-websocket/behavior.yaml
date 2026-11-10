@@ -1,0 +1,7 @@
+unit: chat-websocket
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/chat/ChatWebSocketController.java:43", effect: "persists and broadcasts chat message", must_preserve: true}
+branches: []
+error_paths:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/websocket/WebSocketAuthInterceptor.java:104", trigger: "unauthorized destination subscription", outcome: "subscription rejected", contract: "STOMP authorization error", must_preserve: true}
+concurrency: {model: event-loop, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/chat/ChatWebSocketController.java:43", scope: "message handling", isolation: "default", must_preserve: true}}

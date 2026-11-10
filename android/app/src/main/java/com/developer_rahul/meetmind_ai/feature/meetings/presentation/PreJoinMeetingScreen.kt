@@ -85,6 +85,12 @@ fun PreJoinMeetingScreen(
         viewModel.loadMeetingDetails(meetingId)
     }
 
+    DisposableEffect(Unit) {
+        onDispose {
+            webRtcManager.stopLocalStream()
+        }
+    }
+
     var isMicOn by remember { mutableStateOf(true) }
     var isCameraOn by remember { mutableStateOf(true) }
     var isFrontCamera by remember { mutableStateOf(true) }
@@ -98,10 +104,12 @@ fun PreJoinMeetingScreen(
 
     val meetingTitle = meeting?.title ?: "Live AI Meeting"
     val meetingCode = meeting?.meetingCode ?: "mm-${meetingId}"
-    // The host is returned as a participant when already joined; otherwise the
-    // host is the implicit first participant on the pre-join screen.
     val joinedParticipantCount = uiState.participants.count { it.status == ParticipantStatus.JOINED }
-    val participantCount = joinedParticipantCount.coerceAtLeast(1)
+    val participantStatusText = when (joinedParticipantCount) {
+        0 -> "No one has joined yet"
+        1 -> "1 person in this meeting"
+        else -> "$joinedParticipantCount people in this meeting"
+    }
 
     // Pulse animation for mic audio meter check
     val infiniteTransition = rememberInfiniteTransition(label = "micMeter")
@@ -153,10 +161,14 @@ fun PreJoinMeetingScreen(
             ) {
                 val isRejoin = meeting?.hasJoinedBefore == true || meeting?.userParticipantStatus == "LEFT"
                 val joinButtonText = if (isRejoin) "Re-join Meeting Now 🚀" else "Join Meeting Now 🚀"
+                val resolvedId = meeting?.id?.takeIf { it > 0L } ?: meetingId.toLongOrNull()
+                val isReady = resolvedId != null && !uiState.isLoadingDetails
                 MeetMindButton(
                     text = joinButtonText,
+                    enabled = isReady,
                     onClick = {
-                        onJoin(meeting?.id?.takeIf { it > 0L }?.toString() ?: meetingId)
+                        val targetId = resolvedId?.toString() ?: meetingId
+                        onJoin(targetId)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -396,14 +408,13 @@ fun PreJoinMeetingScreen(
                         Box(
                             modifier = Modifier
                                 .size(8.dp)
-                                .background(EmeraldGreen, CircleShape)
-                                .pulse(color = EmeraldGreen)
+                                .background(if (joinedParticipantCount > 0) EmeraldGreen else TextSecondary, CircleShape)
                         )
                         Spacer(Modifier.width(8.dp))
                         Text(
-                            "$participantCount people in this meeting",
+                            participantStatusText,
                             style = Typography.bodyMedium,
-                            color = EmeraldGreen,
+                            color = if (joinedParticipantCount > 0) EmeraldGreen else TextSecondary,
                             fontWeight = FontWeight.SemiBold
                         )
                     }

@@ -239,7 +239,7 @@ fun MeetingDetailsScreen(
                                 if (meeting.status == MeetingStatus.SCHEDULED) {
                                     viewModel.startMeeting(meeting.id)
                                 } else if (meeting.status == MeetingStatus.LIVE) {
-                                    viewModel.joinMeeting(meeting.id)
+                                    onJoin()
                                 }
                             },
                             modifier = Modifier.weight(1.5f),

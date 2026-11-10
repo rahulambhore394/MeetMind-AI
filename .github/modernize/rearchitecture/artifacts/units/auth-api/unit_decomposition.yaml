@@ -1,0 +1,4 @@
+unit: auth-api
+commit: false
+candidate_splits:
+  - {id: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/auth/AuthController.java:29-65", drivers: [concern_split], rationale: "Registration and login have separate validation, persistence, and token issuance paths.", source_slice: {file: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/auth/AuthController.java", lines: [29, 65]}}

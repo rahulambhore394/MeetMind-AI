@@ -21,11 +21,20 @@ class LiveKitMediaManager(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var room: Room? = null
 
+    private val _currentRoom = MutableStateFlow<Room?>(null)
+    val currentRoom: StateFlow<Room?> = _currentRoom.asStateFlow()
+
     private val _localVideoTrack = MutableStateFlow<VideoTrack?>(null)
     val localVideoTrack: StateFlow<VideoTrack?> = _localVideoTrack.asStateFlow()
 
+    private val _localScreenTrack = MutableStateFlow<VideoTrack?>(null)
+    val localScreenTrack: StateFlow<VideoTrack?> = _localScreenTrack.asStateFlow()
+
     private val _remoteVideoTracks = MutableStateFlow<Map<Long, VideoTrack>>(emptyMap())
     val remoteVideoTracks: StateFlow<Map<Long, VideoTrack>> = _remoteVideoTracks.asStateFlow()
+
+    private val _remoteScreenTracks = MutableStateFlow<Map<Long, VideoTrack>>(emptyMap())
+    val remoteScreenTracks: StateFlow<Map<Long, VideoTrack>> = _remoteScreenTracks.asStateFlow()
 
     private val _activeSpeakers = MutableStateFlow<Set<Long>>(emptySet())
     val activeSpeakers: StateFlow<Set<Long>> = _activeSpeakers.asStateFlow()
@@ -77,6 +86,7 @@ class LiveKitMediaManager(
                     _localVideoTrack.value = localTrack
                 }
 
+                _currentRoom.value = newRoom
                 _isConnected.value = true
                 Log.i("LiveKitManager", "Connected successfully to LiveKit SFU room: ${newRoom.name}")
                 true
@@ -96,10 +106,17 @@ class LiveKitMediaManager(
                 val userId = participant.identity?.value?.toLongOrNull() ?: participant.identity?.hashCode()?.toLong() ?: 0L
 
                 if (track is VideoTrack) {
-                    Log.d("LiveKitManager", "Remote video track subscribed for user $userId (source: ${event.publication.source})")
-                    val current = _remoteVideoTracks.value.toMutableMap()
-                    current[userId] = track
-                    _remoteVideoTracks.value = current
+                    if (event.publication.source == Track.Source.SCREEN_SHARE) {
+                        Log.d("LiveKitManager", "Remote screen share track subscribed for user $userId")
+                        val current = _remoteScreenTracks.value.toMutableMap()
+                        current[userId] = track
+                        _remoteScreenTracks.value = current
+                    } else {
+                        Log.d("LiveKitManager", "Remote video track subscribed for user $userId (source: ${event.publication.source})")
+                        val current = _remoteVideoTracks.value.toMutableMap()
+                        current[userId] = track
+                        _remoteVideoTracks.value = current
+                    }
                 }
             }
 
@@ -109,10 +126,76 @@ class LiveKitMediaManager(
                 val userId = participant.identity?.value?.toLongOrNull() ?: participant.identity?.hashCode()?.toLong() ?: 0L
 
                 if (track is VideoTrack) {
-                    Log.d("LiveKitManager", "Remote video track unsubscribed for user $userId")
-                    val current = _remoteVideoTracks.value.toMutableMap()
-                    current.remove(userId)
-                    _remoteVideoTracks.value = current
+                    val screenMap = _remoteScreenTracks.value.toMutableMap()
+                    if (screenMap[userId] == track) {
+                        screenMap.remove(userId)
+                        _remoteScreenTracks.value = screenMap
+                        Log.d("LiveKitManager", "Remote screen share track unsubscribed for user $userId")
+                    }
+                    val videoMap = _remoteVideoTracks.value.toMutableMap()
+                    if (videoMap[userId] == track) {
+                        videoMap.remove(userId)
+                        _remoteVideoTracks.value = videoMap
+                        Log.d("LiveKitManager", "Remote video track unsubscribed for user $userId")
+                    }
+                }
+            }
+
+            is RoomEvent.TrackPublished -> {
+                val participant = event.participant
+                val track = event.publication.track
+                if (participant is io.livekit.android.room.participant.LocalParticipant) {
+                    if (event.publication.source == Track.Source.CAMERA) {
+                        _localVideoTrack.value = track as? VideoTrack
+                        Log.d("LiveKitManager", "Local camera track published: $track")
+                    } else if (event.publication.source == Track.Source.SCREEN_SHARE) {
+                        _localScreenTrack.value = track as? VideoTrack
+                        Log.d("LiveKitManager", "Local screen share track published: $track")
+                    }
+                }
+            }
+
+            is RoomEvent.TrackUnpublished -> {
+                val participant = event.participant
+                if (participant is io.livekit.android.room.participant.LocalParticipant) {
+                    if (event.publication.source == Track.Source.CAMERA) {
+                        _localVideoTrack.value = null
+                        Log.d("LiveKitManager", "Local camera track unpublished")
+                    } else if (event.publication.source == Track.Source.SCREEN_SHARE) {
+                        _localScreenTrack.value = null
+                        Log.d("LiveKitManager", "Local screen share track unpublished")
+                    }
+                }
+            }
+
+            is RoomEvent.TrackMuted -> {
+                val participant = event.participant
+                val pub = event.publication
+                val userId = participant.identity?.value?.toLongOrNull() ?: participant.identity?.hashCode()?.toLong() ?: 0L
+                if (pub.source == Track.Source.CAMERA) {
+                    if (participant is io.livekit.android.room.participant.LocalParticipant) {
+                        _localVideoTrack.value = null
+                    } else {
+                        val current = _remoteVideoTracks.value.toMutableMap()
+                        current.remove(userId)
+                        _remoteVideoTracks.value = current
+                    }
+                }
+            }
+
+            is RoomEvent.TrackUnmuted -> {
+                val participant = event.participant
+                val pub = event.publication
+                val userId = participant.identity?.value?.toLongOrNull() ?: participant.identity?.hashCode()?.toLong() ?: 0L
+                if (pub.source == Track.Source.CAMERA) {
+                    val track = pub.track as? VideoTrack
+                    if (participant is io.livekit.android.room.participant.LocalParticipant) {
+                        _localVideoTrack.value = track
+                    } else if (track != null) {
+                        val current = _remoteVideoTracks.value.toMutableMap()
+                        current[userId] = track
+                        _remoteVideoTracks.value = current
+                    }
                 }
             }
 
@@ -158,8 +241,12 @@ class LiveKitMediaManager(
         try {
             room?.localParticipant?.setCameraEnabled(enabled)
             val camPub = room?.localParticipant?.getTrackPublication(Track.Source.CAMERA)
-            _localVideoTrack.value = if (enabled) camPub?.track as? VideoTrack else null
-            Log.d("LiveKitManager", "Set camera enabled: $enabled")
+            val localTrack = if (enabled) {
+                camPub?.track as? VideoTrack 
+                    ?: room?.localParticipant?.videoTrackPublications?.firstOrNull { it.first.source == Track.Source.CAMERA }?.first?.track as? VideoTrack
+            } else null
+            _localVideoTrack.value = localTrack
+            Log.d("LiveKitManager", "Set camera enabled: $enabled, track: $localTrack")
         } catch (e: Exception) {
             Log.e("LiveKitManager", "Failed to set camera enabled: ${e.message}")
         }
@@ -182,6 +269,12 @@ class LiveKitMediaManager(
                 ScreenCaptureParams(mediaProjectionPermissionResultData = mediaProjectionIntent)
             } else null
             room?.localParticipant?.setScreenShareEnabled(enabled, params)
+            if (enabled) {
+                val pub = room?.localParticipant?.getTrackPublication(Track.Source.SCREEN_SHARE)
+                _localScreenTrack.value = pub?.track as? VideoTrack
+            } else {
+                _localScreenTrack.value = null
+            }
             Log.d("LiveKitManager", "Set screen share enabled: $enabled")
         } catch (e: Exception) {
             Log.e("LiveKitManager", "Failed to toggle screen share: ${e.message}")
@@ -190,12 +283,15 @@ class LiveKitMediaManager(
 
     fun disconnect() {
         try {
+            _currentRoom.value = null
             room?.disconnect()
             room?.release()
             room = null
             _isConnected.value = false
             _remoteVideoTracks.value = emptyMap()
+            _remoteScreenTracks.value = emptyMap()
             _localVideoTrack.value = null
+            _localScreenTrack.value = null
             _activeSpeakers.value = emptySet()
             Log.i("LiveKitManager", "LiveKit SFU disconnected and released")
         } catch (e: Exception) {

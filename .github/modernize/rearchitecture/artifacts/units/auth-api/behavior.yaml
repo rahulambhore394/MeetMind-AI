@@ -1,0 +1,7 @@
+unit: auth-api
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/auth/AuthService.java:15", effect: "creates/authenticates users and issues JWT", must_preserve: true}
+branches: []
+error_paths:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/auth/AuthController.java:29", trigger: "invalid registration or credentials", outcome: "validation/auth error response", contract: "existing GlobalExceptionHandler/status mapping", must_preserve: true}
+concurrency: {model: sync, tx_boundary: {source_loc: "AuthService.java:15", scope: "user lookup/create and token generation", isolation: "default", must_preserve: true}}

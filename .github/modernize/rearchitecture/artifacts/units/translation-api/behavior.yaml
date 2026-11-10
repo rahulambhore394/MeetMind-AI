@@ -1,0 +1,7 @@
+unit: translation-api
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/translation/TranslationController.java:66", effect: "produces live translation and persists translation state", must_preserve: true}
+branches:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/translation/TranslationController.java:46", condition: "language preference accepted", behavior: "store/update meeting language preference", must_preserve: true}
+error_paths: []
+concurrency: {model: sync, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/translation/LiveTranslationService.java:18", scope: "translation persistence and broker notification", isolation: "default", must_preserve: true}}

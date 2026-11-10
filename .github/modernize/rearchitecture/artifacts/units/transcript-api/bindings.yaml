@@ -1,0 +1,5 @@
+unit: transcript-api
+bindings:
+  - {type: route-declaration, name: "@RequestMapping('/api/meetings/{meetingId}/transcripts')", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptController.java:12", target: "TranscriptController", must_appear_in_target: true, notes: "Transcript retrieval and trigger routes."}
+runtime_config:
+  - {key: transcription.provider, source_loc: "meetmind-backend/src/main/resources/application.properties:43", source: properties-file, default_value: "vosk", must_appear_in_target: true, notes: "Provider selection."}

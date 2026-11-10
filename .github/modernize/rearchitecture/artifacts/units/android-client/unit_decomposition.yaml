@@ -1,0 +1,4 @@
+unit: android-client
+commit: false
+candidate_splits:
+  - {id: "android/app/src/main/java/com/developer_rahul/meetmind_ai/MainActivity.kt:13-60", drivers: [concern_split, lifecycle_split], rationale: "Launcher/session routing and feature navigation are distinct UI lifecycle responsibilities.", source_slice: {file: "android/app/src/main/java/com/developer_rahul/meetmind_ai/MainActivity.kt", lines: [13, 60]}}

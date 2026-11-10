@@ -1,0 +1,5 @@
+unit: recording-api
+bindings:
+  - {type: route-declaration, name: "@RequestMapping('/api/meetings/{meetingId}/recordings')", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingController.java:24", target: "RecordingController", must_appear_in_target: true, notes: "Multipart and download routes."}
+runtime_config:
+  - {key: spring.servlet.multipart.max-file-size, source_loc: "meetmind-backend/src/main/resources/application.properties:15", source: properties-file, default_value: "500MB", must_appear_in_target: true, notes: "Recording upload limit."}

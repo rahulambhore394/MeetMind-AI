@@ -22,6 +22,7 @@ class LiveTranslationViewModel(
     private val meetingId: Long
 ) : ViewModel() {
 
+    private var activeMeetingId: Long = meetingId
     private val TAG = "LiveTranslationVM"
 
     private val _uiState = MutableStateFlow(LiveTranslationUiState())
@@ -36,10 +37,27 @@ class LiveTranslationViewModel(
         observeSubtitles()
     }
 
+    fun updateMeetingId(newMeetingId: Long) {
+        if (newMeetingId > 0L && activeMeetingId != newMeetingId) {
+            val oldId = activeMeetingId
+            val currentLang = _uiState.value.selectedTargetLanguage
+            if (_uiState.value.subtitlesEnabled) {
+                translationRepository.unsubscribeFromSubtitles(oldId, currentLang)
+            }
+            activeMeetingId = newMeetingId
+            if (_uiState.value.subtitlesEnabled) {
+                translationRepository.subscribeToSubtitles(activeMeetingId, currentLang)
+                viewModelScope.launch {
+                    translationRepository.setLanguagePreference(activeMeetingId, currentLang)
+                }
+            }
+        }
+    }
+
     private fun observeSubtitles() {
         viewModelScope.launch {
             translationRepository.subtitles.collect { subtitle ->
-                if (subtitle.meetingId == meetingId) {
+                if (subtitle.meetingId == activeMeetingId) {
                     _subtitles.update { current ->
                         // Deduplicate if we already displayed an optimistic local "You" entry for this original text
                         val filtered = current.filterNot { 
@@ -69,13 +87,13 @@ class LiveTranslationViewModel(
         _uiState.update { it.copy(subtitlesEnabled = enabled, error = null) }
         if (enabled) {
             startLiveTranscription()
-            translationRepository.subscribeToSubtitles(meetingId, _uiState.value.selectedTargetLanguage)
+            translationRepository.subscribeToSubtitles(activeMeetingId, _uiState.value.selectedTargetLanguage)
             viewModelScope.launch {
-                translationRepository.setLanguagePreference(meetingId, _uiState.value.selectedTargetLanguage)
+                translationRepository.setLanguagePreference(activeMeetingId, _uiState.value.selectedTargetLanguage)
             }
         } else {
             stopLiveTranscription()
-            translationRepository.unsubscribeFromSubtitles(meetingId, _uiState.value.selectedTargetLanguage)
+            translationRepository.unsubscribeFromSubtitles(activeMeetingId, _uiState.value.selectedTargetLanguage)
             _subtitles.value = emptyList()
             textToSpeechManager.stop()
         }
@@ -99,16 +117,16 @@ class LiveTranslationViewModel(
     fun setTargetLanguage(languageCode: String) {
         val oldLang = _uiState.value.selectedTargetLanguage
         if (oldLang == languageCode) return
-        translationRepository.unsubscribeFromSubtitles(meetingId, oldLang)
+        translationRepository.unsubscribeFromSubtitles(activeMeetingId, oldLang)
 
         _uiState.update { it.copy(selectedTargetLanguage = languageCode) }
 
         if (_uiState.value.subtitlesEnabled) {
-            translationRepository.subscribeToSubtitles(meetingId, languageCode)
+            translationRepository.subscribeToSubtitles(activeMeetingId, languageCode)
         }
 
         viewModelScope.launch {
-            translationRepository.setLanguagePreference(meetingId, languageCode)
+            translationRepository.setLanguagePreference(activeMeetingId, languageCode)
         }
     }
 
@@ -129,7 +147,7 @@ class LiveTranslationViewModel(
                                     // Instantly show local speaking subtitle in the overlay
                                     val optimisticSubtitle = Subtitle(
                                         id = System.currentTimeMillis(),
-                                        meetingId = meetingId,
+                                        meetingId = activeMeetingId,
                                         speaker = "You",
                                         originalText = spoken,
                                         translatedText = spoken,
@@ -143,7 +161,7 @@ class LiveTranslationViewModel(
                                     }
 
                                     translationRepository.sendLiveSpeech(
-                                        meetingId = meetingId,
+                                        meetingId = activeMeetingId,
                                         text = spoken,
                                         sourceLanguage = _uiState.value.sourceLanguage
                                     )
@@ -194,7 +212,7 @@ class LiveTranslationViewModel(
         super.onCleared()
         stopLiveTranscription()
         textToSpeechManager.stop()
-        translationRepository.unsubscribeFromSubtitles(meetingId, _uiState.value.selectedTargetLanguage)
+        translationRepository.unsubscribeFromSubtitles(activeMeetingId, _uiState.value.selectedTargetLanguage)
     }
 }
 

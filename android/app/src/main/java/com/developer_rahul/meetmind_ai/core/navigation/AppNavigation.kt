@@ -185,7 +185,9 @@ fun AppNavigation(navController: NavHostController) {
                 meetingId = id,
                 onBack = { navController.popBackStack() },
                 onJoin = { resolvedMeetingId ->
-                    navController.navigate(Screen.LiveMeeting.createRoute(resolvedMeetingId))
+                    navController.navigate(Screen.LiveMeeting.createRoute(resolvedMeetingId)) {
+                        popUpTo(Screen.PreJoinMeeting.route) { inclusive = true }
+                    }
                 }
             )
         }
@@ -197,11 +199,11 @@ fun AppNavigation(navController: NavHostController) {
             val id = backStackEntry.arguments?.getString("meetingId") ?: ""
             LiveMeetingScreen(
                 meetingId = id,
-                onLeaveMeeting = { duration -> navController.navigate(Screen.MeetingEnded.createRoute(id, duration)) },
-                onToggleChat = { navController.navigate(Screen.Chat.createRoute(id)) },
-                onToggleParticipants = { navController.navigate(Screen.Participants.createRoute(id)) },
-                onViewTranscript = { navController.navigate(Screen.Transcript.createRoute(id)) },
-                onViewIntelligence = { navController.navigate(Screen.MeetingIntelligence.createRoute(id)) }
+                onLeaveMeeting = { resolvedId, duration -> navController.navigate(Screen.MeetingEnded.createRoute(resolvedId, duration)) },
+                onToggleChat = { resolvedId -> navController.navigate(Screen.Chat.createRoute(resolvedId)) },
+                onToggleParticipants = { resolvedId -> navController.navigate(Screen.Participants.createRoute(resolvedId)) },
+                onViewTranscript = { resolvedId -> navController.navigate(Screen.Transcript.createRoute(resolvedId)) },
+                onViewIntelligence = { resolvedId -> navController.navigate(Screen.MeetingIntelligence.createRoute(resolvedId)) }
             )
         }
 

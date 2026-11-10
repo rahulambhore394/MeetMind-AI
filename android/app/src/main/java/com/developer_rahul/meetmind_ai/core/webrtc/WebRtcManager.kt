@@ -81,7 +81,11 @@ class WebRtcManager(
             .createPeerConnectionFactory()
     }
 
-    fun createLocalStream() {
+    fun createLocalStream(forceRecreate: Boolean = false) {
+        if (!forceRecreate && localAudioTrack != null && localVideoTrack != null) {
+            Log.d(TAG, "Local audio and video tracks already active, reusing existing stream")
+            return
+        }
         if (peerConnectionFactory == null) {
             initPeerConnectionFactory(context)
         }
@@ -95,8 +99,9 @@ class WebRtcManager(
             context,
             android.Manifest.permission.CAMERA
         ) == android.content.pm.PackageManager.PERMISSION_GRANTED
-        if (!hasAudioPermission || !hasCameraPermission) {
-            throw SecurityException("Camera and microphone permissions are required before starting WebRTC")
+        if (!hasAudioPermission && !hasCameraPermission) {
+            Log.w(TAG, "Neither camera nor microphone permission granted yet")
+            return
         }
 
         // 1. Audio creation - decoupled so camera failure never breaks microphone
@@ -126,10 +131,10 @@ class WebRtcManager(
                 cameraTextureHelper = textureHelper
                 videoCapturer?.initialize(textureHelper, context, localVideoSource?.capturerObserver)
                 try {
-                    videoCapturer?.startCapture(1280, 720, 30)
+                    videoCapturer?.startCapture(640, 480, 30)
                 } catch (e: Exception) {
-                    Log.w(TAG, "720p capture failed, falling back to 640x480: ${e.message}")
-                    videoCapturer?.startCapture(640, 480, 24)
+                    Log.w(TAG, "640x480 capture failed, falling back to 480x360: ${e.message}")
+                    videoCapturer?.startCapture(480, 360, 24)
                 }
                 localVideoTrack = peerConnectionFactory?.createVideoTrack("ARDAMSv0", localVideoSource)?.apply {
                     setEnabled(true)

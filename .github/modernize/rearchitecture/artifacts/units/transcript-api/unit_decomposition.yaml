@@ -1,0 +1,4 @@
+unit: transcript-api
+commit: false
+candidate_splits:
+  - {id: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptController.java:25-51", drivers: [execution_model_split], rationale: "Read-only transcript retrieval and asynchronous transcription triggering use different execution models.", source_slice: {file: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptController.java", lines: [25, 51]}}

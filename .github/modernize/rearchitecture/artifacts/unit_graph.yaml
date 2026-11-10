@@ -1,0 +1,181 @@
+units:
+  - name: auth-api
+    trigger: api
+    trigger_detail: "POST /api/auth/register; POST /api/auth/login"
+    source_anchors:
+      - {path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/auth/AuthController.java, line: 18}
+    exported_signature:
+      - {method: "HTTP POST /api/auth/register -> RegisterResponse", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/auth/AuthController.java:29", stability: frozen}
+      - {method: "HTTP POST /api/auth/login -> LoginResponse", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/auth/AuthController.java:50", stability: frozen}
+    dynamic_entrypoints:
+      - {target: "JwtAuthenticationFilter", mechanism: "di", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/auth/SecurityConfig.java:56"}
+    depends_on: []
+    shared_refs: [{module: security-context, used_fields: [current_user, jwt_token]}]
+  - name: meetings-api
+    trigger: api
+    trigger_detail: "Meeting lifecycle and CRUD under /api/meetings"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/meeting/MeetingController.java, line: 21}]
+    exported_signature: [{method: "HTTP CRUD /api/meetings", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/meeting/MeetingController.java:38", stability: frozen}]
+    dynamic_entrypoints: [{target: "MeetingEndedEventListener", mechanism: "annotation-scan", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/meeting/MeetingEndedEventListener.java:22"}]
+    depends_on: [{unit: participant-api, via: "participant membership"}, {unit: event-consumers, via: "published meeting events"}]
+    shared_refs: [{module: meeting-domain, used_fields: [meeting_id, host_id, status, code]}]
+  - name: participant-api
+    trigger: api
+    trigger_detail: "Participant invites, joins, accepts, declines, leaves under /api/meetings/{meetingId}/participants"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/participant/ParticipantController.java, line: 22}]
+    exported_signature: [{method: "HTTP participant operations", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/participant/ParticipantController.java:42", stability: frozen}]
+    dynamic_entrypoints: []
+    depends_on: [{unit: meetings-api, via: "meeting authorization"}]
+    shared_refs: [{module: meeting-domain, used_fields: [meeting_id, host_id, status]}]
+  - name: recording-api
+    trigger: api
+    trigger_detail: "Recording lifecycle and upload/download under /api/meetings/{meetingId}/recordings"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingController.java, line: 23}]
+    exported_signature: [{method: "HTTP recording lifecycle", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingController.java:35", stability: frozen}]
+    dynamic_entrypoints: [{target: "RecordingProcessingConsumer", mechanism: "annotation-scan", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingProcessingConsumer.java:29"}]
+    depends_on: [{unit: meetings-api, via: "meeting authorization"}, {unit: transcription-consumer, via: "recording processed event"}]
+    shared_refs: [{module: meeting-domain, used_fields: [meeting_id, recording_id]}]
+  - name: transcript-api
+    trigger: api
+    trigger_detail: "GET transcript, GET segment detail, POST transcription trigger"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptController.java, line: 11}]
+    exported_signature: [{method: "HTTP transcript operations", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptController.java:25", stability: frozen}]
+    dynamic_entrypoints: [{target: "TranscriptionConsumer", mechanism: "annotation-scan", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptionConsumer.java:45"}]
+    depends_on: [{unit: recording-api, via: "recording association"}, {unit: transcription-consumer, via: "transcription event"}]
+    shared_refs: [{module: meeting-domain, used_fields: [meeting_id, transcript_id, recording_id]}]
+  - name: intelligence-api
+    trigger: api
+    trigger_detail: "Meeting reports, decisions, chapters, parking lot, action items, and generation"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/MeetingIntelligenceController.java, line: 15}]
+    exported_signature: [{method: "HTTP intelligence operations", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/MeetingIntelligenceController.java:24", stability: frozen}]
+    dynamic_entrypoints: [{target: "IntelligenceConsumer", mechanism: "annotation-scan", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/IntelligenceConsumer.java:40"}]
+    depends_on: [{unit: transcript-api, via: "transcript input"}, {unit: intelligence-consumer, via: "generation completion"}]
+    shared_refs: [{module: meeting-domain, used_fields: [meeting_id, transcript_id, action_item_id]}]
+  - name: translation-api
+    trigger: api
+    trigger_detail: "GET translations, POST preference, POST live translation"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/translation/TranslationController.java, line: 11}]
+    exported_signature: [{method: "HTTP translation operations", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/translation/TranslationController.java:30", stability: frozen}]
+    dynamic_entrypoints: []
+    depends_on: [{unit: transcript-api, via: "transcript segments"}]
+    shared_refs: [{module: meeting-domain, used_fields: [meeting_id, transcript_segment_id, language]}]
+  - name: notification-api
+    trigger: api
+    trigger_detail: "Notifications, preferences, and device registration under /api/notifications"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/NotificationController.java, line: 11}]
+    exported_signature: [{method: "HTTP notification operations", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/NotificationController.java:21", stability: frozen}]
+    dynamic_entrypoints: [{target: "ReminderScheduler", mechanism: "annotation-scan", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/ReminderScheduler.java:35"}]
+    depends_on: [{unit: event-consumers, via: "notification events"}]
+    shared_refs: [{module: security-context, used_fields: [current_user]}]
+  - name: user-api
+    trigger: api
+    trigger_detail: "GET/PUT /api/users/me"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/user/UserController.java, line: 8}]
+    exported_signature: [{method: "HTTP GET/PUT /api/users/me", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/user/UserController.java:18", stability: frozen}]
+    dynamic_entrypoints: []
+    depends_on: []
+    shared_refs: [{module: security-context, used_fields: [current_user]}]
+  - name: chat-api
+    trigger: api
+    trigger_detail: "GET/POST /api/meetings/{meetingId}/messages"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/chat/ChatController.java, line: 13}]
+    exported_signature: [{method: "HTTP chat history/send", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/chat/ChatController.java:26", stability: frozen}]
+    dynamic_entrypoints: []
+    depends_on: [{unit: meetings-api, via: "meeting authorization"}]
+    shared_refs: [{module: meeting-domain, used_fields: [meeting_id, current_user]}]
+  - name: webrtc-api
+    trigger: api
+    trigger_detail: "GET /api/webrtc/ice-servers"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/webrtc/WebRtcController.java, line: 10}]
+    exported_signature: [{method: "HTTP GET /api/webrtc/ice-servers", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/webrtc/WebRtcController.java:19", stability: frozen}]
+    dynamic_entrypoints: []
+    depends_on: []
+    shared_refs: []
+  - name: chat-websocket
+    trigger: handler
+    trigger_detail: "STOMP /app/chat.send"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/chat/ChatWebSocketController.java, line: 19}]
+    exported_signature: [{method: "STOMP /app/chat.send -> /topic/meetings/{meetingId}/chat", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/chat/ChatWebSocketController.java:43", stability: frozen}]
+    dynamic_entrypoints: [{target: "WebSocketConfig", mechanism: "annotation-scan", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/websocket/WebSocketConfig.java:79"}]
+    depends_on: [{unit: meetings-api, via: "meeting authorization"}]
+    shared_refs: [{module: websocket-context, used_fields: [principal, meeting_destination]}]
+  - name: signaling-websocket
+    trigger: handler
+    trigger_detail: "STOMP /app/meetings/{meetingId}/signaling"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/webrtc/SignalingWebSocketController.java, line: 18}]
+    exported_signature: [{method: "STOMP signaling message", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/webrtc/SignalingWebSocketController.java:35", stability: frozen}]
+    dynamic_entrypoints: [{target: "WebSocketAuthInterceptor", mechanism: "di", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/websocket/WebSocketAuthInterceptor.java:45"}]
+    depends_on: [{unit: meetings-api, via: "meeting authorization"}]
+    shared_refs: [{module: websocket-context, used_fields: [principal, meeting_destination]}]
+  - name: translation-websocket
+    trigger: handler
+    trigger_detail: "STOMP translation and language preference messages"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/translation/TranslationWebSocketController.java, line: 14}]
+    exported_signature: [{method: "STOMP /app/meetings/{meetingId}/translate", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/translation/TranslationWebSocketController.java:34", stability: frozen}]
+    dynamic_entrypoints: []
+    depends_on: [{unit: translation-api, via: "translation service"}]
+    shared_refs: [{module: websocket-context, used_fields: [principal, meeting_destination]}]
+  - name: ai-proxy-websocket
+    trigger: handler
+    trigger_detail: "STOMP /app/meetings/{meetingId}/ai-proxy/ask"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/representative/AiProxyWebSocketController.java, line: 14}]
+    exported_signature: [{method: "STOMP AI proxy question", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/representative/AiProxyWebSocketController.java:30", stability: frozen}]
+    dynamic_entrypoints: []
+    depends_on: [{unit: intelligence-api, via: "AI service"}]
+    shared_refs: [{module: websocket-context, used_fields: [principal, meeting_destination]}]
+  - name: transcription-consumer
+    trigger: handler
+    trigger_detail: "Kafka transcription processing topic"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptionConsumer.java, line: 45}]
+    exported_signature: [{method: "Kafka transcription event handler", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptionConsumer.java:45", stability: must_preserve}]
+    dynamic_entrypoints: [{target: "TranscriptionConsumer", mechanism: "annotation-scan", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptionConsumer.java:45"}]
+    depends_on: [{unit: transcript-api, via: "transcript persistence"}]
+    shared_refs: [{module: event-context, used_fields: [event_id, meeting_id, correlation_id]}]
+  - name: intelligence-consumer
+    trigger: handler
+    trigger_detail: "Kafka meeting intelligence generation topic"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/IntelligenceConsumer.java, line: 40}]
+    exported_signature: [{method: "Kafka intelligence event handler", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/IntelligenceConsumer.java:40", stability: must_preserve}]
+    dynamic_entrypoints: [{target: "IntelligenceConsumer", mechanism: "annotation-scan", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/IntelligenceConsumer.java:40"}]
+    depends_on: [{unit: intelligence-api, via: "summary persistence"}]
+    shared_refs: [{module: event-context, used_fields: [event_id, meeting_id, correlation_id]}]
+  - name: recording-consumer
+    trigger: handler
+    trigger_detail: "Kafka recording processing topic"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingProcessingConsumer.java, line: 29}]
+    exported_signature: [{method: "Kafka recording processing event handler", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingProcessingConsumer.java:29", stability: must_preserve}]
+    dynamic_entrypoints: [{target: "RecordingProcessingConsumer", mechanism: "annotation-scan", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingProcessingConsumer.java:29"}]
+    depends_on: [{unit: recording-api, via: "recording processing"}]
+    shared_refs: [{module: event-context, used_fields: [event_id, meeting_id, correlation_id]}]
+  - name: event-consumers
+    trigger: handler
+    trigger_detail: "Kafka notification, analytics, audit, and dead-letter topics"
+    source_anchors:
+      - {path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/NotificationConsumer.java, line: 43}
+      - {path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/AnalyticsConsumer.java, line: 31}
+      - {path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/AuditLogConsumer.java, line: 27}
+      - {path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/DltConsumer.java, line: 22}
+    exported_signature: [{method: "Kafka event handlers", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/NotificationConsumer.java:43", stability: must_preserve}]
+    dynamic_entrypoints: [{target: "Kafka consumers", mechanism: "annotation-scan", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/NotificationConsumer.java:43"}]
+    depends_on: [{unit: notification-api, via: "notification persistence"}]
+    shared_refs: [{module: event-context, used_fields: [event_id, meeting_id, correlation_id]}]
+  - name: reminder-scheduler
+    trigger: job
+    trigger_detail: "Fixed-rate scheduled reminder scan every 60 seconds"
+    source_anchors: [{path: meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/ReminderScheduler.java, line: 35}]
+    exported_signature: [{method: "scheduled reminder scan", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/ReminderScheduler.java:35", stability: must_preserve}]
+    dynamic_entrypoints: [{target: "ReminderScheduler", mechanism: "annotation-scan", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/ReminderScheduler.java:35"}]
+    depends_on: [{unit: notification-api, via: "notification delivery"}]
+    shared_refs: [{module: meeting-domain, used_fields: [meeting_id, status]}]
+  - name: android-client
+    trigger: page
+    trigger_detail: "Android launcher activity and Compose navigation graph"
+    source_anchors:
+      - {path: android/app/src/main/AndroidManifest.xml, line: 48}
+      - {path: android/app/src/main/java/com/developer_rahul/meetmind_ai/MainActivity.kt, line: 13}
+    exported_signature: [{method: "Android launcher Activity", source_loc: "android/app/src/main/AndroidManifest.xml:48", stability: frozen}]
+    dynamic_entrypoints:
+      - {target: "MeetMindFcmService", mechanism: "xml-config", source_loc: "android/app/src/main/AndroidManifest.xml:36"}
+      - {target: "RecordingService", mechanism: "xml-config", source_loc: "android/app/src/main/AndroidManifest.xml:29"}
+    depends_on: [{unit: auth-api, via: "Retrofit auth"}, {unit: meetings-api, via: "Retrofit meetings"}, {unit: chat-websocket, via: "STOMP chat"}, {unit: signaling-websocket, via: "WebRTC signaling"}]
+    shared_refs: [{module: client-network, used_fields: [base_url, auth_token, websocket_session]}]

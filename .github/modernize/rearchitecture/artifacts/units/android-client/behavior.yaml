@@ -1,0 +1,9 @@
+unit: android-client
+side_effects:
+  - {source_loc: "android/app/src/main/java/com/developer_rahul/meetmind_ai/MainActivity.kt:29", effect: "routes push/WebSocket events to meeting, intelligence, transcript, or representative screens", must_preserve: true}
+  - {source_loc: "android/app/src/main/java/com/developer_rahul/meetmind_ai/core/media/recording/RecordingService.kt:1", effect: "runs foreground media recording service", must_preserve: true}
+branches:
+  - {source_loc: "android/app/src/main/java/com/developer_rahul/meetmind_ai/MainActivity.kt:48", condition: "authentication/session state", behavior: "choose welcome or authenticated navigation", must_preserve: true}
+error_paths:
+  - {source_loc: "android/app/src/main/java/com/developer_rahul/meetmind_ai/feature/auth/presentation/AuthViewModel.kt:1", trigger: "login/register failure", outcome: "show authentication error state", contract: "user-visible Compose error state", must_preserve: true}
+concurrency: {model: coroutine, tx_boundary: {source_loc: "android/app/src/main/java/com/developer_rahul/meetmind_ai/core/network/websocket/MeetingWebSocketManager.kt:1", scope: "network and realtime state updates", isolation: "n/a", must_preserve: true}}

@@ -1,0 +1,8 @@
+unit: intelligence-consumer
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/IntelligenceConsumer.java:40", effect: "consumes transcript event, generates summary/action items, broadcasts readiness", must_preserve: true}
+branches:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/HybridMeetingIntelligenceProvider.java:1", condition: "provider configuration", behavior: "select local or external intelligence provider", must_preserve: true}
+error_paths:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/IntelligenceConsumer.java:40", trigger: "provider failure", outcome: "Kafka retry/DLT and no false-ready notification", contract: "consumer error contract", must_preserve: true}
+concurrency: {model: thread-pool, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/MeetingIntelligenceService.java:35", scope: "summary/action-item persistence", isolation: "default", must_preserve: true}}

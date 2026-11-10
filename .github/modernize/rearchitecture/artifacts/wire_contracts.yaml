@@ -1,0 +1,41 @@
+contracts:
+  - name: "Authentication REST"
+    unit: auth-api
+    type: rest
+    stability: frozen
+    source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/auth/AuthController.java:18"
+    contract: {method: "POST", path: "/api/auth/register and /api/auth/login", request: "RegisterRequest or LoginRequest", response: "RegisterResponse or LoginResponse", error: "validation/auth errors", auth: "public endpoints; JWT issued on success"}
+    target_contract: {method: "POST /api/auth/{register,login}", notes: "Preserve request DTO fields, response DTO shape, and JWT issuance semantics."}
+    semantic_divergence: []
+  - name: "Meeting REST"
+    unit: meetings-api
+    type: rest
+    stability: frozen
+    source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/meeting/MeetingController.java:22"
+    contract: {method: "CRUD", path: "/api/meetings/**", request: "meeting DTOs and meeting code/path parameters", response: "meeting DTOs/status", error: "authorization, validation, not-found errors", auth: "JWT"}
+    target_contract: {method: "Preserve existing HTTP methods and paths", notes: "Lifecycle start/end and code join are externally observable."}
+    semantic_divergence: []
+  - name: "Feature REST surfaces"
+    unit: global
+    type: rest
+    stability: must_preserve
+    source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/MeetingIntelligenceController.java:24"
+    contract: {method: "GET/POST/PATCH/DELETE", path: "/api/meetings/**, /api/notifications/**, /api/users/**, /api/webrtc/**", request: "feature DTOs", response: "JSON DTOs or binary recording download", error: "GlobalExceptionHandler response", auth: "JWT except auth endpoints"}
+    target_contract: {method: "Preserve controller paths and status/error behavior", notes: "Filter implementation work by unit_graph unit."}
+    semantic_divergence: []
+  - name: "STOMP WebSocket"
+    unit: global
+    type: sdk
+    stability: frozen
+    source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/websocket/WebSocketConfig.java:79"
+    contract: {method: "STOMP CONNECT/SEND/SUBSCRIBE", path: "/ws and /app/**", request: "JSON STOMP messages", response: "topic/user destinations", error: "authentication interceptor and broker errors", auth: "JWT in CONNECT headers"}
+    target_contract: {method: "Preserve STOMP endpoint, application destinations, and topic destinations", notes: "Chat, signaling, translation, and AI proxy units have individual message mappings."}
+    semantic_divergence: []
+  - name: "Kafka event processing"
+    unit: global
+    type: kafka
+    stability: must_preserve
+    source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/KafkaEventPublisher.java:79"
+    contract: {method: "publish/consume", path: "configured Spring Kafka topics", request: "MeetMindEvent JSON envelope", response: "consumer side effects and DLT handling", error: "configured retry/error handler and DLT"}
+    target_contract: {method: "Preserve event envelope, topic bindings, idempotency, and DLT behavior", notes: "Use consumer unit source anchors for exact listener bindings."}
+    semantic_divergence: []

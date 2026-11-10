@@ -1,0 +1,4 @@
+unit: intelligence-consumer
+bindings:
+  - {type: listener, name: "@KafkaListener", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/IntelligenceConsumer.java:40", target: "IntelligenceConsumer", must_appear_in_target: true, notes: "Kafka intelligence binding."}
+runtime_config: []

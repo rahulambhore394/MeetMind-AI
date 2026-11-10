@@ -1,0 +1,5 @@
+unit: transcription-consumer
+bindings:
+  - {type: listener, name: "@KafkaListener", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptionConsumer.java:45", target: "TranscriptionConsumer", must_appear_in_target: true, notes: "Kafka topic/group binding."}
+runtime_config:
+  - {key: transcription.vosk.model-path.*, source_loc: "meetmind-backend/src/main/resources/application.properties:44", source: properties-file, default_value: "models/vosk/*", must_appear_in_target: true, notes: "Language model paths."}

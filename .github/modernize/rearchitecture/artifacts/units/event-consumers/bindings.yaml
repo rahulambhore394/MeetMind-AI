@@ -1,0 +1,5 @@
+unit: event-consumers
+bindings:
+  - {type: listener, name: "@KafkaListener notification/analytics/audit/DLT", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/NotificationConsumer.java:43", target: "event consumer classes", must_appear_in_target: true, notes: "Multiple Kafka listener bindings."}
+runtime_config:
+  - {key: spring.kafka.bootstrap-servers, source_loc: "meetmind-backend/src/main/resources/application.properties:26", source: env, default_value: "localhost:9092", must_appear_in_target: true, notes: "Kafka broker."}

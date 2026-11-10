@@ -1,0 +1,8 @@
+unit: recording-api
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingController.java:83", effect: "accepts multipart recording upload", must_preserve: true}
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingController.java:104", effect: "streams recording download", must_preserve: true}
+branches: []
+error_paths:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingController.java:83", trigger: "multipart size or recording state invalid", outcome: "upload rejected", contract: "multipart/error response", must_preserve: true}
+concurrency: {model: sync, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingService.java:25", scope: "recording metadata and status updates", isolation: "default", must_preserve: true}}

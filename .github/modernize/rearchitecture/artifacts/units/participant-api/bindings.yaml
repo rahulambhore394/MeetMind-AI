@@ -1,0 +1,4 @@
+unit: participant-api
+bindings:
+  - {type: route-declaration, name: "@RequestMapping('/api/meetings/{meetingId}/participants')", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/participant/ParticipantController.java:23", target: "ParticipantController", must_appear_in_target: true, notes: "Participant membership routes."}
+runtime_config: []

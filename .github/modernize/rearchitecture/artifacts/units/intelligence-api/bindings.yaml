@@ -1,0 +1,7 @@
+unit: intelligence-api
+bindings:
+  - {type: route-declaration, name: "MeetingIntelligenceController mappings", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/MeetingIntelligenceController.java:24", target: "MeetingIntelligenceController", must_appear_in_target: true, notes: "Reports and generation routes."}
+runtime_config:
+  - {key: intelligence.provider, source_loc: "meetmind-backend/src/main/resources/application.properties:56", source: env, default_value: "hybrid", must_appear_in_target: true, notes: "AI provider selection."}
+  - {key: intelligence.gemini.api-key, source_loc: "meetmind-backend/src/main/resources/application.properties:58", source: env, default_value: "empty", must_appear_in_target: true, notes: "Gemini credential."}
+  - {key: intelligence.openai.api-key, source_loc: "meetmind-backend/src/main/resources/application.properties:60", source: env, default_value: "empty", must_appear_in_target: true, notes: "OpenAI credential."}

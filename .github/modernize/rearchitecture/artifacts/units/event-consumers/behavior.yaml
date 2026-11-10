@@ -1,0 +1,9 @@
+unit: event-consumers
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/NotificationConsumer.java:43", effect: "creates and broadcasts notifications", must_preserve: true}
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/AuditLogConsumer.java:27", effect: "records audit event", must_preserve: true}
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/AnalyticsConsumer.java:31", effect: "records analytics event", must_preserve: true}
+branches:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/DltConsumer.java:22", condition: "failed event routed to DLT", behavior: "log/handle dead-letter event", must_preserve: true}
+error_paths: []
+concurrency: {model: thread-pool, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/NotificationConsumer.java:43", scope: "event side effect persistence", isolation: "default", must_preserve: true}}

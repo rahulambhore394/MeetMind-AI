@@ -1,0 +1,6 @@
+unit: ai-proxy-websocket
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/representative/AiProxyWebSocketController.java:30", effect: "forwards AI question and broadcasts answer", must_preserve: true}
+branches: []
+error_paths: []
+concurrency: {model: async, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/representative/AiProxyWebSocketController.java:30", scope: "AI request and response delivery", isolation: "default", must_preserve: true}}

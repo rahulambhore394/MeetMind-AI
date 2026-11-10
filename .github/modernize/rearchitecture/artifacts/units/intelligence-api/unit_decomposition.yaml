@@ -1,0 +1,4 @@
+unit: intelligence-api
+commit: false
+candidate_splits:
+  - {id: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/MeetingIntelligenceController.java:24-198", drivers: [concern_split, execution_model_split], rationale: "Report reads, mutable decisions, parking-lot edits, and AI generation have distinct contracts.", source_slice: {file: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/MeetingIntelligenceController.java", lines: [24, 198]}}

@@ -1,0 +1,4 @@
+unit: transcription-consumer
+commit: false
+candidate_splits:
+  - {id: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptionConsumer.java:45", drivers: [execution_model_split], rationale: "Kafka orchestration and provider-specific speech recognition have different runtime concerns.", source_slice: {file: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/transcription/TranscriptionConsumer.java", lines: [45, 45]}}

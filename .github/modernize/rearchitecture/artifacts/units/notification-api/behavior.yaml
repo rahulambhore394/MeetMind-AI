@@ -1,0 +1,8 @@
+unit: notification-api
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/NotificationController.java:56", effect: "registers/unregisters push devices", must_preserve: true}
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/NotificationController.java:37", effect: "marks all notifications read", must_preserve: true}
+branches: []
+error_paths:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/NotificationController.java:31", trigger: "notification id not owned by current user", outcome: "reject mutation", contract: "authorization/error response", must_preserve: true}
+concurrency: {model: sync, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/NotificationService.java:14", scope: "notification/device/preference mutation", isolation: "default", must_preserve: true}}

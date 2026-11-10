@@ -1,0 +1,5 @@
+unit: notification-api
+bindings:
+  - {type: route-declaration, name: "@RequestMapping('/api/notifications')", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/NotificationController.java:12", target: "NotificationController", must_appear_in_target: true, notes: "Notification and device routes."}
+runtime_config:
+  - {key: mail.from.address, source_loc: "meetmind-backend/src/main/resources/application.properties:77", source: env, default_value: "noreply@meetmind.ai", must_appear_in_target: true, notes: "Outbound mail sender."}

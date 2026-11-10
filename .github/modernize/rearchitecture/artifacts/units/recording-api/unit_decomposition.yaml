@@ -1,0 +1,4 @@
+unit: recording-api
+commit: false
+candidate_splits:
+  - {id: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingController.java:35-104", drivers: [execution_model_split, concern_split], rationale: "Recording lifecycle commands and multipart transfer/download have different I/O and failure behavior.", source_slice: {file: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingController.java", lines: [35, 104]}}

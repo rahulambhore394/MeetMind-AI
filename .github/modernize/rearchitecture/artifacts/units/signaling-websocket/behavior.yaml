@@ -1,0 +1,6 @@
+unit: signaling-websocket
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/webrtc/SignalingWebSocketController.java:35", effect: "routes WebRTC signaling payload to meeting destination", must_preserve: true}
+branches: []
+error_paths: []
+concurrency: {model: event-loop, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/webrtc/SignalingWebSocketController.java:35", scope: "signaling message routing", isolation: "n/a", must_preserve: true}}

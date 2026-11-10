@@ -1,0 +1,7 @@
+unit: recording-consumer
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingProcessingConsumer.java:29", effect: "processes recording event and updates recording/transcript state", must_preserve: true}
+branches: []
+error_paths:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingProcessingConsumer.java:29", trigger: "processing failure", outcome: "retry or DLT", contract: "Kafka consumer error handling", must_preserve: true}
+concurrency: {model: thread-pool, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/recording/RecordingProcessingService.java:14", scope: "processing status and notification", isolation: "default", must_preserve: true}}

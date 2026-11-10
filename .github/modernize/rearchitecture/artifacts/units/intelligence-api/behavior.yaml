@@ -1,0 +1,9 @@
+unit: intelligence-api
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/MeetingIntelligenceController.java:198", effect: "queues or runs intelligence generation and publishes progress", must_preserve: true}
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/MeetingIntelligenceController.java:63", effect: "creates/deletes decision data", must_preserve: true}
+branches:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/MeetingIntelligenceController.java:198", condition: "provider/generation mode", behavior: "generate or analyze using configured provider", must_preserve: true}
+error_paths:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/IntelligenceException.java:1", trigger: "provider failure or invalid meeting", outcome: "generation error", contract: "existing intelligence error response", must_preserve: true}
+concurrency: {model: async, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/intelligence/MeetingIntelligenceService.java:35", scope: "summary/action-item persistence and event notification", isolation: "default", must_preserve: true}}

@@ -1,0 +1,4 @@
+unit: user-api
+bindings:
+  - {type: route-declaration, name: "@RequestMapping('/api/users')", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/user/UserController.java:9", target: "UserController", must_appear_in_target: true, notes: "Current-user profile routes."}
+runtime_config: []

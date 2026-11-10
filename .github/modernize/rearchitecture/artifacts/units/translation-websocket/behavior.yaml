@@ -1,0 +1,7 @@
+unit: translation-websocket
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/translation/TranslationWebSocketController.java:34", effect: "translates live message and broadcasts result", must_preserve: true}
+branches:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/translation/TranslationWebSocketController.java:77", condition: "language preference message", behavior: "update preference rather than translate text", must_preserve: true}
+error_paths: []
+concurrency: {model: event-loop, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/translation/TranslationWebSocketController.java:34", scope: "translation request and outbound message", isolation: "default", must_preserve: true}}

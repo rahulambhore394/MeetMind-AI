@@ -25,6 +25,7 @@ class LiveMeetingViewModel(
     private val meetingId: Long
 ) : ViewModel() {
 
+    private var activeMeetingId: Long = meetingId
     private val _uiState = MutableStateFlow(LiveMeetingUiState())
     val uiState = _uiState.asStateFlow()
 
@@ -35,10 +36,24 @@ class LiveMeetingViewModel(
 
     private var callStarted = false
 
-    fun startCall() {
+    fun startCall(targetMeetingId: Long? = null) {
+        if (targetMeetingId != null && targetMeetingId > 0L) {
+            activeMeetingId = targetMeetingId
+        }
         if (callStarted) return
         callStarted = true
         joinMeeting()
+    }
+
+    fun updateMeetingId(newMeetingId: Long) {
+        if (newMeetingId > 0L && activeMeetingId != newMeetingId) {
+            val oldId = activeMeetingId
+            activeMeetingId = newMeetingId
+            if (callStarted) {
+                meetingWebSocketManager.unsubscribeFromAiProxySpeech(oldId)
+                meetingWebSocketManager.subscribeToAiProxySpeech(newMeetingId)
+            }
+        }
     }
 
     fun initAudioRouting(context: android.content.Context) {
@@ -56,7 +71,7 @@ class LiveMeetingViewModel(
     private fun observeAiProxySpeech() {
         viewModelScope.launch {
             meetingWebSocketManager.aiProxySpeech.collect { dto ->
-                if (dto.meetingId == meetingId) {
+                if (dto.meetingId == activeMeetingId) {
                     Log.d("LiveMeetingVM", "AI Proxy Speech received: ${dto.spokenText} for owner ${dto.ownerName}")
                     _uiState.update { it.copy(activeAiSpeech = dto) }
 
@@ -84,13 +99,13 @@ class LiveMeetingViewModel(
     private fun joinMeeting() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            val result = meetingRepository.joinMeeting(meetingId)
+            val result = meetingRepository.joinMeeting(activeMeetingId)
             if (result is NetworkResult.Error) {
                 Log.w("LiveMeetingVM", "REST joinMeeting non-fatal error: ${result.error.message}, proceeding to start media call...")
             }
-            meetingWebSocketManager.subscribeToAiProxySpeech(meetingId)
+            meetingWebSocketManager.subscribeToAiProxySpeech(activeMeetingId)
             try {
-                meetingCallRepository.joinMeeting(meetingId)
+                meetingCallRepository.joinMeeting(activeMeetingId)
                 _uiState.update { it.copy(isLoading = false) }
             } catch (e: Exception) {
                 callStarted = false
@@ -141,10 +156,22 @@ class LiveMeetingViewModel(
                 updateParticipantState(event.userId) { it.copy(connectionState = event.state) }
             }
             is MeetingCallEvent.ScreenShareStarted -> {
-                updateParticipantState(event.userId) { it.copy(screenTrack = event.videoTrack, isScreenSharing = true) }
+                updateParticipantState(event.userId) {
+                    it.copy(
+                        screenTrack = event.videoTrack,
+                        sfuScreenTrack = event.sfuVideoTrack,
+                        isScreenSharing = true
+                    )
+                }
             }
             is MeetingCallEvent.ScreenShareStopped -> {
-                updateParticipantState(event.userId) { it.copy(screenTrack = null, isScreenSharing = false) }
+                updateParticipantState(event.userId) {
+                    it.copy(
+                        screenTrack = null,
+                        sfuScreenTrack = null,
+                        isScreenSharing = false
+                    )
+                }
             }
             is MeetingCallEvent.Error -> {
                 _uiState.update { it.copy(error = event.message) }
@@ -187,18 +214,22 @@ class LiveMeetingViewModel(
     }
 
     fun startScreenSharing(mediaProjectionData: android.content.Intent) {
+        _uiState.update { it.copy(isScreenSharing = true, error = null) }
         meetingCallRepository.startScreenSharing(mediaProjectionData)
-        val track = meetingCallRepository.getLocalScreenTrack()
-        if (track != null) {
-            _uiState.update { it.copy(isScreenSharing = true, localScreenTrack = track) }
-        } else {
-            _uiState.update { it.copy(isScreenSharing = false, localScreenTrack = null, error = "Failed to start screen capture") }
+        val p2pTrack = meetingCallRepository.getLocalScreenTrack()
+        val sfuTrack = meetingCallRepository.getLocalSfuScreenTrack()
+        _uiState.update {
+            it.copy(
+                isScreenSharing = true,
+                localScreenTrack = p2pTrack,
+                localSfuScreenTrack = sfuTrack
+            )
         }
     }
 
     fun stopScreenSharing() {
         meetingCallRepository.stopScreenSharing()
-        _uiState.update { it.copy(isScreenSharing = false, localScreenTrack = null) }
+        _uiState.update { it.copy(isScreenSharing = false, localScreenTrack = null, localSfuScreenTrack = null) }
     }
 
     fun leaveMeeting() {
@@ -206,11 +237,11 @@ class LiveMeetingViewModel(
         callStarted = false
         viewModelScope.launch {
             try {
-                meetingRepository.leaveMeeting(meetingId)
+                meetingRepository.leaveMeeting(activeMeetingId)
             } catch (e: Exception) {
                 Log.e("LiveMeetingVM", "Error executing REST leaveMeeting: ${e.message}")
             }
-            meetingWebSocketManager.unsubscribeFromAiProxySpeech(meetingId)
+            meetingWebSocketManager.unsubscribeFromAiProxySpeech(activeMeetingId)
             textToSpeechManager.stop()
             meetingCallRepository.leaveMeeting()
         }
@@ -218,7 +249,7 @@ class LiveMeetingViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        meetingWebSocketManager.unsubscribeFromAiProxySpeech(meetingId)
+        meetingWebSocketManager.unsubscribeFromAiProxySpeech(activeMeetingId)
         textToSpeechManager.stop()
         meetingCallRepository.leaveMeeting()
     }

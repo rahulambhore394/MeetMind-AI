@@ -32,9 +32,19 @@ import com.developer_rahul.meetmind_ai.core.ui.provideChatViewModelFactory
 fun ChatScreen(
     meetingId: String,
     onBack: () -> Unit,
-    viewModel: ChatViewModel = viewModel(factory = provideChatViewModelFactory(meetingId.toLongOrNull() ?: -1L))
+    viewModel: ChatViewModel = viewModel(
+        key = "ChatScreen_$meetingId",
+        factory = provideChatViewModelFactory(meetingId.toLongOrNull() ?: -1L)
+    )
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(meetingId) {
+        val numId = meetingId.toLongOrNull() ?: -1L
+        if (numId > 0L) {
+            viewModel.updateMeetingId(numId)
+        }
+    }
 
     Scaffold(
         topBar = {

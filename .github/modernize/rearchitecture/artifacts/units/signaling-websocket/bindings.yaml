@@ -1,0 +1,4 @@
+unit: signaling-websocket
+bindings:
+  - {type: route-declaration, name: "@MessageMapping('/meetings/{meetingId}/signaling')", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/webrtc/SignalingWebSocketController.java:35", target: "SignalingWebSocketController", must_appear_in_target: true, notes: "WebRTC signaling destination."}
+runtime_config: []

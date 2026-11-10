@@ -1,0 +1,9 @@
+unit: meetings-api
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/meeting/MeetingController.java:93", effect: "starts meeting and publishes lifecycle event", must_preserve: true}
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/meeting/MeetingController.java:113", effect: "ends meeting and publishes lifecycle event", must_preserve: true}
+branches:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/meeting/MeetingController.java:82", condition: "meeting code and membership validity", behavior: "join or reject participant", must_preserve: true}
+error_paths:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/meeting/MeetingAuthorizationService.java:6", trigger: "caller is not authorized", outcome: "request rejected", contract: "authorization error response", must_preserve: true}
+concurrency: {model: sync, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/meeting/MeetingService.java:36", scope: "meeting lifecycle persistence and event publication", isolation: "default", must_preserve: true}}

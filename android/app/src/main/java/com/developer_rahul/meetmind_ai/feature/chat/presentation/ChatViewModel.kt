@@ -10,22 +10,37 @@ import kotlinx.coroutines.launch
 
 class ChatViewModel(
     private val chatRepository: ChatRepository,
-    private val meetingId: Long
+    initialMeetingId: Long
 ) : ViewModel() {
 
+    private var currentMeetingId: Long = initialMeetingId
     private val _uiState = MutableStateFlow(ChatUiState())
     val uiState = _uiState.asStateFlow()
 
     init {
-        chatRepository.subscribeToChat(meetingId)
-        loadHistory()
+        if (currentMeetingId > 0L) {
+            chatRepository.subscribeToChat(currentMeetingId)
+            loadHistory()
+        }
         observeMessages()
     }
 
+    fun updateMeetingId(newMeetingId: Long) {
+        if (newMeetingId > 0L && newMeetingId != currentMeetingId) {
+            if (currentMeetingId > 0L) {
+                chatRepository.unsubscribeFromChat(currentMeetingId)
+            }
+            currentMeetingId = newMeetingId
+            chatRepository.subscribeToChat(newMeetingId)
+            loadHistory()
+        }
+    }
+
     private fun loadHistory() {
+        if (currentMeetingId <= 0L) return
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true) }
-            when (val result = chatRepository.getMessages(meetingId)) {
+            when (val result = chatRepository.getMessages(currentMeetingId)) {
                 is NetworkResult.Success -> {
                     _uiState.update { state ->
                         val historyMessages = result.data.reversed()
@@ -45,7 +60,7 @@ class ChatViewModel(
     private fun observeMessages() {
         viewModelScope.launch {
             chatRepository.messages
-                .filter { it.meetingId == meetingId }
+                .filter { it.meetingId == currentMeetingId }
                 .collect { message ->
                     _uiState.update { state ->
                         // Deduplicate: replace optimistic local message or insert incoming
@@ -70,11 +85,11 @@ class ChatViewModel(
 
     fun sendMessage() {
         val content = _uiState.value.pendingMessage.trim()
-        if (content.isBlank()) return
+        if (content.isBlank() || currentMeetingId <= 0L) return
 
         val optimisticMessage = ChatMessage(
             id = System.currentTimeMillis(),
-            meetingId = meetingId,
+            meetingId = currentMeetingId,
             senderId = -1L,
             senderName = "You",
             text = content,
@@ -89,12 +104,14 @@ class ChatViewModel(
             )
         }
 
-        chatRepository.sendMessage(meetingId, content)
+        chatRepository.sendMessage(currentMeetingId, content)
     }
 
     override fun onCleared() {
         super.onCleared()
-        chatRepository.unsubscribeFromChat(meetingId)
+        if (currentMeetingId > 0L) {
+            chatRepository.unsubscribeFromChat(currentMeetingId)
+        }
     }
 }
 

@@ -1,0 +1,31 @@
+seams:
+  - id: "android/app/src/main/java/com/developer_rahul/meetmind_ai/core/network:1"
+    description: "Android client consumes backend HTTP and STOMP contracts."
+    source: inferred
+    cut_between: {migrated_side: android-client, frozen_side: meetings-api}
+    protocol_shift: {from: "Retrofit/OkHttp client", to: "Spring REST"}
+    frozen_side_rule: "meetings-api MUST NOT be refactored as part of Android-only changes."
+    bridge_points:
+      - at: "Android Retrofit service to meeting controller"
+        from_form: "Kotlin suspend Retrofit request with serialized DTO"
+        to_form: "HTTP request to /api/meetings with Bearer JWT"
+        mapping_rule: "Preserve path, HTTP verb, JSON field names, JWT Authorization header, and response/error DTO mapping."
+        edge_cases: ["401 clears local auth state", "multipart recording endpoints use streaming rather than JSON"]
+        idempotency_retry: "GET may retry; writes retry only when the existing operation is idempotent."
+        fallback: "Surface HTTP/network error in the corresponding ViewModel state; do not fabricate success."
+        must_preserve: true
+  - id: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/KafkaEventPublisher.java:79"
+    description: "Kafka event publisher crosses from synchronous domain operations to asynchronous consumers."
+    source: inferred
+    cut_between: {migrated_side: meetings-api, frozen_side: event-consumers}
+    protocol_shift: {from: "in-process Spring event", to: "Kafka JSON event"}
+    frozen_side_rule: "event-consumers MUST NOT be refactored when changing a producing unit without an explicit contract update."
+    bridge_points:
+      - at: "KafkaEventPublisher event serialization"
+        from_form: "Spring application event with typed payload"
+        to_form: "Kafka topic record containing MeetMindEvent envelope"
+        mapping_rule: "Preserve event type, eventId, correlationId, meetingId, payload fields, topic routing, and JSON serializer configuration."
+        edge_cases: ["duplicate delivery", "consumer disabled by spring.kafka.listener.auto-startup", "failed records routed to DLT"]
+        idempotency_retry: "Consumers use event idempotency registry; producers may retry publish without changing event identity."
+        fallback: "Publish failure remains an explicit error and must not be reported as completed side effect."
+        must_preserve: true

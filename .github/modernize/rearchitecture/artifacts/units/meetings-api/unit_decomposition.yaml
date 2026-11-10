@@ -1,0 +1,4 @@
+unit: meetings-api
+commit: false
+candidate_splits:
+  - {id: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/meeting/MeetingController.java:38-195", drivers: [lifecycle_split, concern_split], rationale: "CRUD, code joining, and lifecycle transitions have distinct authorization and event side effects.", source_slice: {file: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/meeting/MeetingController.java", lines: [38, 195]}}

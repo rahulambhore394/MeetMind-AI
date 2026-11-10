@@ -1,0 +1,7 @@
+unit: user-api
+side_effects:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/user/UserController.java:24", effect: "updates authenticated user profile", must_preserve: true}
+branches: []
+error_paths:
+  - {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/user/UserController.java:18", trigger: "missing/invalid authenticated user", outcome: "request rejected", contract: "security/error response", must_preserve: true}
+concurrency: {model: sync, tx_boundary: {source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/user/UserController.java:24", scope: "profile update", isolation: "default", must_preserve: true}}

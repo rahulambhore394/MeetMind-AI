@@ -1,0 +1,7 @@
+unit: android-client
+bindings:
+  - {type: xml-config, name: "MAIN/LAUNCHER MainActivity", source_loc: "android/app/src/main/AndroidManifest.xml:48", target: "MainActivity", must_appear_in_target: true, notes: "Android application entry point."}
+  - {type: xml-config, name: "Firebase messaging service", source_loc: "android/app/src/main/AndroidManifest.xml:36", target: "MeetMindFcmService", must_appear_in_target: true, notes: "Push notification callback."}
+  - {type: xml-config, name: "Foreground recording service", source_loc: "android/app/src/main/AndroidManifest.xml:29", target: "RecordingService", must_appear_in_target: true, notes: "MediaProjection and microphone service."}
+runtime_config:
+  - {key: BuildConfig.BASE_URL, source_loc: "android/app/build.gradle.kts:18", source: code, default_value: "https://meetmind-backend-s3yy.onrender.com/", must_appear_in_target: true, notes: "Backend base URL."}

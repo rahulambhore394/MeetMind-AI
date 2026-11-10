@@ -1,0 +1,4 @@
+unit: meetings-api
+bindings:
+  - {type: route-declaration, name: "@RequestMapping('/api/meetings')", source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/meeting/MeetingController.java:22", target: "MeetingController", must_appear_in_target: true, notes: "Meeting CRUD and lifecycle routes."}
+runtime_config: []

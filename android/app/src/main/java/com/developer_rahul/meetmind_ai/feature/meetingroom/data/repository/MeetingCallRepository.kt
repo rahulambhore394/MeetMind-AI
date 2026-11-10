@@ -264,6 +264,9 @@ class MeetingCallRepository(
         localUserId = getCurrentUserId()
         isSfuMode = false
 
+        // Ensure any pre-existing local camera capturer from PreJoin is stopped so LiveKit can exclusively acquire the camera
+        webRtcManager.stopLocalStream()
+
         // Attempt LiveKit SFU connection first
         if (liveKitMediaManager != null && meetingRepository != null) {
             try {
@@ -291,9 +294,23 @@ class MeetingCallRepository(
                         }
 
                         scope.launch {
+                            liveKitMediaManager.localScreenTrack.collect { track ->
+                                _events.emit(MeetingCallEvent.LocalScreenStreamReady(sfuVideoTrack = track))
+                            }
+                        }
+
+                        scope.launch {
                             liveKitMediaManager.remoteVideoTracks.collect { tracks ->
                                 tracks.forEach { (peerId, track) ->
                                     _events.emit(MeetingCallEvent.RemoteStreamReady(peerId, sfuVideoTrack = track))
+                                }
+                            }
+                        }
+
+                        scope.launch {
+                            liveKitMediaManager.remoteScreenTracks.collect { tracks ->
+                                tracks.forEach { (peerId, track) ->
+                                    _events.emit(MeetingCallEvent.ScreenShareStarted(userId = peerId, sfuVideoTrack = track))
                                 }
                             }
                         }
@@ -914,6 +931,8 @@ class MeetingCallRepository(
     }
 
     fun getLocalScreenTrack(): VideoTrack? = webRtcManager.getLocalScreenTrack()
+
+    fun getLocalSfuScreenTrack(): io.livekit.android.room.track.VideoTrack? = liveKitMediaManager?.localScreenTrack?.value
 
     private fun sendMediaUpdate(
         audioEnabled: Boolean? = null,

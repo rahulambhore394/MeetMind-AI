@@ -1,0 +1,66 @@
+modules:
+  - name: security-context
+    kind: config
+    source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/common/SecurityUtils.java:1"
+    used_by_units: [auth-api, notification-api, user-api]
+    fields:
+      - {name: current_user, type: "UserPrincipal"}
+      - {name: jwt_token, type: "String"}
+    god_class: false
+    split_candidate: false
+    migration_strategy: wrap
+    notes: "Centralizes authenticated-user lookup and JWT context."
+  - name: meeting-domain
+    kind: dto
+    source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/meeting/Meeting.java:9"
+    used_by_units: [meetings-api, participant-api, recording-api, transcript-api, intelligence-api, translation-api, chat-api, reminder-scheduler]
+    fields:
+      - {name: meeting_id, type: "Long"}
+      - {name: host_id, type: "Long"}
+      - {name: status, type: "MeetingStatus"}
+      - {name: code, type: "String"}
+      - {name: recording_id, type: "Long"}
+      - {name: transcript_id, type: "Long"}
+      - {name: action_item_id, type: "Long"}
+      - {name: transcript_segment_id, type: "Long"}
+      - {name: language, type: "String"}
+      - {name: current_user, type: "UserPrincipal"}
+    god_class: true
+    split_candidate: true
+    migration_strategy: split
+    notes: "Meeting is the shared persistence and authorization reference across most feature packages."
+  - name: websocket-context
+    kind: config
+    source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/websocket/WebSocketConfig.java:79"
+    used_by_units: [chat-websocket, signaling-websocket, translation-websocket, ai-proxy-websocket]
+    fields:
+      - {name: principal, type: "java.security.Principal"}
+      - {name: meeting_destination, type: "String"}
+    god_class: false
+    split_candidate: false
+    migration_strategy: wrap
+    notes: "STOMP endpoint, authentication interceptor, and destination conventions."
+  - name: event-context
+    kind: dto
+    source_loc: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/event/MeetMindEvent.java:1"
+    used_by_units: [transcription-consumer, intelligence-consumer, recording-consumer, event-consumers]
+    fields:
+      - {name: event_id, type: "String"}
+      - {name: meeting_id, type: "Long"}
+      - {name: correlation_id, type: "String"}
+    god_class: false
+    split_candidate: false
+    migration_strategy: wrap
+    notes: "Event envelope and idempotency metadata shared by Kafka handlers."
+  - name: client-network
+    kind: config
+    source_loc: "android/app/src/main/java/com/developer_rahul/meetmind_ai/core/di/AppContainer.kt:1"
+    used_by_units: [android-client]
+    fields:
+      - {name: base_url, type: "String"}
+      - {name: auth_token, type: "String"}
+      - {name: websocket_session, type: "MeetingWebSocketManager"}
+    god_class: false
+    split_candidate: false
+    migration_strategy: wrap
+    notes: "Android networking, token storage, Retrofit, OkHttp, and WebSocket wiring."

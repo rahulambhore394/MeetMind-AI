@@ -1,0 +1,4 @@
+unit: notification-api
+commit: false
+candidate_splits:
+  - {id: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/NotificationController.java:21-65", drivers: [concern_split], rationale: "User notification state, preference settings, and device registration change at different cadences.", source_slice: {file: "meetmind-backend/src/main/java/com/meetmind/meetmind_backend/notification/NotificationController.java", lines: [21, 65]}}
