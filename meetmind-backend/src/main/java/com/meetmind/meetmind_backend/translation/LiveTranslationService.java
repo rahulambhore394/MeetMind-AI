@@ -2,6 +2,11 @@ package com.meetmind.meetmind_backend.translation;
 
 import com.meetmind.meetmind_backend.meeting.MeetingRepository;
 import com.meetmind.meetmind_backend.participant.ParticipantRepository;
+import com.meetmind.meetmind_backend.transcription.MeetingTranscript;
+import com.meetmind.meetmind_backend.transcription.TranscriptRepository;
+import com.meetmind.meetmind_backend.transcription.TranscriptSegment;
+import com.meetmind.meetmind_backend.transcription.TranscriptSegmentRepository;
+import com.meetmind.meetmind_backend.transcription.TranscriptionStatus;
 import com.meetmind.meetmind_backend.user.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -11,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -26,6 +32,8 @@ public class LiveTranslationService {
     private final SimpMessagingTemplate messagingTemplate;
     private final MeetingRepository meetingRepository;
     private final ParticipantRepository participantRepository;
+    private final TranscriptRepository transcriptRepository;
+    private final TranscriptSegmentRepository segmentRepository;
 
     public LiveTranslationService(
             TranslationProvider provider,
@@ -33,7 +41,9 @@ public class LiveTranslationService {
             TranslationPreferenceService preferenceService,
             SimpMessagingTemplate messagingTemplate,
             MeetingRepository meetingRepository,
-            ParticipantRepository participantRepository
+            ParticipantRepository participantRepository,
+            TranscriptRepository transcriptRepository,
+            TranscriptSegmentRepository segmentRepository
     ) {
         this.provider = provider;
         this.translationRepository = translationRepository;
@@ -41,6 +51,8 @@ public class LiveTranslationService {
         this.messagingTemplate = messagingTemplate;
         this.meetingRepository = meetingRepository;
         this.participantRepository = participantRepository;
+        this.transcriptRepository = transcriptRepository;
+        this.segmentRepository = segmentRepository;
     }
 
     /**
@@ -67,6 +79,14 @@ public class LiveTranslationService {
 
         String srcLang = sourceLanguage != null ? sourceLanguage.trim().toLowerCase() : "en";
         String tgtLang = targetLanguage != null ? targetLanguage.trim().toLowerCase() : "en";
+
+        if (segmentId == null && !sourceText.isBlank()) {
+            try {
+                segmentId = recordLiveSpeechSegment(meetingId, sourceText, srcLang, speaker, timestamp);
+            } catch (Exception e) {
+                log.warn("LiveTranslationService: Failed to record transcript segment: {}", e.getMessage());
+            }
+        }
 
         // Idempotency: Skip if already translated for this segment & target language
         if (segmentId != null && translationRepository.existsByTranscriptSegmentIdAndTargetLanguage(segmentId, tgtLang)) {
@@ -138,6 +158,15 @@ public class LiveTranslationService {
             String speaker,
             Long timestamp
     ) {
+        if (segmentId == null && sourceText != null && !sourceText.isBlank()) {
+            try {
+                String srcLang = sourceLanguage != null ? sourceLanguage.trim().toLowerCase() : "en";
+                segmentId = recordLiveSpeechSegment(meetingId, sourceText, srcLang, speaker, timestamp);
+            } catch (Exception e) {
+                log.warn("LiveTranslationService: Failed to record transcript segment in process: {}", e.getMessage());
+            }
+        }
+
         Set<String> activeTargetLanguages = preferenceService.getActiveTargetLanguages(meetingId);
         if (activeTargetLanguages == null || activeTargetLanguages.isEmpty()) {
             // Default to English if no specific preferences are registered
@@ -165,6 +194,49 @@ public class LiveTranslationService {
             }
         }
         return results;
+    }
+
+    private synchronized Long recordLiveSpeechSegment(
+            Long meetingId,
+            String sourceText,
+            String sourceLanguage,
+            String speaker,
+            Long timestamp
+    ) {
+        if (meetingId == null || sourceText == null || sourceText.isBlank()) return null;
+
+        MeetingTranscript transcript = transcriptRepository.findByMeetingId(meetingId).stream()
+                .filter(t -> t.getStatus() == TranscriptionStatus.PROCESSING || t.getStatus() == TranscriptionStatus.PENDING || t.getStatus() == TranscriptionStatus.COMPLETED)
+                .findFirst()
+                .orElseGet(() -> {
+                    MeetingTranscript t = new MeetingTranscript();
+                    t.setMeetingId(meetingId);
+                    t.setLanguage(sourceLanguage != null ? sourceLanguage.trim().toLowerCase() : "en");
+                    t.setStatus(TranscriptionStatus.PROCESSING);
+                    t.setProviderName("live-speech-stt");
+                    return transcriptRepository.save(t);
+                });
+
+        List<TranscriptSegment> existing = segmentRepository.findByTranscriptIdOrderBySegmentIndex(transcript.getId());
+        int nextIndex = existing.size();
+
+        TranscriptSegment segment = new TranscriptSegment();
+        segment.setTranscriptId(transcript.getId());
+        segment.setSegmentIndex(nextIndex);
+        segment.setText(sourceText.trim());
+        segment.setSpeaker(speaker != null && !speaker.isBlank() ? speaker.trim() : "Speaker");
+        long start = (timestamp != null && timestamp > 0) ? timestamp : System.currentTimeMillis();
+        segment.setStartMs(start);
+        segment.setEndMs(start + 1500L);
+        segment.setConfidence(0.95);
+        segment = segmentRepository.save(segment);
+
+        String full = transcript.getFullText();
+        String updatedFull = (full == null || full.isBlank()) ? sourceText.trim() : full.trim() + " " + sourceText.trim();
+        transcript.setFullText(updatedFull);
+        transcriptRepository.save(transcript);
+
+        return segment.getId();
     }
 
     /**

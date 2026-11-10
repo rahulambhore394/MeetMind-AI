@@ -24,6 +24,8 @@ class LiveTranslationViewModel(
 
     private var activeMeetingId: Long = meetingId
     private val TAG = "LiveTranslationVM"
+    private var currentUserName: String = ""
+    private var isAudioMuted: Boolean = false
 
     private val _uiState = MutableStateFlow(LiveTranslationUiState())
     val uiState = _uiState.asStateFlow()
@@ -35,6 +37,20 @@ class LiveTranslationViewModel(
 
     init {
         observeSubtitles()
+    }
+
+    fun setCurrentUserName(name: String) {
+        currentUserName = name
+    }
+
+    fun onAudioMuteChanged(isMuted: Boolean) {
+        if (isAudioMuted == isMuted) return
+        isAudioMuted = isMuted
+        if (isMuted) {
+            stopLiveTranscription()
+        } else if (_uiState.value.subtitlesEnabled) {
+            startLiveTranscription()
+        }
     }
 
     fun updateMeetingId(newMeetingId: Long) {
@@ -67,7 +83,11 @@ class LiveTranslationViewModel(
                         if (newList.size > 4) newList.takeLast(4) else newList
                     }
                     if (_uiState.value.audioTranslationEnabled) {
-                        textToSpeechManager.speak(subtitle.translatedText, subtitle.targetLanguage)
+                        val isSelf = subtitle.speaker.equals("You", ignoreCase = true) ||
+                                (currentUserName.isNotBlank() && subtitle.speaker.equals(currentUserName, ignoreCase = true))
+                        if (!isSelf) {
+                            textToSpeechManager.speak(subtitle.translatedText, subtitle.targetLanguage)
+                        }
                     }
 
                     // Auto-fade older subtitles after 7 seconds of inactivity
@@ -131,11 +151,15 @@ class LiveTranslationViewModel(
     }
 
     fun startLiveTranscription() {
+        if (isAudioMuted) {
+            Log.d(TAG, "Mic is muted; not starting speech recognition")
+            return
+        }
         speechJob?.cancel()
         speechJob = viewModelScope.launch {
             Log.d(TAG, "Starting continuous live speech recognition in ${_uiState.value.sourceLanguage}")
             var consecutiveErrors = 0
-            while (isActive && _uiState.value.subtitlesEnabled) {
+            while (isActive && _uiState.value.subtitlesEnabled && !isAudioMuted) {
                 try {
                     speechProvider.startListening(_uiState.value.sourceLanguage).collect { result ->
                         when (result) {
@@ -223,4 +247,11 @@ data class LiveTranslationUiState(
     val selectedTargetLanguage: String = "hi",
     val currentOriginalText: String = "",
     val error: String? = null
-)
+) {
+    val activeLanguageBadge: String
+        get() {
+            val src = sourceLanguage.take(2).uppercase()
+            val tgt = selectedTargetLanguage.take(2).uppercase()
+            return "$src ➔ $tgt"
+        }
+}

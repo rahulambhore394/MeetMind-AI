@@ -209,30 +209,45 @@ public class MeetingIntelligenceService {
     @Transactional
     public MeetingSummary autoGenerateSummaryOnMeetingEnd(Long meetingId) {
         log.info("MeetingIntelligenceService: Generating meeting summary on conclusion for meeting {}", meetingId);
-        
+        return generateOrUpdateMeetingIntelligence(meetingId, false);
+    }
+
+    @Transactional
+    public MeetingSummary generateOrUpdateMeetingIntelligence(Long meetingId, boolean forceRefresh) {
         Meeting meeting = meetingRepository.findById(meetingId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Meeting not found"));
 
         Optional<MeetingSummary> existingOpt = summaryRepository.findByMeetingId(meetingId);
-        if (existingOpt.isPresent() && "COMPLETED".equalsIgnoreCase(existingOpt.get().getStatus())) {
+        if (!forceRefresh && existingOpt.isPresent() && "COMPLETED".equalsIgnoreCase(existingOpt.get().getStatus())) {
             return existingOpt.get();
         }
 
         List<MeetingTranscript> existingTranscripts = transcriptRepository.findByMeetingId(meetingId);
         MeetingTranscript transcript = !existingTranscripts.isEmpty() ? existingTranscripts.get(0) : null;
-        if (transcript != null && transcript.getStatus() == TranscriptionStatus.COMPLETED) {
-            try {
-                return generateIntelligence(transcript.getId());
-            } catch (Exception e) {
-                log.warn("MeetingIntelligenceService: Failed to process real intelligence for transcript {}: {}", transcript.getId(), e.getMessage());
+        if (transcript != null) {
+            List<TranscriptSegment> segments = segmentRepository.findByTranscriptIdOrderBySegmentIndex(transcript.getId());
+            if (!segments.isEmpty()) {
+                if (transcript.getFullText() == null || transcript.getFullText().isBlank()) {
+                    String fullText = segments.stream().map(TranscriptSegment::getText).collect(Collectors.joining(" "));
+                    transcript.setFullText(fullText);
+                }
+                transcript.setStatus(TranscriptionStatus.COMPLETED);
+                transcript = transcriptRepository.save(transcript);
+
+                try {
+                    return generateIntelligence(transcript.getId());
+                } catch (Exception e) {
+                    log.warn("MeetingIntelligenceService: Failed to process real intelligence for transcript {}: {}", transcript.getId(), e.getMessage());
+                }
             }
         }
 
+        final Long transcriptId = (transcript != null) ? transcript.getId() : null;
         MeetingSummary summary = existingOpt.orElseGet(() -> {
             MeetingSummary s = new MeetingSummary();
             s.setMeetingId(meetingId);
-            if (transcript != null) {
-                s.setTranscriptId(transcript.getId());
+            if (transcriptId != null) {
+                s.setTranscriptId(transcriptId);
             }
             return s;
         });
@@ -545,21 +560,26 @@ public class MeetingIntelligenceService {
     }
 
     public SummaryDetailView triggerAnalysis(Long meetingId, Long transcriptId, User user) throws IntelligenceException {
-        Meeting meeting = meetingRepository.findById(meetingId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Meeting not found"));
+        verifyAccess(meetingId, user.getId());
 
-        if (!meeting.getHost().getId().equals(user.getId())) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the meeting host can trigger AI analysis");
+        if (transcriptId != null) {
+            MeetingTranscript transcript = transcriptRepository.findById(transcriptId)
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transcript not found"));
+
+            if (!transcript.getMeetingId().equals(meetingId)) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transcript does not belong to this meeting");
+            }
+
+            if (transcript.getStatus() != TranscriptionStatus.COMPLETED) {
+                transcript.setStatus(TranscriptionStatus.COMPLETED);
+                transcriptRepository.save(transcript);
+            }
+
+            generateIntelligence(transcriptId);
+        } else {
+            generateOrUpdateMeetingIntelligence(meetingId, true);
         }
 
-        MeetingTranscript transcript = transcriptRepository.findById(transcriptId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Transcript not found"));
-
-        if (!transcript.getMeetingId().equals(meetingId)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Transcript does not belong to this meeting");
-        }
-
-        generateIntelligence(transcriptId);
         return getSummaryDetail(meetingId, user);
     }
 

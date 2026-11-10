@@ -50,6 +50,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.MeetingStatus
@@ -63,6 +64,8 @@ import com.developer_rahul.meetmind_ai.core.ui.components.StatusChip
 import com.developer_rahul.meetmind_ai.core.ui.provideChatViewModelFactory
 import com.developer_rahul.meetmind_ai.core.ui.provideLiveMeetingViewModelFactory
 import com.developer_rahul.meetmind_ai.core.ui.provideLiveTranslationViewModelFactory
+import com.developer_rahul.meetmind_ai.core.ui.provideMeetingIntelligenceViewModelFactory
+import com.developer_rahul.meetmind_ai.feature.ai.presentation.MeetingIntelligenceViewModel
 import com.developer_rahul.meetmind_ai.feature.chat.presentation.ChatBubble
 import com.developer_rahul.meetmind_ai.feature.chat.presentation.ChatViewModel
 import com.developer_rahul.meetmind_ai.core.media.recording.RecordingService
@@ -111,6 +114,16 @@ fun LiveMeetingScreen(
         it.userId == currentUserId && it.role == ParticipantRole.HOST 
     }
     val isHost = isHostByMeeting || isHostByParticipants
+
+    val currentUserName = remember(currentUserId, uiState.participants) {
+        uiState.participants.find { it.userId == currentUserId }?.name ?: "You"
+    }
+
+    LaunchedEffect(currentUserName) {
+        if (currentUserName.isNotBlank() && currentUserName != "You") {
+            translationViewModel.setCurrentUserName(currentUserName)
+        }
+    }
 
     LaunchedEffect(effectiveMeetingId) {
         if (effectiveMeetingId > 0L) {
@@ -172,6 +185,11 @@ fun LiveMeetingScreen(
     }
 
     var isMuted by remember { mutableStateOf(false) }
+
+    LaunchedEffect(isMuted) {
+        translationViewModel.onAudioMuteChanged(isMuted)
+    }
+
     var isVideoOff by remember { mutableStateOf(false) }
     var areControlsVisible by remember { mutableStateOf(true) }
     var isSwappedByPip by remember { mutableStateOf(false) }
@@ -203,6 +221,7 @@ fun LiveMeetingScreen(
     var showLeaveDialog by remember { mutableStateOf(false) }
     var showRecordingConsent by remember { mutableStateOf(false) }
     var showTranslationSettings by remember { mutableStateOf(false) }
+    var showIntelligenceSheet by remember { mutableStateOf(false) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var showChatSheet by remember { mutableStateOf(false) }
     var showAudioDeviceSheet by remember { mutableStateOf(false) }
@@ -543,8 +562,10 @@ fun LiveMeetingScreen(
                 },
                 onAiInsights = { 
                     showMoreSheet = false 
-                    onViewIntelligence(effectiveMeetingIdString)
+                    showIntelligenceSheet = true
                 },
+                subtitlesActive = translationState.subtitlesEnabled,
+                activeLanguageBadge = translationState.activeLanguageBadge,
                 onToggleChat = {
                     showMoreSheet = false
                     showChatSheet = true
@@ -589,6 +610,22 @@ fun LiveMeetingScreen(
                 onFullScreenChat = {
                     showChatSheet = false
                     onToggleChat(effectiveMeetingIdString)
+                }
+            )
+        }
+    }
+
+    if (showIntelligenceSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showIntelligenceSheet = false },
+            containerColor = BackgroundSurface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = TextDisabled) }
+        ) {
+            InMeetingIntelligenceSheetContent(
+                meetingId = effectiveMeetingIdString,
+                onFullScreen = {
+                    showIntelligenceSheet = false
+                    onViewIntelligence(effectiveMeetingIdString)
                 }
             )
         }
@@ -1067,6 +1104,9 @@ fun LiveMeetingScreen(
                 totalParticipants = totalParticipants,
                 isLocked = callState.isMeetingLocked,
                 isHost = isHost,
+                isSubtitlesEnabled = translationState.subtitlesEnabled,
+                activeLanguageBadge = translationState.activeLanguageBadge,
+                isAudioTranslationEnabled = translationState.audioTranslationEnabled,
                 onOpenHostControls = if (isHost) { { showHostControlsSheet = true } } else null,
                 onCopyMeetingCode = {
                     val code = meeting?.meetingCode ?: "mm-$meetingId"
@@ -1077,6 +1117,14 @@ fun LiveMeetingScreen(
                 onFlipCamera = { callViewModel.switchCamera() },
                 onOpenChat = { showChatSheet = true },
                 onOpenParticipants = { showParticipantsSheet = true },
+                onToggleSubtitles = {
+                    val newEnabled = !translationState.subtitlesEnabled
+                    translationViewModel.toggleSubtitles(newEnabled)
+                    val msg = if (newEnabled) "Live Subtitles enabled (${translationState.activeLanguageBadge})" else "Live Subtitles disabled"
+                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                },
+                onOpenTranslationSettings = { showTranslationSettings = true },
+                onOpenIntelligence = { showIntelligenceSheet = true },
                 onStopRecording = {
                     val id = meetingId.toLongOrNull() ?: meeting?.id ?: effectiveMeetingId.takeIf { it > 0L }
                     if (id != null && id > 0L) {
@@ -1086,6 +1134,58 @@ fun LiveMeetingScreen(
                     }
                 }
             )
+        }
+
+        // Floating Subtitle / Language Status Indicator Chip
+        if (translationState.subtitlesEnabled) {
+            Surface(
+                onClick = { showTranslationSettings = true },
+                shape = CircleShape,
+                color = Color(0xEE161B22),
+                border = androidx.compose.foundation.BorderStroke(1.dp, EmeraldGreen.copy(alpha = 0.5f)),
+                shadowElevation = 8.dp,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .statusBarsPadding()
+                    .padding(top = if (areControlsVisible) 58.dp else 12.dp)
+                    .bounceClick()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 11.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(7.dp)
+                            .background(EmeraldGreen, CircleShape)
+                    )
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        text = "Subtitles: ${translationState.activeLanguageBadge}",
+                        style = Typography.labelSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                    if (translationState.audioTranslationEnabled) {
+                        Spacer(Modifier.width(6.dp))
+                        Text("•", color = TextSecondary, style = Typography.labelSmall)
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            Icons.Default.VolumeUp,
+                            contentDescription = null,
+                            tint = EmeraldGreen,
+                            modifier = Modifier.size(13.dp)
+                        )
+                        Spacer(Modifier.width(2.dp))
+                        Text(
+                            "TTS ON",
+                            color = EmeraldGreen,
+                            style = Typography.labelSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
         }
 
         // Active AI Speaking Banner
@@ -1315,6 +1415,8 @@ fun MoreControlsContent(
     isSharing: Boolean,
     isHost: Boolean = false,
     selectedAudioDevice: String = "Speaker",
+    subtitlesActive: Boolean = false,
+    activeLanguageBadge: String = "",
     onOpenHostControls: () -> Unit = {},
     onToggleAudioDevice: () -> Unit = {},
     onToggleRecording: () -> Unit,
@@ -1392,13 +1494,14 @@ fun MoreControlsContent(
         )
         ControlItem(
             icon = Icons.Default.AutoAwesome,
-            title = "AI Meeting Summary & Action Items",
+            title = "Meeting Intelligence (Live AI Copilot)",
             color = ElectricIndigo,
             onClick = onAiInsights
         )
         ControlItem(
             icon = Icons.Default.Translate,
-            title = "Live Translation & Subtitles",
+            title = if (subtitlesActive) "Live Translation ($activeLanguageBadge • Active)" else "Live Translation & Subtitles",
+            color = if (subtitlesActive) EmeraldGreen else TextPrimary,
             onClick = onToggleTranslationSettings
         )
     }
@@ -1551,12 +1654,18 @@ fun TopMeetingBar(
     totalParticipants: Int,
     isLocked: Boolean = false,
     isHost: Boolean = false,
+    isSubtitlesEnabled: Boolean = false,
+    activeLanguageBadge: String = "",
+    isAudioTranslationEnabled: Boolean = false,
     onOpenHostControls: (() -> Unit)? = null,
     onCopyMeetingCode: () -> Unit,
     onToggleAudioDevice: () -> Unit,
     onFlipCamera: () -> Unit,
     onOpenChat: () -> Unit,
     onOpenParticipants: () -> Unit,
+    onToggleSubtitles: () -> Unit = {},
+    onOpenTranslationSettings: () -> Unit = {},
+    onOpenIntelligence: () -> Unit = {},
     onStopRecording: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1724,6 +1833,45 @@ fun TopMeetingBar(
                         .bounceClick()
                 ) {
                     Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat", tint = Color.White, modifier = Modifier.size(16.dp))
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // CC Subtitles & Translation Quick Toggle
+                IconButton(
+                    onClick = onToggleSubtitles,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .background(
+                            if (isSubtitlesEnabled) EmeraldGreen.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.12f),
+                            CircleShape
+                        )
+                        .bounceClick()
+                ) {
+                    Icon(
+                        Icons.Default.ClosedCaption,
+                        contentDescription = "Live Subtitles & Translation",
+                        tint = if (isSubtitlesEnabled) EmeraldGreen else Color.White,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // AI Meeting Intelligence Button
+                IconButton(
+                    onClick = onOpenIntelligence,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .background(ElectricIndigo.copy(alpha = 0.25f), CircleShape)
+                        .bounceClick()
+                ) {
+                    Icon(
+                        Icons.Default.AutoAwesome,
+                        contentDescription = "AI Meeting Intelligence",
+                        tint = ElectricIndigo,
+                        modifier = Modifier.size(16.dp)
+                    )
                 }
 
                 if (isHost && onOpenHostControls != null) {
@@ -2896,6 +3044,402 @@ fun HostControlsSheetContent(
             }
         }
         Spacer(modifier = Modifier.height(16.dp))
+    }
+}
+
+@Composable
+fun InMeetingIntelligenceSheetContent(
+    meetingId: String,
+    onFullScreen: () -> Unit,
+    viewModel: MeetingIntelligenceViewModel = viewModel(
+        key = "InMeetingIntelligence_$meetingId",
+        factory = provideMeetingIntelligenceViewModelFactory(meetingId.toLongOrNull() ?: -1L)
+    )
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    val summary = uiState.summary
+    var selectedTab by remember { mutableStateOf(0) }
+    val tabs = listOf("Summary", "Tasks", "Decisions", "Topics")
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(0.85f)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+            .navigationBarsPadding()
+    ) {
+        // Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(38.dp)
+                        .background(
+                            Brush.linearGradient(listOf(ElectricIndigo, NeonCyan)),
+                            CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.AutoAwesome,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Column {
+                    Text(
+                        "Meeting Intelligence",
+                        style = Typography.titleLarge,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Live AI Copilot & Real-Time Synthesis",
+                        style = Typography.bodySmall,
+                        color = TextSecondary
+                    )
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { viewModel.loadIntelligence() },
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Color.White.copy(alpha = 0.08f), CircleShape)
+                ) {
+                    Icon(
+                        Icons.Default.Refresh,
+                        contentDescription = "Refresh",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                IconButton(
+                    onClick = onFullScreen,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .background(Color.White.copy(alpha = 0.08f), CircleShape)
+                ) {
+                    Icon(
+                        Icons.Default.OpenInFull,
+                        contentDescription = "Full Screen",
+                        tint = TextPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        // Tab Row
+        TabRow(
+            selectedTabIndex = selectedTab,
+            containerColor = Color.Transparent,
+            contentColor = ElectricIndigo,
+            divider = { HorizontalDivider(color = Color.White.copy(alpha = 0.08f)) }
+        ) {
+            tabs.forEachIndexed { index, title ->
+                Tab(
+                    selected = selectedTab == index,
+                    onClick = { selectedTab = index },
+                    text = {
+                        Text(
+                            title,
+                            style = Typography.labelMedium,
+                            fontWeight = if (selectedTab == index) FontWeight.Bold else FontWeight.Normal,
+                            color = if (selectedTab == index) ElectricIndigo else TextSecondary
+                        )
+                    }
+                )
+            }
+        }
+
+        Spacer(Modifier.height(16.dp))
+
+        if (uiState.isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    CircularProgressIndicator(color = ElectricIndigo, modifier = Modifier.size(36.dp))
+                    Spacer(Modifier.height(12.dp))
+                    Text("Synthesizing meeting insights...", color = TextSecondary, style = Typography.bodySmall)
+                }
+            }
+        } else if (summary == null || (summary.summary.isBlank() && summary.actionItems.isEmpty() && summary.decisions.isEmpty())) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(24.dp)
+                ) {
+                    Icon(
+                        Icons.Default.Psychology,
+                        contentDescription = null,
+                        tint = TextDisabled,
+                        modifier = Modifier.size(48.dp)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "Listening to conversation...",
+                        style = Typography.titleMedium,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "As participants speak, MeetMind AI will synthesize live summaries, action items, and key decisions.",
+                        style = Typography.bodySmall,
+                        color = TextSecondary,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(16.dp))
+                    Button(
+                        onClick = { viewModel.loadIntelligence() },
+                        colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Generate AI Summary", style = Typography.labelMedium)
+                    }
+                }
+            }
+        } else {
+            Box(modifier = Modifier.weight(1f)) {
+                when (selectedTab) {
+                    0 -> InMeetingSummaryTab(summary.summary, summary.keyPoints)
+                    1 -> InMeetingTasksTab(summary.actionItems) { id, completed ->
+                        viewModel.updateActionItemStatus(id, completed)
+                    }
+                    2 -> InMeetingDecisionsTab(summary.decisions)
+                    3 -> InMeetingTopicsTab(summary.topics)
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Button(
+                onClick = { viewModel.loadIntelligence() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(46.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(16.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Refresh AI Insights", style = Typography.labelLarge, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+fun InMeetingSummaryTab(summaryText: String, keyPoints: List<String>) {
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        if (summaryText.isNotBlank()) {
+            item {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = Color(0xFF161B22),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ElectricIndigo.copy(alpha = 0.35f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.AutoAwesome, null, tint = ElectricIndigo, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Executive Brief", style = Typography.labelLarge, color = ElectricIndigo, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        Text(summaryText, style = Typography.bodyMedium, color = TextPrimary, lineHeight = 22.sp)
+                    }
+                }
+            }
+        }
+
+        if (keyPoints.isNotEmpty()) {
+            item {
+                Text("Key Discussion Points", style = Typography.titleSmall, color = TextSecondary, fontWeight = FontWeight.Bold)
+            }
+            items(keyPoints) { point ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF161B22),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.06f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(Icons.Default.CheckCircle, null, tint = EmeraldGreen, modifier = Modifier.size(16.dp).padding(top = 2.dp))
+                        Spacer(Modifier.width(10.dp))
+                        Text(point, style = Typography.bodyMedium, color = TextPrimary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun InMeetingTasksTab(
+    actionItems: List<com.developer_rahul.meetmind_ai.feature.intelligence.data.remote.dto.ActionItemResponseDto>,
+    onToggleStatus: (Long, Boolean) -> Unit
+) {
+    if (actionItems.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No action items extracted yet.", color = TextSecondary, style = Typography.bodyMedium)
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(actionItems) { item ->
+                val isCompleted = item.status.equals("COMPLETED", ignoreCase = true)
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF161B22),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.06f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = isCompleted,
+                            onCheckedChange = { onToggleStatus(item.id, it) },
+                            colors = CheckboxDefaults.colors(
+                                checkedColor = EmeraldGreen,
+                                checkmarkColor = Color.White
+                            )
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = item.description,
+                                style = Typography.bodyMedium,
+                                color = if (isCompleted) TextDisabled else TextPrimary,
+                                textDecoration = if (isCompleted) androidx.compose.ui.text.style.TextDecoration.LineThrough else null
+                            )
+                            if (!item.assignedUser.isNullOrBlank()) {
+                                Spacer(Modifier.height(4.dp))
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Box(
+                                        modifier = Modifier
+                                            .background(ElectricIndigo.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
+                                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    ) {
+                                        Text(
+                                            "@${item.assignedUser}",
+                                            style = Typography.labelSmall,
+                                            color = ElectricIndigo,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun InMeetingDecisionsTab(decisions: List<String>) {
+    if (decisions.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No agreed decisions recorded yet.", color = TextSecondary, style = Typography.bodyMedium)
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(decisions) { decision ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF161B22),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.25f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Icon(
+                            Icons.Default.Lightbulb,
+                            contentDescription = null,
+                            tint = Color(0xFFF59E0B),
+                            modifier = Modifier.size(18.dp).padding(top = 2.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(decision, style = Typography.bodyMedium, color = TextPrimary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun InMeetingTopicsTab(topics: List<String>) {
+    if (topics.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text("No agenda topics identified yet.", color = TextSecondary, style = Typography.bodyMedium)
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            items(topics) { topic ->
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF161B22),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.06f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .background(NeonCyan, CircleShape)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(topic, style = Typography.bodyMedium, color = TextPrimary, fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+        }
     }
 }
 
