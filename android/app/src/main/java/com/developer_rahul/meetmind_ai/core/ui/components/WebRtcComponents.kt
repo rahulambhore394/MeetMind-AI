@@ -21,6 +21,7 @@ fun VideoRenderer(
     videoTrack: VideoTrack? = null,
     sfuVideoTrack: io.livekit.android.room.track.VideoTrack? = null,
     isOverlay: Boolean = false,
+    mirror: Boolean = false,
     onSurfaceReady: (VideoTextureViewRenderer) -> Unit = {}
 ) {
     val eglBaseContext = remember {
@@ -33,7 +34,7 @@ fun VideoRenderer(
             LiveKitVideoTrackView(
                 videoTrack = sfuVideoTrack,
                 passedRoom = currentRoom,
-                mirror = isOverlay,
+                mirror = mirror || isOverlay,
                 scaleType = ScaleType.Fill,
                 modifier = Modifier.fillMaxSize()
             )

@@ -15,10 +15,14 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
@@ -160,6 +164,8 @@ fun LiveMeetingScreen(
 
     var isMuted by remember { mutableStateOf(false) }
     var isVideoOff by remember { mutableStateOf(false) }
+    var areControlsVisible by remember { mutableStateOf(true) }
+    var isSwappedByPip by remember { mutableStateOf(false) }
     
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
     LaunchedEffect(Unit) {
@@ -593,269 +599,324 @@ fun LiveMeetingScreen(
                           (participant.name.endsWith("(You)", ignoreCase = true) || participant.name.equals("You", ignoreCase = true))
             !isLocal
         }
-        val displayParticipants = if (remoteParticipants.isNotEmpty()) remoteParticipants else participantsList
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = if (hasActiveScreenShare) 75.dp else 0.dp)
-        ) {
-            if (hasActiveScreenShare) {
-                // Prominent Screen Share Hero View
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(240.dp)
-                        .padding(horizontal = 12.dp, vertical = 6.dp)
-                        .clip(RoundedCornerShape(20.dp))
-                        .background(Color.Black)
-                        .border(1.5.dp, NeonCyan, RoundedCornerShape(20.dp))
-                ) {
-                    VideoRenderer(
-                        modifier = Modifier.fillMaxSize(),
-                        videoTrack = activeP2pScreenTrack,
-                        sfuVideoTrack = activeSfuScreenTrack,
-                        isOverlay = true
-                    )
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(8.dp),
-                        color = Color.Black.copy(alpha = 0.75f),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.PresentToAll, null, tint = NeonCyan, modifier = Modifier.size(14.dp))
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                if (callState.isScreenSharing) "Sharing Your Screen" else "Screen Share",
-                                style = Typography.labelMedium,
-                                color = Color.White,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
-                }
-            }
+        val isHostUser = ((meeting ?: uiState.meetings.find { it.id.toString() == meetingId || it.meetingCode == meetingId })?.hostId == currentUserId && currentUserId > 0L) ||
+                         (currentUserId > 0L && uiState.participants.any { it.userId == currentUserId && it.role == ParticipantRole.HOST })
 
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(if (totalParticipants <= 1) 1 else 2),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = PaddingValues(
-                    top = if (hasActiveScreenShare) 6.dp else 115.dp,
-                    bottom = 120.dp,
-                    start = 12.dp,
-                    end = 12.dp
-                ),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                itemsIndexed(displayParticipants) { index, participant ->
-                    val mediaState = callState.participants[participant.userId] ?: callState.participants[participant.id]
-                    val isLocalUser = (currentUserId > 0L && participant.userId == currentUserId) ||
-                                      (participant.name.endsWith("(You)", ignoreCase = true) || participant.name.equals("You", ignoreCase = true))
+        val localUiParticipant = Participant(
+            id = "local_user_$currentUserId",
+            name = "You",
+            isActiveSpeaker = !isMuted,
+            isOnline = true,
+            isHost = isHostUser,
+            videoTrack = if (!isVideoOff) callState.localVideoTrack else null,
+            sfuVideoTrack = if (!isVideoOff) callState.localSfuVideoTrack else null,
+            screenTrack = if (callState.isScreenSharing) callState.localScreenTrack else null,
+            sfuScreenTrack = if (callState.isScreenSharing) callState.localSfuScreenTrack else null,
+            isMicOn = !isMuted,
+            isVideoOn = !isVideoOff
+        )
 
-                    val localVideo = if (!isVideoOff) callState.localVideoTrack else null
-                    val effectiveVideoTrack = if (isLocalUser) localVideo else mediaState?.videoTrack
-                    val effectiveScreenTrack = if (isLocalUser) (if (callState.isScreenSharing) callState.localScreenTrack else null) else mediaState?.screenTrack
+        fun toUiParticipant(participant: com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Participant): Participant {
+            val isLocalUser = (currentUserId > 0L && participant.userId == currentUserId) ||
+                              (participant.name.endsWith("(You)", ignoreCase = true) || participant.name.equals("You", ignoreCase = true))
+            if (isLocalUser) return localUiParticipant
 
-                    val isAiAgent = participant.role == ParticipantRole.AI_REPRESENTATIVE || participant.role == ParticipantRole.AUTOMATED_AGENT
-                    val currentAiSpeech = callState.activeAiSpeech
-                    val isAiCurrentlySpeaking = isAiAgent && currentAiSpeech != null && (currentAiSpeech.ownerId == participant.userId || participant.name.contains(currentAiSpeech.ownerName, ignoreCase = true))
+            val mediaState = callState.participants[participant.userId] ?: callState.participants[participant.id]
+            val isAiAgent = participant.role == ParticipantRole.AI_REPRESENTATIVE || participant.role == ParticipantRole.AUTOMATED_AGENT
+            val currentAiSpeech = callState.activeAiSpeech
+            val isAiCurrentlySpeaking = isAiAgent && currentAiSpeech != null && (currentAiSpeech.ownerId == participant.userId || participant.name.contains(currentAiSpeech.ownerName, ignoreCase = true))
 
-                    val uiParticipant = Participant(
-                        id = participant.id.toString(),
-                        name = if (isLocalUser && !participant.name.contains("(You)")) "${participant.name} (You)" else participant.name,
-                        isAiRep = isAiAgent,
-                        isHost = participant.role == ParticipantRole.HOST,
-                        isOnline = true,
-                        videoTrack = effectiveVideoTrack,
-                        sfuVideoTrack = if (isLocalUser) (if (!isVideoOff) callState.localSfuVideoTrack else null) else mediaState?.sfuVideoTrack,
-                        isMicOn = if (isLocalUser) !isMuted else (mediaState?.audioEnabled ?: true),
-                        isVideoOn = if (isLocalUser) !isVideoOff else (mediaState?.videoEnabled ?: (mediaState?.videoTrack != null || mediaState?.sfuVideoTrack != null)),
-                        isActiveSpeaker = if (isLocalUser) (!isMuted) else (isAiCurrentlySpeaking || (mediaState?.isSpeaking ?: false)),
-                        screenTrack = effectiveScreenTrack,
-                        sfuScreenTrack = if (isLocalUser) callState.localSfuScreenTrack else mediaState?.sfuScreenTrack
-                    )
-                    ParticipantVideoTile(
-                        participant = uiParticipant,
-                        isOverlay = index > 0
-                    )
-                }
-                
-                if (participantsList.isEmpty()) {
-                    item {
-                        ParticipantVideoTile(
-                            Participant(
-                                id = "1",
-                                name = "You",
-                                isActiveSpeaker = !isMuted,
-                                isOnline = true,
-                                isHost = ((meeting ?: uiState.meetings.find { it.id.toString() == meetingId || it.meetingCode == meetingId })?.hostId == currentUserId && currentUserId > 0L) ||
-                                         (currentUserId > 0L && uiState.participants.any { it.userId == currentUserId && it.role == ParticipantRole.HOST }),
-                                videoTrack = if (!isVideoOff) callState.localVideoTrack else null,
-                                sfuVideoTrack = if (!isVideoOff) callState.localSfuVideoTrack else null,
-                                screenTrack = if (callState.isScreenSharing) callState.localScreenTrack else null,
-                                sfuScreenTrack = if (callState.isScreenSharing) callState.localSfuScreenTrack else null,
-                                isMicOn = !isMuted,
-                                isVideoOn = !isVideoOff
-                            )
-                        )
-                    }
-                }
-            }
+            return Participant(
+                id = participant.id.toString(),
+                name = participant.name,
+                isAiRep = isAiAgent,
+                isHost = participant.role == ParticipantRole.HOST,
+                isOnline = true,
+                videoTrack = mediaState?.videoTrack,
+                sfuVideoTrack = mediaState?.sfuVideoTrack,
+                isMicOn = mediaState?.audioEnabled ?: true,
+                isVideoOn = mediaState?.videoEnabled ?: (mediaState?.videoTrack != null || mediaState?.sfuVideoTrack != null),
+                isActiveSpeaker = isAiCurrentlySpeaking || (mediaState?.isSpeaking ?: false),
+                screenTrack = mediaState?.screenTrack,
+                sfuScreenTrack = mediaState?.sfuScreenTrack
+            )
         }
 
-        Surface(
+        val allUiParticipants = if (remoteParticipants.isEmpty()) {
+            listOf(localUiParticipant)
+        } else {
+            listOf(localUiParticipant) + remoteParticipants.map { toUiParticipant(it) }
+        }
+
+        // Central Adaptive Video Stage
+        BoxWithConstraints(
             modifier = Modifier
-                .align(Alignment.TopCenter)
-                .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
-                .fillMaxWidth()
-                .glassmorphism(),
-            shape = RoundedCornerShape(24.dp),
-            color = GlassBackground
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f, fill = false)
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(10.dp)
-                            .background(EmeraldGreen, CircleShape)
-                            .pulse(color = EmeraldGreen)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = meeting?.title ?: "Live Meeting",
-                        style = Typography.titleMedium,
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    
-                    Spacer(modifier = Modifier.width(8.dp))
+                    areControlsVisible = !areControlsVisible
+                }
+        ) {
+            val stageTopPadding by animateDpAsState(
+                targetValue = if (areControlsVisible) 68.dp else 0.dp,
+                animationSpec = tween(250),
+                label = "stageTopPadding"
+            )
+            val stageBottomPadding by animateDpAsState(
+                targetValue = if (areControlsVisible) 84.dp else 0.dp,
+                animationSpec = tween(250),
+                label = "stageBottomPadding"
+            )
 
-                    Text(
-                        text = formattedDuration,
-                        style = Typography.labelMedium,
-                        color = TextSecondary,
-                        fontWeight = FontWeight.SemiBold
-                    )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
+                    .padding(top = stageTopPadding, bottom = stageBottomPadding)
+                    .padding(horizontal = 6.dp, vertical = 4.dp)
+            ) {
+                if (hasActiveScreenShare) {
+                    // SCREEN SHARE HERO VIEW + PARTICIPANT ROW
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1.5f)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color.Black)
+                                .border(1.5.dp, NeonCyan, RoundedCornerShape(20.dp))
+                        ) {
+                            VideoRenderer(
+                                modifier = Modifier.fillMaxSize(),
+                                videoTrack = activeP2pScreenTrack,
+                                sfuVideoTrack = activeSfuScreenTrack,
+                                isOverlay = false
+                            )
+                            Surface(
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(8.dp),
+                                color = Color.Black.copy(alpha = 0.75f),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.PresentToAll, null, tint = NeonCyan, modifier = Modifier.size(14.dp))
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        if (callState.isScreenSharing) "Sharing Your Screen" else "Screen Share",
+                                        style = Typography.labelMedium,
+                                        color = Color.White,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
 
-                    Spacer(modifier = Modifier.width(8.dp))
-                    
-                    Surface(
-                        onClick = {
-                            val code = meeting?.meetingCode ?: "mm-${meetingId}"
-                            clipboardManager.setText(AnnotatedString(code))
-                            Toast.makeText(context, "Code copied: $code", Toast.LENGTH_SHORT).show()
-                        },
-                        shape = CircleShape,
-                        color = Color.White.copy(alpha = 0.1f),
-                        modifier = Modifier.bounceClick()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        Spacer(Modifier.height(8.dp))
+
+                        // Strip of participants
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                meeting?.meetingCode ?: "mm-${meetingId}",
-                                style = Typography.labelSmall,
-                                color = NeonCyan,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Icon(Icons.Default.ContentCopy, null, tint = NeonCyan, modifier = Modifier.size(12.dp))
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(8.dp))
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (isRecording) {
-                        Surface(
-                            onClick = {
-                                val id = meetingId.toLongOrNull() ?: meeting?.id ?: effectiveMeetingId.takeIf { it > 0L }
-                                if (id != null && id > 0L) {
-                                    meetingViewModel.stopRecording(id)
-                                    com.developer_rahul.meetmind_ai.core.media.recording.RecordingService.stopService(context)
-                                    Toast.makeText(context, "Stopping recording & uploading...", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            color = RoseRed.copy(alpha = 0.85f),
-                            shape = CircleShape,
-                            modifier = Modifier.bounceClick()
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Box(
+                            items(allUiParticipants) { p ->
+                                ParticipantVideoTile(
+                                    participant = p,
                                     modifier = Modifier
-                                        .size(6.dp)
-                                        .background(Color.White, CircleShape)
-                                        .pulse(color = Color.White)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    "REC ${formatDuration(uiState.localRecordingState.durationMs)}",
-                                    color = Color.White,
-                                    style = Typography.labelSmall,
-                                    fontWeight = FontWeight.Black
+                                        .fillMaxHeight()
+                                        .width(130.dp),
+                                    mirror = (p.id == localUiParticipant.id)
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.width(6.dp))
                     }
+                } else if (remoteParticipants.isEmpty()) {
+                    // SOLO MODE (Only local user)
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        ParticipantVideoTile(
+                            participant = localUiParticipant,
+                            modifier = Modifier.fillMaxSize(),
+                            mirror = true
+                        )
 
-                    // Chat Button in Top Bar
-                    IconButton(
-                        onClick = { showChatSheet = true },
-                        modifier = Modifier
-                            .size(34.dp)
-                            .background(Color.White.copy(alpha = 0.12f), CircleShape)
-                            .bounceClick()
-                    ) {
-                        Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat", tint = Color.White, modifier = Modifier.size(16.dp))
+                        SoloMeetingInvitationCard(
+                            meetingTitle = meeting?.title ?: "Meeting",
+                            meetingCode = meeting?.meetingCode ?: "mm-$meetingId",
+                            onCopyCode = {
+                                val code = meeting?.meetingCode ?: "mm-$meetingId"
+                                clipboardManager.setText(AnnotatedString(code))
+                                Toast.makeText(context, "Code copied: $code", Toast.LENGTH_SHORT).show()
+                            },
+                            onShareLink = {
+                                val shareIntent = android.content.Intent().apply {
+                                    action = android.content.Intent.ACTION_SEND
+                                    putExtra(android.content.Intent.EXTRA_TEXT, "Join my MeetMind AI live meeting!\nTitle: ${meeting?.title ?: "Meeting"}\nMeeting Code: ${meeting?.meetingCode ?: meetingId}")
+                                    type = "text/plain"
+                                }
+                                context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Meeting Code"))
+                            },
+                            onInviteEmail = { showInviteDialog = true },
+                            modifier = Modifier.align(Alignment.Center)
+                        )
                     }
+                } else if (remoteParticipants.size == 1) {
+                    // DUET MODE (Google Meet Standard: Remote full stage, local in bottom-right PIP)
+                    val remoteUi = toUiParticipant(remoteParticipants.first())
+                    val fullScreenParticipant = if (isSwappedByPip) localUiParticipant else remoteUi
+                    val pipParticipant = if (isSwappedByPip) remoteUi else localUiParticipant
 
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        ParticipantVideoTile(
+                            participant = fullScreenParticipant,
+                            modifier = Modifier.fillMaxSize(),
+                            mirror = (fullScreenParticipant.id == localUiParticipant.id)
+                        )
 
-                    // Participants Counter Button in Top Bar
-                    Surface(
-                        onClick = { onToggleParticipants(effectiveMeetingIdString) },
-                        shape = CircleShape,
-                        color = ElectricIndigo.copy(alpha = 0.25f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, ElectricIndigo.copy(alpha = 0.5f)),
-                        modifier = Modifier.bounceClick()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        FloatingPipTile(
+                            participant = pipParticipant,
+                            isVideoOff = if (isSwappedByPip) !remoteUi.isVideoOn else isVideoOff,
+                            onFlipCamera = { callViewModel.switchCamera() },
+                            onSwap = { isSwappedByPip = !isSwappedByPip },
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 8.dp, bottom = 8.dp)
+                        )
+                    }
+                } else if (remoteParticipants.size == 2) {
+                    // 2 REMOTE PARTICIPANTS: Split screen in equal halves, local in PIP
+                    val remote0 = toUiParticipant(remoteParticipants[0])
+                    val remote1 = toUiParticipant(remoteParticipants[1])
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(Icons.Default.People, null, tint = ElectricIndigo, modifier = Modifier.size(14.dp))
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                "$totalParticipants",
-                                color = TextPrimary,
-                                style = Typography.labelMedium,
-                                fontWeight = FontWeight.Bold
+                            ParticipantVideoTile(
+                                participant = remote0,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                mirror = false
+                            )
+                            ParticipantVideoTile(
+                                participant = remote1,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                mirror = false
+                            )
+                        }
+
+                        FloatingPipTile(
+                            participant = localUiParticipant,
+                            isVideoOff = isVideoOff,
+                            onFlipCamera = { callViewModel.switchCamera() },
+                            onSwap = {},
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(end = 8.dp, bottom = 8.dp)
+                        )
+                    }
+                } else if (remoteParticipants.size in 3..4) {
+                    // 3-4 PARTICIPANTS: 2x2 Balanced Grid
+                    val gridList = if (remoteParticipants.size == 3) {
+                        listOf(
+                            toUiParticipant(remoteParticipants[0]),
+                            toUiParticipant(remoteParticipants[1]),
+                            toUiParticipant(remoteParticipants[2]),
+                            localUiParticipant
+                        )
+                    } else {
+                        remoteParticipants.take(4).map { toUiParticipant(it) }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                ParticipantVideoTile(
+                                    participant = gridList[0],
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .weight(1f),
+                                    mirror = (gridList[0].id == localUiParticipant.id)
+                                )
+                                ParticipantVideoTile(
+                                    participant = gridList[1],
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .weight(1f),
+                                    mirror = (gridList[1].id == localUiParticipant.id)
+                                )
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                ParticipantVideoTile(
+                                    participant = gridList[2],
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .weight(1f),
+                                    mirror = (gridList[2].id == localUiParticipant.id)
+                                )
+                                ParticipantVideoTile(
+                                    participant = gridList[3],
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .weight(1f),
+                                    mirror = (gridList[3].id == localUiParticipant.id)
+                                )
+                            }
+                        }
+
+                        if (remoteParticipants.size == 4) {
+                            FloatingPipTile(
+                                participant = localUiParticipant,
+                                isVideoOff = isVideoOff,
+                                onFlipCamera = { callViewModel.switchCamera() },
+                                onSwap = {},
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(end = 8.dp, bottom = 8.dp)
+                            )
+                        }
+                    }
+                } else {
+                    // 5+ PARTICIPANTS: Scrollable 2-Column Grid
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(allUiParticipants) { p ->
+                            ParticipantVideoTile(
+                                participant = p,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(180.dp),
+                                mirror = (p.id == localUiParticipant.id)
                             )
                         }
                     }
@@ -863,14 +924,49 @@ fun LiveMeetingScreen(
             }
         }
 
-        // Animated AI Representative Speaking Banner
+        // Top Floating Bar (Slides smoothly with AnimatedVisibility)
+        AnimatedVisibility(
+            visible = areControlsVisible,
+            enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { -it },
+            exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { -it },
+            modifier = Modifier.align(Alignment.TopCenter)
+        ) {
+            TopMeetingBar(
+                meetingTitle = meeting?.title ?: "Live Meeting",
+                meetingCode = meeting?.meetingCode ?: "mm-$meetingId",
+                formattedDuration = formattedDuration,
+                isRecording = isRecording,
+                recordingDurationMs = uiState.localRecordingState.durationMs,
+                selectedAudioDevice = callState.selectedAudioDevice,
+                totalParticipants = totalParticipants,
+                onCopyMeetingCode = {
+                    val code = meeting?.meetingCode ?: "mm-$meetingId"
+                    clipboardManager.setText(AnnotatedString(code))
+                    Toast.makeText(context, "Code copied: $code", Toast.LENGTH_SHORT).show()
+                },
+                onToggleAudioDevice = { showAudioDeviceSheet = true },
+                onFlipCamera = { callViewModel.switchCamera() },
+                onOpenChat = { showChatSheet = true },
+                onOpenParticipants = { onToggleParticipants(effectiveMeetingIdString) },
+                onStopRecording = {
+                    val id = meetingId.toLongOrNull() ?: meeting?.id ?: effectiveMeetingId.takeIf { it > 0L }
+                    if (id != null && id > 0L) {
+                        meetingViewModel.stopRecording(id)
+                        com.developer_rahul.meetmind_ai.core.media.recording.RecordingService.stopService(context)
+                        Toast.makeText(context, "Stopping recording & uploading...", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            )
+        }
+
+        // Active AI Speaking Banner
         val activeSpeech = callState.activeAiSpeech
         if (activeSpeech != null) {
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
                     .statusBarsPadding()
-                    .padding(top = 68.dp, start = 16.dp, end = 16.dp)
+                    .padding(top = if (areControlsVisible) 70.dp else 12.dp, start = 14.dp, end = 14.dp)
                     .fillMaxWidth()
                     .shadow(16.dp, RoundedCornerShape(16.dp)),
                 shape = RoundedCornerShape(16.dp),
@@ -920,73 +1016,19 @@ fun LiveMeetingScreen(
             }
         }
 
-        // Floating Local Preview (You) - Positioned cleanly above Bottom Controls
-        if (remoteParticipants.isNotEmpty()) {
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                .padding(bottom = 120.dp, end = 16.dp)
-                .size(width = 100.dp, height = 140.dp)
-                .shadow(16.dp, RoundedCornerShape(20.dp)),
-            shape = RoundedCornerShape(20.dp),
-            color = CardSurface,
-            border = androidx.compose.foundation.BorderStroke(1.5.dp, GlassWhite)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                if ((callState.localVideoTrack != null || callState.localSfuVideoTrack != null) && !isVideoOff) {
-                    VideoRenderer(
-                        modifier = Modifier.fillMaxSize(),
-                        videoTrack = callState.localVideoTrack,
-                        sfuVideoTrack = callState.localSfuVideoTrack,
-                        isOverlay = true
-                    )
-                } else {
-                    AvatarPlaceholder(name = "You", sizeDp = 48)
-                }
-
-                // Camera Flip Quick Control
-                if (!isVideoOff) {
-                    IconButton(
-                        onClick = { callViewModel.switchCamera() },
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(4.dp)
-                            .size(28.dp)
-                            .background(Color.Black.copy(alpha = 0.5f), CircleShape)
-                            .bounceClick()
-                    ) {
-                        Icon(Icons.Default.Cameraswitch, contentDescription = "Flip Camera", tint = Color.White, modifier = Modifier.size(16.dp))
-                    }
-                }
-                
-                Row(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(6.dp)
-                        .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(6.dp))
-                        .padding(horizontal = 6.dp, vertical = 2.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                        null,
-                        tint = if (isMuted) RoseRed else EmeraldGreen,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Spacer(Modifier.width(4.dp))
-                    Text("You", style = Typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
-                }
-            }
-        }
-
-        }
-
+        // Subtitles Overlay
         if (translationState.subtitlesEnabled) {
+            val subtitleBottomOffset by animateDpAsState(
+                targetValue = if (areControlsVisible) 92.dp else 20.dp,
+                animationSpec = tween(250),
+                label = "subtitleBottomOffset"
+            )
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 120.dp)
-                    .padding(start = 16.dp, end = 125.dp)
+                    .navigationBarsPadding()
+                    .padding(bottom = subtitleBottomOffset)
+                    .padding(horizontal = 16.dp)
                     .fillMaxWidth()
             ) {
                 SubtitleOverlay(
@@ -997,104 +1039,43 @@ fun LiveMeetingScreen(
             }
         }
 
-        // Standard Bottom Glass Dock Controls
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = 20.dp)
-                .padding(horizontal = 16.dp)
-                .fillMaxWidth()
-                .glassmorphism(borderColor = GlassWhite)
-                .padding(vertical = 10.dp, horizontal = 16.dp)
+        // Bottom Controls Dock (Slides smoothly with AnimatedVisibility)
+        AnimatedVisibility(
+            visible = areControlsVisible,
+            enter = fadeIn(tween(250)) + slideInVertically(tween(250)) { it },
+            exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { it },
+            modifier = Modifier.align(Alignment.BottomCenter)
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                // Mic Button (Green ON / RoseRed OFF)
-                MeetingControlButton(
-                    icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
-                    isActive = !isMuted,
-                    activeColor = EmeraldGreen.copy(alpha = 0.85f),
-                    inactiveColor = RoseRed.copy(alpha = 0.85f),
-                    onClick = { 
-                        isMuted = !isMuted
-                        callViewModel.setAudioEnabled(!isMuted)
-                        Toast.makeText(context, if (isMuted) "Microphone Muted" else "Microphone Unmuted", Toast.LENGTH_SHORT).show()
+            MeetingBottomDock(
+                isMuted = isMuted,
+                isVideoOff = isVideoOff,
+                isScreenSharing = callState.isScreenSharing,
+                selectedAudioDevice = callState.selectedAudioDevice,
+                onToggleMic = {
+                    isMuted = !isMuted
+                    callViewModel.setAudioEnabled(!isMuted)
+                    Toast.makeText(context, if (isMuted) "Microphone Muted" else "Microphone Unmuted", Toast.LENGTH_SHORT).show()
+                },
+                onToggleVideo = {
+                    isVideoOff = !isVideoOff
+                    callViewModel.setVideoEnabled(!isVideoOff)
+                    Toast.makeText(context, if (isVideoOff) "Camera Turned Off" else "Camera Turned On", Toast.LENGTH_SHORT).show()
+                },
+                onToggleScreenShare = {
+                    if (callState.isScreenSharing) {
+                        callViewModel.stopScreenSharing()
+                        com.developer_rahul.meetmind_ai.core.media.recording.RecordingService.stopService(context)
+                        Toast.makeText(context, "Screen Sharing Stopped", Toast.LENGTH_SHORT).show()
+                    } else {
+                        com.developer_rahul.meetmind_ai.core.media.recording.RecordingService.startService(context)
+                        val mediaProjectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                        screenShareLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
                     }
-                )
-
-                // Camera Button (Indigo ON / RoseRed OFF)
-                MeetingControlButton(
-                    icon = if (isVideoOff) Icons.Default.VideocamOff else Icons.Default.Videocam,
-                    isActive = !isVideoOff,
-                    activeColor = ElectricIndigo.copy(alpha = 0.85f),
-                    inactiveColor = RoseRed.copy(alpha = 0.85f),
-                    onClick = { 
-                        isVideoOff = !isVideoOff
-                        callViewModel.setVideoEnabled(!isVideoOff)
-                        Toast.makeText(context, if (isVideoOff) "Camera Turned Off" else "Camera Turned On", Toast.LENGTH_SHORT).show()
-                    }
-                )
-
-                // Audio Output Routing Button (Speaker, Earpiece, Bluetooth, Headset)
-                val audioDeviceIcon = when (callState.selectedAudioDevice) {
-                    "Bluetooth" -> Icons.Default.BluetoothAudio
-                    "Headset" -> Icons.Default.Headset
-                    "Earpiece" -> Icons.Default.PhoneInTalk
-                    else -> Icons.Default.VolumeUp
-                }
-
-                MeetingControlButton(
-                    icon = audioDeviceIcon,
-                    isActive = callState.selectedAudioDevice != "Speaker",
-                    activeColor = NeonCyan.copy(alpha = 0.85f),
-                    inactiveColor = Color.White.copy(alpha = 0.12f),
-                    onClick = { showAudioDeviceSheet = true }
-                )
-
-                // Screen Share Button (Cyan ON / Translucent OFF)
-                MeetingControlButton(
-                    icon = if (callState.isScreenSharing) Icons.Default.StopScreenShare else Icons.Default.PresentToAll,
-                    isActive = callState.isScreenSharing,
-                    activeColor = NeonCyan.copy(alpha = 0.85f),
-                    inactiveColor = Color.White.copy(alpha = 0.12f),
-                    onClick = {
-                        if (callState.isScreenSharing) {
-                            callViewModel.stopScreenSharing()
-                            com.developer_rahul.meetmind_ai.core.media.recording.RecordingService.stopService(context)
-                            Toast.makeText(context, "Screen Sharing Stopped", Toast.LENGTH_SHORT).show()
-                        } else {
-                            com.developer_rahul.meetmind_ai.core.media.recording.RecordingService.startService(context)
-                            val mediaProjectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                            screenShareLauncher.launch(mediaProjectionManager.createScreenCaptureIntent())
-                        }
-                    }
-                )
-
-                // More Controls Sheet Button
-                MeetingControlButton(
-                    icon = Icons.Default.MoreHoriz,
-                    isActive = false,
-                    onClick = { showMoreSheet = true }
-                )
-                
-                // End Call CTA Button
-                Surface(
-                    onClick = { showLeaveDialog = true },
-                    shape = CircleShape,
-                    color = RoseRed,
-                    shadowElevation = 8.dp,
-                    modifier = Modifier
-                        .size(52.dp)
-                        .bounceClick()
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.CallEnd, contentDescription = "End Call", tint = Color.White, modifier = Modifier.size(24.dp))
-                    }
-                }
-            }
+                },
+                onToggleAudioDevice = { showAudioDeviceSheet = true },
+                onOpenMore = { showMoreSheet = true },
+                onEndCall = { showLeaveDialog = true }
+            )
         }
     }
 }
@@ -1311,21 +1292,22 @@ fun ControlItem(
 @Composable
 fun ParticipantVideoTile(
     participant: Participant,
-    isOverlay: Boolean = false
+    modifier: Modifier = Modifier,
+    isOverlay: Boolean = false,
+    mirror: Boolean = false
 ) {
     Box(
-        modifier = Modifier
-            .aspectRatio(0.82f)
-            .clip(RoundedCornerShape(20.dp))
+        modifier = modifier
+            .clip(RoundedCornerShape(16.dp))
             .background(CardSurface)
             .then(
                 if (participant.isActiveSpeaker && participant.isOnline) {
                     val speakerBorderColor = if (participant.isAiRep) NeonCyan else EmeraldGreen
-                    Modifier.border(2.5.dp, speakerBorderColor, RoundedCornerShape(20.dp))
+                    Modifier.border(2.5.dp, speakerBorderColor, RoundedCornerShape(16.dp))
                 } else if (participant.isAiRep) {
-                    Modifier.border(1.5.dp, NeonCyan.copy(alpha = 0.35f), RoundedCornerShape(20.dp))
+                    Modifier.border(1.5.dp, NeonCyan.copy(alpha = 0.4f), RoundedCornerShape(16.dp))
                 } else {
-                    Modifier.border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(20.dp))
+                    Modifier.border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp))
                 }
             )
     ) {
@@ -1336,52 +1318,57 @@ fun ParticipantVideoTile(
                 modifier = Modifier.fillMaxSize(),
                 videoTrack = cameraTrack,
                 sfuVideoTrack = sfuCameraTrack,
-                isOverlay = isOverlay
+                isOverlay = isOverlay,
+                mirror = mirror
             )
         } else {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 AvatarPlaceholder(
                     name = participant.name, 
                     isActiveSpeaker = participant.isActiveSpeaker && participant.isOnline, 
-                    sizeDp = 72
+                    sizeDp = 68
                 )
             }
         }
 
-        Row(
+        Surface(
             modifier = Modifier
                 .align(Alignment.BottomStart)
-                .padding(10.dp)
-                .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(8.dp))
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+                .padding(8.dp),
+            color = Color.Black.copy(alpha = 0.65f),
+            shape = RoundedCornerShape(8.dp)
         ) {
-            Icon(
-                if (!participant.isOnline) Icons.Default.CloudOff else if (!participant.isMicOn) Icons.Default.MicOff else Icons.Default.Mic,
-                null, 
-                tint = if (!participant.isOnline || !participant.isMicOn) RoseRed else EmeraldGreen, 
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text(
-                participant.name + if (participant.isOnline) "" else " (Offline)",
-                color = if (participant.isOnline) Color.White else TextDisabled,
-                style = Typography.labelMedium,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            if (participant.isHost) {
-                Spacer(modifier = Modifier.width(6.dp))
-                StatusChip(text = "HOST", color = ElectricIndigo)
-            }
-            if (participant.isAiRep) {
-                Spacer(modifier = Modifier.width(6.dp))
-                StatusChip(text = "AI", color = NeonCyan)
-            }
-            if (participant.screenTrack != null) {
-                Spacer(modifier = Modifier.width(6.dp))
-                Icon(Icons.Default.PresentToAll, null, tint = NeonCyan, modifier = Modifier.size(14.dp))
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    if (!participant.isOnline) Icons.Default.CloudOff else if (!participant.isMicOn) Icons.Default.MicOff else Icons.Default.Mic,
+                    null, 
+                    tint = if (!participant.isOnline || !participant.isMicOn) RoseRed else EmeraldGreen, 
+                    modifier = Modifier.size(13.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    participant.name + if (participant.isOnline) "" else " (Offline)",
+                    color = if (participant.isOnline) Color.White else TextDisabled,
+                    style = Typography.labelMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (participant.isHost) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    StatusChip(text = "HOST", color = ElectricIndigo)
+                }
+                if (participant.isAiRep) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    StatusChip(text = "AI", color = NeonCyan)
+                }
+                if (participant.screenTrack != null) {
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(Icons.Default.PresentToAll, null, tint = NeonCyan, modifier = Modifier.size(13.dp))
+                }
             }
         }
         
@@ -1390,15 +1377,520 @@ fun ParticipantVideoTile(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
-                    .padding(10.dp)
-                    .background(speakerColor.copy(alpha = 0.2f), CircleShape)
-                    .padding(6.dp)
+                    .padding(8.dp)
+                    .background(speakerColor.copy(alpha = 0.25f), CircleShape)
+                    .padding(5.dp)
             ) {
                 Icon(
                     if (participant.isAiRep) Icons.Default.GraphicEq else Icons.Default.VolumeUp,
                     null,
                     tint = speakerColor,
-                    modifier = Modifier.size(16.dp)
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun TopMeetingBar(
+    meetingTitle: String,
+    meetingCode: String,
+    formattedDuration: String,
+    isRecording: Boolean,
+    recordingDurationMs: Long,
+    selectedAudioDevice: String,
+    totalParticipants: Int,
+    onCopyMeetingCode: () -> Unit,
+    onToggleAudioDevice: () -> Unit,
+    onFlipCamera: () -> Unit,
+    onOpenChat: () -> Unit,
+    onOpenParticipants: () -> Unit,
+    onStopRecording: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .statusBarsPadding()
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .fillMaxWidth()
+            .glassmorphism(),
+        shape = RoundedCornerShape(24.dp),
+        color = GlassBackground
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Left: Title + Code Chip
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.weight(1f, fill = false)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(EmeraldGreen, CircleShape)
+                        .pulse(color = EmeraldGreen)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = meetingTitle,
+                    style = Typography.titleMedium,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Surface(
+                    onClick = onCopyMeetingCode,
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color.White.copy(alpha = 0.12f),
+                    modifier = Modifier.bounceClick()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            meetingCode,
+                            style = Typography.labelSmall,
+                            color = NeonCyan,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(Icons.Default.ContentCopy, null, tint = NeonCyan, modifier = Modifier.size(12.dp))
+                    }
+                }
+            }
+
+            // Right Action Controls
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // Duration & REC Pill
+                if (isRecording) {
+                    Surface(
+                        onClick = onStopRecording,
+                        color = RoseRed.copy(alpha = 0.9f),
+                        shape = CircleShape,
+                        modifier = Modifier.bounceClick()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .background(Color.White, CircleShape)
+                                    .pulse(color = Color.White)
+                            )
+                            Spacer(modifier = Modifier.width(5.dp))
+                            Text(
+                                "REC ${formatDuration(recordingDurationMs)}",
+                                color = Color.White,
+                                style = Typography.labelSmall,
+                                fontWeight = FontWeight.Black
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                } else {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.4f)
+                    ) {
+                        Text(
+                            text = formattedDuration,
+                            style = Typography.labelSmall,
+                            color = TextSecondary,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(6.dp))
+                }
+
+                // Audio Route Quick Switcher
+                val audioIcon = when (selectedAudioDevice) {
+                    "Bluetooth" -> Icons.Default.BluetoothAudio
+                    "Headset" -> Icons.Default.Headset
+                    "Earpiece" -> Icons.Default.PhoneInTalk
+                    else -> Icons.Default.VolumeUp
+                }
+                IconButton(
+                    onClick = onToggleAudioDevice,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .background(Color.White.copy(alpha = 0.12f), CircleShape)
+                        .bounceClick()
+                ) {
+                    Icon(audioIcon, contentDescription = "Audio Output", tint = Color.White, modifier = Modifier.size(17.dp))
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // Camera Flip Quick Switcher
+                IconButton(
+                    onClick = onFlipCamera,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .background(Color.White.copy(alpha = 0.12f), CircleShape)
+                        .bounceClick()
+                ) {
+                    Icon(Icons.Default.Cameraswitch, contentDescription = "Flip Camera", tint = Color.White, modifier = Modifier.size(17.dp))
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // Chat Shortcut
+                IconButton(
+                    onClick = onOpenChat,
+                    modifier = Modifier
+                        .size(34.dp)
+                        .background(Color.White.copy(alpha = 0.12f), CircleShape)
+                        .bounceClick()
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat", tint = Color.White, modifier = Modifier.size(16.dp))
+                }
+
+                Spacer(modifier = Modifier.width(6.dp))
+
+                // Participants Badge Button
+                Surface(
+                    onClick = onOpenParticipants,
+                    shape = CircleShape,
+                    color = ElectricIndigo.copy(alpha = 0.25f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, ElectricIndigo.copy(alpha = 0.5f)),
+                    modifier = Modifier.bounceClick()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.People, null, tint = ElectricIndigo, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            "$totalParticipants",
+                            color = TextPrimary,
+                            style = Typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MeetingBottomDock(
+    isMuted: Boolean,
+    isVideoOff: Boolean,
+    isScreenSharing: Boolean,
+    selectedAudioDevice: String,
+    onToggleMic: () -> Unit,
+    onToggleVideo: () -> Unit,
+    onToggleScreenShare: () -> Unit,
+    onToggleAudioDevice: () -> Unit,
+    onOpenMore: () -> Unit,
+    onEndCall: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .navigationBarsPadding()
+            .padding(bottom = 14.dp, start = 14.dp, end = 14.dp)
+            .fillMaxWidth()
+            .shadow(16.dp, RoundedCornerShape(32.dp)),
+        shape = RoundedCornerShape(32.dp),
+        color = Color(0xEE1E222D),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.12f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            // 1. Mic Button (52dp)
+            MeetingControlButton(
+                icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
+                isActive = !isMuted,
+                activeColor = Color(0xFF3C4043),
+                inactiveColor = RoseRed,
+                size = 52.dp,
+                iconSize = 24.dp,
+                onClick = onToggleMic
+            )
+
+            // 2. Camera Button (52dp)
+            MeetingControlButton(
+                icon = if (isVideoOff) Icons.Default.VideocamOff else Icons.Default.Videocam,
+                isActive = !isVideoOff,
+                activeColor = Color(0xFF3C4043),
+                inactiveColor = RoseRed,
+                size = 52.dp,
+                iconSize = 24.dp,
+                onClick = onToggleVideo
+            )
+
+            // 3. Screen Share (48dp)
+            MeetingControlButton(
+                icon = if (isScreenSharing) Icons.Default.StopScreenShare else Icons.Default.PresentToAll,
+                isActive = isScreenSharing,
+                activeColor = NeonCyan,
+                inactiveColor = Color(0xFF3C4043),
+                contentColor = if (isScreenSharing) Color.Black else Color.White,
+                size = 48.dp,
+                iconSize = 22.dp,
+                onClick = onToggleScreenShare
+            )
+
+            // 4. Audio Output Selector (48dp)
+            val audioDeviceIcon = when (selectedAudioDevice) {
+                "Bluetooth" -> Icons.Default.BluetoothAudio
+                "Headset" -> Icons.Default.Headset
+                "Earpiece" -> Icons.Default.PhoneInTalk
+                else -> Icons.Default.VolumeUp
+            }
+            MeetingControlButton(
+                icon = audioDeviceIcon,
+                isActive = selectedAudioDevice != "Speaker",
+                activeColor = NeonCyan,
+                inactiveColor = Color(0xFF3C4043),
+                contentColor = if (selectedAudioDevice != "Speaker") Color.Black else Color.White,
+                size = 48.dp,
+                iconSize = 22.dp,
+                onClick = onToggleAudioDevice
+            )
+
+            // 5. More Options (48dp)
+            MeetingControlButton(
+                icon = Icons.Default.MoreHoriz,
+                isActive = false,
+                inactiveColor = Color(0xFF3C4043),
+                size = 48.dp,
+                iconSize = 22.dp,
+                onClick = onOpenMore
+            )
+
+            // 6. End Call Button (52dp)
+            Surface(
+                onClick = onEndCall,
+                shape = CircleShape,
+                color = RoseRed,
+                shadowElevation = 8.dp,
+                modifier = Modifier
+                    .size(52.dp)
+                    .bounceClick()
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.CallEnd,
+                        contentDescription = "End Call",
+                        tint = Color.White,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SoloMeetingInvitationCard(
+    meetingTitle: String,
+    meetingCode: String,
+    onCopyCode: () -> Unit,
+    onShareLink: () -> Unit,
+    onInviteEmail: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .padding(24.dp)
+            .fillMaxWidth()
+            .shadow(20.dp, RoundedCornerShape(24.dp)),
+        shape = RoundedCornerShape(24.dp),
+        color = Color(0xE61A1E29),
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
+    ) {
+        Column(
+            modifier = Modifier.padding(20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(52.dp)
+                    .background(ElectricIndigo.copy(alpha = 0.2f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    Icons.Default.PersonAdd,
+                    contentDescription = null,
+                    tint = ElectricIndigo,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                "You're the only one here",
+                style = Typography.titleLarge,
+                color = TextPrimary,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "Share this meeting link with others you want in the call",
+                style = Typography.bodyMedium,
+                color = TextSecondary,
+                textAlign = TextAlign.Center
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Surface(
+                onClick = onCopyCode,
+                color = CardSurface,
+                shape = RoundedCornerShape(12.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .bounceClick()
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        meetingCode,
+                        style = Typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = NeonCyan
+                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Copy", style = Typography.labelMedium, color = TextSecondary)
+                        Spacer(Modifier.width(4.dp))
+                        Icon(Icons.Default.ContentCopy, null, tint = TextPrimary, modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Button(
+                    onClick = onShareLink,
+                    modifier = Modifier
+                        .weight(1f)
+                        .bounceClick(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo)
+                ) {
+                    Icon(Icons.Default.Share, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Share Link", fontWeight = FontWeight.Bold, style = Typography.labelMedium)
+                }
+
+                OutlinedButton(
+                    onClick = onInviteEmail,
+                    modifier = Modifier
+                        .weight(1f)
+                        .bounceClick(),
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.6f))
+                ) {
+                    Icon(Icons.Default.PersonAdd, null, tint = NeonCyan, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Invite Email", color = NeonCyan, fontWeight = FontWeight.Bold, style = Typography.labelMedium)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FloatingPipTile(
+    participant: Participant,
+    isVideoOff: Boolean,
+    onFlipCamera: () -> Unit,
+    onSwap: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onSwap,
+        modifier = modifier
+            .size(width = 96.dp, height = 144.dp)
+            .shadow(16.dp, RoundedCornerShape(18.dp)),
+        shape = RoundedCornerShape(18.dp),
+        color = CardSurface,
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, GlassWhite)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            val cameraTrack = participant.videoTrack
+            val sfuCameraTrack = participant.sfuVideoTrack
+            if ((cameraTrack != null || sfuCameraTrack != null) && participant.isVideoOn) {
+                VideoRenderer(
+                    modifier = Modifier.fillMaxSize(),
+                    videoTrack = cameraTrack,
+                    sfuVideoTrack = sfuCameraTrack,
+                    isOverlay = true,
+                    mirror = true
+                )
+            } else {
+                AvatarPlaceholder(name = participant.name, sizeDp = 42)
+            }
+
+            // Camera flip shortcut
+            if (participant.isVideoOn && !isVideoOff) {
+                IconButton(
+                    onClick = onFlipCamera,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(4.dp)
+                        .size(26.dp)
+                        .background(Color.Black.copy(alpha = 0.55f), CircleShape)
+                        .bounceClick()
+                ) {
+                    Icon(
+                        Icons.Default.Cameraswitch,
+                        contentDescription = "Flip Camera",
+                        tint = Color.White,
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
+            }
+
+            // Name & mic tag
+            Row(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(5.dp)
+                    .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(6.dp))
+                    .padding(horizontal = 5.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    if (!participant.isMicOn) Icons.Default.MicOff else Icons.Default.Mic,
+                    null,
+                    tint = if (!participant.isMicOn) RoseRed else EmeraldGreen,
+                    modifier = Modifier.size(10.dp)
+                )
+                Spacer(Modifier.width(3.dp))
+                Text(
+                    participant.name.take(6),
+                    style = Typography.labelSmall,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
                 )
             }
         }
@@ -1409,20 +1901,24 @@ fun ParticipantVideoTile(
 fun MeetingControlButton(
     icon: ImageVector,
     isActive: Boolean,
-    activeColor: Color = GlassWhite,
-    inactiveColor: Color = GlassWhite,
+    activeColor: Color = Color(0xFF3C4043),
+    inactiveColor: Color = RoseRed,
+    contentColor: Color = Color.White,
+    size: androidx.compose.ui.unit.Dp = 48.dp,
+    iconSize: androidx.compose.ui.unit.Dp = 22.dp,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
         shape = CircleShape,
         color = if (isActive) activeColor else inactiveColor,
+        shadowElevation = 4.dp,
         modifier = Modifier
-            .size(48.dp)
+            .size(size)
             .bounceClick()
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(22.dp))
+            Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(iconSize))
         }
     }
 }
