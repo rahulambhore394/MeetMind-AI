@@ -17,8 +17,12 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
@@ -232,6 +236,55 @@ public class TranscriptionService {
 
         List<TranscriptSegment> segments = segmentRepository.findByTranscriptIdOrderBySegmentIndex(transcriptId);
         return new TranscriptDetailView(transcript, segments);
+    }
+
+    public TranscriptDetailView getLatestTranscript(Long meetingId, User user) {
+        verifyAccess(meetingId, user.getId());
+
+        List<MeetingTranscript> list = transcriptRepository.findByMeetingId(meetingId);
+        if (list.isEmpty()) {
+            return new TranscriptDetailView(null, List.of());
+        }
+
+        MeetingTranscript latest = list.stream().max(Comparator.comparing(MeetingTranscript::getId)).orElse(list.get(0));
+        List<TranscriptSegment> segments = segmentRepository.findByTranscriptIdOrderBySegmentIndex(latest.getId());
+        return new TranscriptDetailView(latest, segments);
+    }
+
+    public String exportTranscriptText(Long meetingId, User user) {
+        verifyAccess(meetingId, user.getId());
+
+        com.meetmind.meetmind_backend.meeting.Meeting meeting = meetingRepository.findById(meetingId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Meeting not found"));
+
+        TranscriptDetailView detail = getLatestTranscript(meetingId, user);
+        StringBuilder sb = new StringBuilder();
+        sb.append("====================================================\n");
+        sb.append("MEETMIND AI — MEETING TRANSCRIPT\n");
+        sb.append("Meeting: ").append(meeting.getTitle()).append("\n");
+        sb.append("Meeting Code: ").append(meeting.getMeetingCode()).append("\n");
+        sb.append("Host: ").append(meeting.getHost().getName()).append("\n");
+        sb.append("Exported At: ").append(LocalDateTime.now()).append("\n");
+        sb.append("====================================================\n\n");
+
+        if (detail.segments() == null || detail.segments().isEmpty()) {
+            sb.append("No spoken transcript segments were recorded for this meeting.\n");
+        } else {
+            DateTimeFormatter timeFmt = DateTimeFormatter.ofPattern("HH:mm:ss");
+            for (TranscriptSegment seg : detail.segments()) {
+                String timeStr = "00:00:00";
+                if (seg.getStartMs() > 0) {
+                    Instant instant = Instant.ofEpochMilli(seg.getStartMs());
+                    timeStr = instant.atZone(ZoneId.systemDefault()).format(timeFmt);
+                }
+                sb.append("[").append(timeStr).append("] ")
+                  .append(seg.getSpeaker() != null ? seg.getSpeaker() : "Speaker")
+                  .append(": ")
+                  .append(seg.getText())
+                  .append("\n\n");
+            }
+        }
+        return sb.toString();
     }
 
     /**

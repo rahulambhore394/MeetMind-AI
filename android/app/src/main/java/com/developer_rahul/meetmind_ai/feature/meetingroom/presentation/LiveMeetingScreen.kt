@@ -16,10 +16,12 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -65,6 +67,10 @@ import com.developer_rahul.meetmind_ai.core.ui.provideChatViewModelFactory
 import com.developer_rahul.meetmind_ai.core.ui.provideLiveMeetingViewModelFactory
 import com.developer_rahul.meetmind_ai.core.ui.provideLiveTranslationViewModelFactory
 import com.developer_rahul.meetmind_ai.core.ui.provideMeetingIntelligenceViewModelFactory
+import com.developer_rahul.meetmind_ai.core.ui.provideTranscriptViewModelFactory
+import com.developer_rahul.meetmind_ai.feature.transcript.presentation.TranscriptViewModel
+import com.developer_rahul.meetmind_ai.feature.transcript.domain.model.TranscriptSegment
+import android.content.Intent
 import com.developer_rahul.meetmind_ai.feature.ai.presentation.MeetingIntelligenceViewModel
 import com.developer_rahul.meetmind_ai.feature.chat.presentation.ChatBubble
 import com.developer_rahul.meetmind_ai.feature.chat.presentation.ChatViewModel
@@ -222,6 +228,7 @@ fun LiveMeetingScreen(
     var showRecordingConsent by remember { mutableStateOf(false) }
     var showTranslationSettings by remember { mutableStateOf(false) }
     var showIntelligenceSheet by remember { mutableStateOf(false) }
+    var showTranscriptSheet by remember { mutableStateOf(false) }
     var showInviteDialog by remember { mutableStateOf(false) }
     var showChatSheet by remember { mutableStateOf(false) }
     var showAudioDeviceSheet by remember { mutableStateOf(false) }
@@ -558,7 +565,7 @@ fun LiveMeetingScreen(
                 },
                 onViewTranscript = { 
                     showMoreSheet = false 
-                    onViewTranscript(effectiveMeetingIdString)
+                    showTranscriptSheet = true
                 },
                 onAiInsights = { 
                     showMoreSheet = false 
@@ -626,6 +633,23 @@ fun LiveMeetingScreen(
                 onFullScreen = {
                     showIntelligenceSheet = false
                     onViewIntelligence(effectiveMeetingIdString)
+                }
+            )
+        }
+    }
+
+    if (showTranscriptSheet) {
+        ModalBottomSheet(
+            onDismissRequest = { showTranscriptSheet = false },
+            containerColor = BackgroundSurface,
+            dragHandle = { BottomSheetDefaults.DragHandle(color = TextDisabled) }
+        ) {
+            InMeetingTranscriptSheetContent(
+                meetingId = effectiveMeetingIdString,
+                onClose = { showTranscriptSheet = false },
+                onFullScreen = {
+                    showTranscriptSheet = false
+                    onViewTranscript(effectiveMeetingIdString)
                 }
             )
         }
@@ -3625,6 +3649,242 @@ fun InMeetingParticipantsSheetContent(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun InMeetingTranscriptSheetContent(
+    meetingId: String,
+    onClose: () -> Unit,
+    onFullScreen: () -> Unit,
+    transcriptViewModel: TranscriptViewModel = viewModel(
+        key = "InMeetingTranscript_$meetingId",
+        factory = provideTranscriptViewModelFactory(meetingId.toLongOrNull() ?: -1L)
+    )
+) {
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+    val uiState by transcriptViewModel.uiState.collectAsState()
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(uiState.filteredSegments.size) {
+        if (uiState.filteredSegments.isNotEmpty()) {
+            listState.animateScrollToItem(uiState.filteredSegments.size - 1)
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .fillMaxHeight(0.85f)
+            .padding(horizontal = 20.dp, vertical = 10.dp)
+    ) {
+        // Top Header
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = CircleShape,
+                    color = EmeraldGreen.copy(alpha = 0.15f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, EmeraldGreen.copy(alpha = 0.3f)),
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.Subtitles, contentDescription = null, tint = EmeraldGreen, modifier = Modifier.size(18.dp))
+                    }
+                }
+                Spacer(Modifier.width(10.dp))
+                Column {
+                    Text("Live Transcript", style = Typography.titleMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(6.dp).background(EmeraldGreen, CircleShape))
+                        Spacer(Modifier.width(4.dp))
+                        Text("STREAMING LIVE", style = Typography.labelSmall.copy(fontSize = 10.sp), color = EmeraldGreen, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = {
+                        val text = transcriptViewModel.getFormattedTranscriptText()
+                        clipboardManager.setText(AnnotatedString(text))
+                        Toast.makeText(context, "Transcript copied", Toast.LENGTH_SHORT).show()
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = "Copy", tint = TextPrimary, modifier = Modifier.size(18.dp))
+                }
+                IconButton(
+                    onClick = {
+                        val text = transcriptViewModel.getFormattedTranscriptText()
+                        val sendIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_TEXT, text)
+                            putExtra(Intent.EXTRA_SUBJECT, "Live Meeting Transcript")
+                            type = "text/plain"
+                        }
+                        context.startActivity(Intent.createChooser(sendIntent, "Share Live Transcript"))
+                    },
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(Icons.Default.Share, contentDescription = "Share", tint = TextPrimary, modifier = Modifier.size(18.dp))
+                }
+                IconButton(
+                    onClick = onFullScreen,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(Icons.Default.OpenInNew, contentDescription = "Full Screen", tint = ElectricIndigo, modifier = Modifier.size(18.dp))
+                }
+                IconButton(
+                    onClick = onClose,
+                    modifier = Modifier.size(36.dp)
+                ) {
+                    Icon(Icons.Default.Close, contentDescription = "Close", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                }
+            }
+        }
+
+        Spacer(Modifier.height(12.dp))
+
+        // Target language chips
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            transcriptViewModel.availableLanguages.forEach { lang ->
+                val isSelected = uiState.selectedLanguage == lang.code
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { transcriptViewModel.selectLanguage(lang.code) },
+                    label = { 
+                        Text(
+                            lang.displayName, 
+                            style = Typography.labelSmall,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                        ) 
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = ElectricIndigo,
+                        selectedLabelColor = Color.White,
+                        containerColor = BackgroundSurface,
+                        labelColor = TextPrimary
+                    ),
+                    shape = RoundedCornerShape(14.dp)
+                )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+
+        // Search Bar
+        OutlinedTextField(
+            value = uiState.searchQuery,
+            onValueChange = { transcriptViewModel.onSearch(it) },
+            placeholder = { Text("Filter live transcript...", style = Typography.bodySmall, color = TextDisabled) },
+            leadingIcon = { Icon(Icons.Default.Search, null, tint = TextSecondary, modifier = Modifier.size(18.dp)) },
+            trailingIcon = {
+                if (uiState.searchQuery.isNotEmpty()) {
+                    IconButton(onClick = { transcriptViewModel.onSearch("") }, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Clear, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
+                    }
+                }
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = ElectricIndigo,
+                unfocusedBorderColor = BorderColor,
+                focusedContainerColor = CardSurface,
+                unfocusedContainerColor = CardSurface
+            ),
+            singleLine = true
+        )
+
+        Spacer(Modifier.height(12.dp))
+
+        // List
+        if (uiState.isLoading && uiState.filteredSegments.isEmpty()) {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(color = ElectricIndigo, modifier = Modifier.size(32.dp))
+            }
+        } else if (uiState.filteredSegments.isEmpty()) {
+            Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(16.dp)) {
+                    Icon(Icons.Default.Hearing, null, tint = TextDisabled, modifier = Modifier.size(40.dp))
+                    Spacer(Modifier.height(8.dp))
+                    Text("Listening for live speech...", style = Typography.bodyMedium, color = TextSecondary)
+                    Text("Spoken utterances will appear here in real time as participants talk.", style = Typography.bodySmall, color = TextDisabled, textAlign = TextAlign.Center)
+                }
+            }
+        } else {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(bottom = 16.dp)
+            ) {
+                items(uiState.filteredSegments, key = { it.id }) { seg ->
+                    InMeetingTranscriptItem(seg, uiState.searchQuery)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InMeetingTranscriptItem(
+    segment: TranscriptSegment,
+    searchQuery: String = ""
+) {
+    val speakerColor = when {
+        segment.speaker.equals("you", ignoreCase = true) -> EmeraldGreen
+        segment.speaker.contains("ai", ignoreCase = true) -> NeonCyan
+        segment.speaker.contains("host", ignoreCase = true) -> PurpleViolet
+        else -> ElectricIndigo
+    }
+
+    Surface(
+        color = CardSurface,
+        shape = RoundedCornerShape(12.dp),
+        border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = segment.speaker,
+                    style = Typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = speakerColor
+                )
+                Text(
+                    text = segment.time,
+                    style = Typography.labelSmall.copy(fontSize = 10.sp),
+                    color = TextDisabled
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = segment.text,
+                style = Typography.bodyMedium,
+                color = TextPrimary,
+                lineHeight = 20.sp
+            )
         }
     }
 }

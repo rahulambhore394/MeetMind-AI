@@ -19,6 +19,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @Service
@@ -235,6 +236,22 @@ public class LiveTranslationService {
         String updatedFull = (full == null || full.isBlank()) ? sourceText.trim() : full.trim() + " " + sourceText.trim();
         transcript.setFullText(updatedFull);
         transcriptRepository.save(transcript);
+
+        if (messagingTemplate != null) {
+            messagingTemplate.convertAndSend(
+                    "/topic/meetings/" + meetingId + "/transcript",
+                    Map.of(
+                            "type", "TRANSCRIPT_SEGMENT_ADDED",
+                            "segmentId", segment.getId(),
+                            "transcriptId", transcript.getId(),
+                            "speaker", segment.getSpeaker(),
+                            "text", segment.getText(),
+                            "startMs", segment.getStartMs(),
+                            "endMs", segment.getEndMs(),
+                            "timestamp", System.currentTimeMillis()
+                    )
+            );
+        }
 
         return segment.getId();
     }

@@ -184,6 +184,31 @@ class TranscriptViewModel(
         val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
         return sdf.format(Date(timestamp))
     }
+
+    fun getFormattedTranscriptText(): String {
+        val segments = if (_uiState.value.filteredSegments.isNotEmpty()) {
+            _uiState.value.filteredSegments
+        } else {
+            mergeSegments(_uiState.value.rawSegments, _uiState.value.liveSegments)
+        }
+        if (segments.isEmpty()) return "No spoken transcript recorded for this meeting."
+
+        return buildString {
+            appendLine("MEETMIND AI — MEETING TRANSCRIPT")
+            appendLine("=================================")
+            appendLine("Language: ${_uiState.value.selectedLanguage.uppercase()}")
+            appendLine("Total Segments: ${segments.size}")
+            appendLine()
+            segments.forEach { seg ->
+                appendLine("[${seg.time}] ${seg.speaker}: ${seg.text}")
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        liveTranslationRepository.unsubscribeFromSubtitles(meetingId, _uiState.value.selectedLanguage)
+    }
 }
 
 data class LanguageOption(
