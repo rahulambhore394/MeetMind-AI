@@ -856,6 +856,14 @@ class MeetingCallRepository(
     }
 
     fun startScreenSharing(mediaProjectionData: android.content.Intent) {
+        if (isSfuMode && liveKitMediaManager != null) {
+            scope.launch {
+                liveKitMediaManager.setScreenShareEnabled(true, mediaProjectionData)
+            }
+            sendMediaUpdate(isScreenSharing = true)
+            return
+        }
+
         webRtcManager.startScreenCapture(mediaProjectionData)
         val screenTrack = webRtcManager.getLocalScreenTrack()
         
@@ -876,6 +884,14 @@ class MeetingCallRepository(
     }
 
     fun stopScreenSharing() {
+        if (isSfuMode && liveKitMediaManager != null) {
+            scope.launch {
+                liveKitMediaManager.setScreenShareEnabled(false)
+            }
+            sendMediaUpdate(isScreenSharing = false)
+            return
+        }
+
         for ((peerId, pc) in peerConnections) {
             val sender = screenSenders.remove(peerId) ?: pc.senders.find { s ->
                 val trackId = s.track()?.id() ?: ""
