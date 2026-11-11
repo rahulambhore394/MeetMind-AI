@@ -3,6 +3,7 @@ package com.developer_rahul.meetmind_ai.feature.meetings.presentation
 import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -32,7 +33,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun ComprehensiveReportScreen(
     meetingId: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onViewTranscript: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val meetingRepository = remember { com.developer_rahul.meetmind_ai.MeetMindApplication.instance.container.meetingRepository }
@@ -75,6 +77,7 @@ fun ComprehensiveReportScreen(
     }
 
     ComprehensiveReportScreen(
+        meetingId = meetingId,
         onBack = onBack,
         report = report,
         isLoading = isLoading,
@@ -95,19 +98,22 @@ fun ComprehensiveReportScreen(
                     intelligenceRepository.updateActionItemStatus(mid, taskId, newStatus)
                 }
             }
-        }
+        },
+        onViewTranscript = onViewTranscript
     )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ComprehensiveReportScreen(
+    meetingId: String = "",
     onBack: () -> Unit,
     report: ComprehensiveReportDto?,
     isLoading: Boolean = false,
     errorMessage: String? = null,
     onRetry: () -> Unit = {},
-    onUpdateTaskStatus: (Long, String) -> Unit = { _, _ -> }
+    onUpdateTaskStatus: (Long, String) -> Unit = { _, _ -> },
+    onViewTranscript: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
 
@@ -166,6 +172,9 @@ fun ComprehensiveReportScreen(
                             }
                         ) {
                             Icon(Icons.Default.Share, contentDescription = "Share Report", tint = TextPrimary)
+                        }
+                        IconButton(onClick = { onViewTranscript(meetingId) }) {
+                            Icon(Icons.Default.Subtitles, contentDescription = "View Transcript", tint = NeonCyan)
                         }
                     }
                     IconButton(onClick = onRetry) {
@@ -301,6 +310,43 @@ fun ComprehensiveReportScreen(
                                 Spacer(Modifier.width(4.dp))
                                 Text("Host: ${report.hostName ?: "Host"}", style = Typography.bodySmall, color = TextSecondary)
                             }
+                        }
+                    }
+                }
+
+                // Meeting Transcript Direct Access Card
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = CardSurface,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.35f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onViewTranscript(meetingId) }
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = NeonCyan.copy(alpha = 0.15f),
+                                    modifier = Modifier.size(38.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Subtitles, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Column {
+                                    Text("Full Meeting Transcript 📝", style = Typography.titleMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                    Text("Verbatim spoken dialogue with speaker attribution", style = Typography.labelSmall, color = TextSecondary)
+                                }
+                            }
+                            Icon(Icons.Default.ChevronRight, contentDescription = null, tint = NeonCyan)
                         }
                     }
                 }

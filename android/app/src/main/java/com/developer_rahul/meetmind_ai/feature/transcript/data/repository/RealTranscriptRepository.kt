@@ -31,6 +31,24 @@ class RealTranscriptRepository(
         }
     }
 
+    override suspend fun getLatestTranscript(meetingId: Long): NetworkResult<Transcript> {
+        return try {
+            val response = apiService.getLatestTranscript(meetingId)
+            NetworkResult.Success(response.transcript.toDomain(response.segments))
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun exportTranscript(meetingId: Long): NetworkResult<String> {
+        return try {
+            val body = apiService.exportTranscript(meetingId)
+            NetworkResult.Success(body.string())
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
     override suspend fun triggerTranscription(meetingId: Long, recordingId: Long): NetworkResult<Transcript> {
         return try {
             val response = apiService.triggerTranscription(meetingId, mapOf("recordingId" to recordingId))

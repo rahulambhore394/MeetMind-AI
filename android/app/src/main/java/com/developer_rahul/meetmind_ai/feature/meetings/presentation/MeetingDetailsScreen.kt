@@ -37,6 +37,7 @@ fun MeetingDetailsScreen(
     onPlayRecording: (String, String) -> Unit = { _, _ -> },
     onViewIntelligence: (String) -> Unit = { _ -> },
     onViewReport: (String) -> Unit = { _ -> },
+    onViewTranscript: (String) -> Unit = { _ -> },
     viewModel: MeetingViewModel = viewModel(factory = ViewModelFactory)
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -528,29 +529,95 @@ fun MeetingDetailsScreen(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Button(
                                 onClick = { onViewIntelligence(meetingId) },
-                                modifier = Modifier.weight(1f).height(46.dp),
+                                modifier = Modifier.weight(1f).height(44.dp),
                                 shape = MaterialTheme.shapes.medium,
                                 colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo)
                             ) {
-                                Icon(Icons.Default.Psychology, contentDescription = null, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("AI Studio", style = Typography.labelMedium, fontWeight = FontWeight.Bold)
+                                Icon(Icons.Default.Psychology, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("AI Studio", style = Typography.labelSmall, fontWeight = FontWeight.Bold)
                             }
 
                             OutlinedButton(
                                 onClick = { onViewReport(meetingId) },
-                                modifier = Modifier.weight(1f).height(46.dp),
+                                modifier = Modifier.weight(1f).height(44.dp),
                                 shape = MaterialTheme.shapes.medium,
                                 border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor)
                             ) {
-                                Icon(Icons.Default.Assessment, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(18.dp))
-                                Spacer(Modifier.width(6.dp))
-                                Text("Full Report", style = Typography.labelMedium, color = TextPrimary)
+                                Icon(Icons.Default.Assessment, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Report", style = Typography.labelSmall, color = TextPrimary)
                             }
+
+                            OutlinedButton(
+                                onClick = { onViewTranscript(meetingId) },
+                                modifier = Modifier.weight(1f).height(44.dp),
+                                shape = MaterialTheme.shapes.medium,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.5f)),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = NeonCyan)
+                            ) {
+                                Icon(Icons.Default.Subtitles, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Transcript", style = Typography.labelSmall, fontWeight = FontWeight.Bold, color = NeonCyan)
+                            }
+                        }
+                    }
+                }
+
+                // Dedicated Meeting Transcript Card
+                Spacer(modifier = Modifier.height(28.dp))
+                SectionHeader(title = "Meeting Transcript")
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    color = CardSurface,
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = NeonCyan.copy(alpha = 0.15f),
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Subtitles, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(20.dp))
+                                    }
+                                }
+                                Spacer(Modifier.width(10.dp))
+                                Column {
+                                    Text("Spoken Discussion Transcript", style = Typography.titleMedium, fontWeight = FontWeight.Bold, color = TextPrimary)
+                                    Text("Full text timeline with speaker attribution", style = Typography.labelSmall, color = TextSecondary)
+                                }
+                            }
+                        }
+                        Spacer(Modifier.height(14.dp))
+                        Text(
+                            text = "Browse every spoken segment, search keywords, switch display language across 8+ languages, and export the official plain text transcript.",
+                            style = Typography.bodyMedium,
+                            color = TextSecondary,
+                            lineHeight = 20.sp
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Button(
+                            onClick = { onViewTranscript(meetingId) },
+                            modifier = Modifier.fillMaxWidth().height(46.dp),
+                            shape = MaterialTheme.shapes.medium,
+                            colors = ButtonDefaults.buttonColors(containerColor = NeonCyan.copy(alpha = 0.15f)),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.4f))
+                        ) {
+                            Icon(Icons.Default.Article, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Open Complete Transcript 📝", style = Typography.labelMedium, fontWeight = FontWeight.Bold, color = NeonCyan)
                         }
                     }
                 }

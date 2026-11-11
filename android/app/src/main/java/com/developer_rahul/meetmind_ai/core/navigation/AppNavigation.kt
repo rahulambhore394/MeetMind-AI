@@ -120,7 +120,10 @@ fun AppNavigation(navController: NavHostController) {
             val id = backStackEntry.arguments?.getString("meetingId") ?: ""
             ComprehensiveReportScreen(
                 meetingId = id,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onViewTranscript = { mId ->
+                    navController.navigate(Screen.Transcript.createRoute(mId))
+                }
             )
         }
 
@@ -172,6 +175,9 @@ fun AppNavigation(navController: NavHostController) {
                 },
                 onViewReport = { mId ->
                     navController.navigate(Screen.ComprehensiveReport.createRoute(mId))
+                },
+                onViewTranscript = { mId ->
+                    navController.navigate(Screen.Transcript.createRoute(mId))
                 }
             )
         }
@@ -270,6 +276,7 @@ fun AppNavigation(navController: NavHostController) {
             val duration = backStackEntry.arguments?.getString("duration") ?: "00:00"
             MeetingEndedScreen(
                 duration = duration,
+                onViewTranscript = { navController.navigate(Screen.Transcript.createRoute(meetingId)) },
                 onViewSummary = { navController.navigate(Screen.MeetingIntelligence.createRoute(meetingId)) },
                 onViewReport = { navController.navigate(Screen.ComprehensiveReport.createRoute(meetingId)) },
                 onBackToHome = { navController.navigate(Screen.Dashboard.route) { popUpTo(0) } }
@@ -352,7 +359,10 @@ fun AppNavigation(navController: NavHostController) {
             val id = backStackEntry.arguments?.getString("meetingId") ?: ""
             AiDashboardScreen(
                 meetingId = id,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onViewTranscript = { mId ->
+                    navController.navigate(Screen.Transcript.createRoute(mId))
+                }
             )
         }
 
@@ -363,7 +373,10 @@ fun AppNavigation(navController: NavHostController) {
             val id = backStackEntry.arguments?.getString("meetingId") ?: ""
             ComprehensiveReportScreen(
                 meetingId = id,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onViewTranscript = { mId ->
+                    navController.navigate(Screen.Transcript.createRoute(mId))
+                }
             )
         }
 

@@ -14,6 +14,16 @@ interface TranscriptApiService {
         @Path("transcriptId") transcriptId: Long
     ): TranscriptDetailDto
 
+    @GET("api/meetings/{meetingId}/transcripts/latest")
+    suspend fun getLatestTranscript(
+        @Path("meetingId") meetingId: Long
+    ): TranscriptDetailDto
+
+    @GET("api/meetings/{meetingId}/transcripts/export")
+    suspend fun exportTranscript(
+        @Path("meetingId") meetingId: Long
+    ): okhttp3.ResponseBody
+
     @POST("api/meetings/{meetingId}/transcripts/trigger")
     suspend fun triggerTranscription(
         @Path("meetingId") meetingId: Long,

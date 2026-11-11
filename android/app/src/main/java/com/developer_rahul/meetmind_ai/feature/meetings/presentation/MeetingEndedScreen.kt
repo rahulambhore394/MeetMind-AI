@@ -6,8 +6,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,6 +22,7 @@ import com.developer_rahul.meetmind_ai.core.ui.components.*
 @Composable
 fun MeetingEndedScreen(
     duration: String = "00:00",
+    onViewTranscript: () -> Unit = {},
     onViewSummary: () -> Unit,
     onViewReport: () -> Unit = {},
     onBackToHome: () -> Unit
@@ -96,6 +96,21 @@ fun MeetingEndedScreen(
             isAiAction = true
         )
         
+        Spacer(modifier = Modifier.height(12.dp))
+
+        OutlinedButton(
+            onClick = onViewTranscript,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = MaterialTheme.shapes.medium,
+            border = androidx.compose.foundation.BorderStroke(1.5.dp, NeonCyan)
+        ) {
+            Icon(Icons.Default.Subtitles, null, tint = NeonCyan, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("View Meeting Transcript 📝", color = NeonCyan, style = Typography.labelLarge, fontWeight = FontWeight.Bold)
+        }
+
         Spacer(modifier = Modifier.height(12.dp))
 
         OutlinedButton(

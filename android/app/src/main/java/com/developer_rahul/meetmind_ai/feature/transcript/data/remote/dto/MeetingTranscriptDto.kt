@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 data class MeetingTranscriptDto(
     val id: Long,
     val meetingId: Long,
-    val recordingId: Long,
+    val recordingId: Long? = null,
     val language: String,
     val fullText: String? = null,
     val status: String,

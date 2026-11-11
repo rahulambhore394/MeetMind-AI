@@ -126,6 +126,33 @@ fun TranscriptScreen(
                         ) {
                             Icon(Icons.Default.Share, contentDescription = "Share", tint = TextPrimary)
                         }
+                        IconButton(
+                            onClick = {
+                                viewModel.exportFromServer(
+                                    onSuccess = { serverText ->
+                                        val sendIntent = Intent().apply {
+                                            action = Intent.ACTION_SEND
+                                            putExtra(Intent.EXTRA_TEXT, serverText)
+                                            putExtra(Intent.EXTRA_SUBJECT, "Official Meeting Transcript")
+                                            type = "text/plain"
+                                        }
+                                        context.startActivity(Intent.createChooser(sendIntent, "Export Official Transcript"))
+                                    },
+                                    onError = { _ ->
+                                        val text = viewModel.getFormattedTranscriptText()
+                                        val sendIntent = Intent().apply {
+                                            action = Intent.ACTION_SEND
+                                            putExtra(Intent.EXTRA_TEXT, text)
+                                            putExtra(Intent.EXTRA_SUBJECT, "Meeting Transcript")
+                                            type = "text/plain"
+                                        }
+                                        context.startActivity(Intent.createChooser(sendIntent, "Export Transcript"))
+                                    }
+                                )
+                            }
+                        ) {
+                            Icon(Icons.Default.Download, contentDescription = "Download Export", tint = NeonCyan)
+                        }
                         IconButton(onClick = { viewModel.loadTranscript() }) {
                             Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = TextPrimary)
                         }

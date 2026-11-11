@@ -3,7 +3,7 @@ package com.developer_rahul.meetmind_ai.feature.transcript.domain.model
 data class Transcript(
     val id: Long,
     val meetingId: Long,
-    val recordingId: Long,
+    val recordingId: Long? = null,
     val language: String,
     val status: String,
     val createdAt: String,

@@ -38,6 +38,7 @@ import kotlinx.serialization.json.JsonPrimitive
 fun AiDashboardScreen(
     meetingId: String,
     onBack: () -> Unit,
+    onViewTranscript: (String) -> Unit = {},
     viewModel: MeetingIntelligenceViewModel = viewModel(
         key = "AiDashboardScreen_$meetingId",
         factory = provideMeetingIntelligenceViewModelFactory(meetingId.toLongOrNull() ?: -1L)
@@ -110,6 +111,9 @@ fun AiDashboardScreen(
                             ) {
                                 Icon(Icons.Default.Share, contentDescription = "Share", tint = TextPrimary)
                             }
+                        }
+                        IconButton(onClick = { onViewTranscript(meetingId) }) {
+                            Icon(Icons.Default.Subtitles, contentDescription = "View Transcript", tint = NeonCyan)
                         }
                         IconButton(onClick = { viewModel.loadIntelligence() }) {
                             Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = TextPrimary)

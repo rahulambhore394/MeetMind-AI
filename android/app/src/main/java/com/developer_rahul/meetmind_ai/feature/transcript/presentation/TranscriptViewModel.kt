@@ -90,34 +90,52 @@ class TranscriptViewModel(
                 )
             }
 
-            // Also check standard transcripts
-            when (val listResult = transcriptRepository.getTranscripts(meetingId)) {
+            // 1. Try fetching the latest transcript directly
+            when (val latestResult = transcriptRepository.getLatestTranscript(meetingId)) {
                 is NetworkResult.Success -> {
-                    val latestTranscript = listResult.data.maxByOrNull { it.id }
-                    if (latestTranscript != null) {
-                        fetchDetails(latestTranscript.id, translatedSegments)
-                    } else {
-                        val all = mergeSegments(emptyList(), translatedSegments)
-                        _uiState.update { it.copy(
-                            isLoading = false,
-                            rawSegments = emptyList(),
-                            liveSegments = translatedSegments,
-                            filteredSegments = all,
-                            isEmpty = all.isEmpty()
-                        ) }
-                    }
-                }
-                is NetworkResult.Error -> {
-                    val all = mergeSegments(emptyList(), translatedSegments)
+                    val merged = mergeSegments(latestResult.data.segments, translatedSegments)
+                    val filtered = filterSegments(merged, _uiState.value.searchQuery)
                     _uiState.update { it.copy(
                         isLoading = false,
+                        transcript = latestResult.data,
+                        rawSegments = latestResult.data.segments,
                         liveSegments = translatedSegments,
-                        filteredSegments = all,
-                        isEmpty = all.isEmpty()
+                        filteredSegments = filtered,
+                        isEmpty = filtered.isEmpty()
                     ) }
+                    return@launch
                 }
                 else -> {
-                    _uiState.update { it.copy(isLoading = false) }
+                    // 2. Fall back to listing all transcripts for the meeting
+                    when (val listResult = transcriptRepository.getTranscripts(meetingId)) {
+                        is NetworkResult.Success -> {
+                            val latestTranscript = listResult.data.maxByOrNull { it.id }
+                            if (latestTranscript != null) {
+                                fetchDetails(latestTranscript.id, translatedSegments)
+                            } else {
+                                val all = mergeSegments(emptyList(), translatedSegments)
+                                _uiState.update { it.copy(
+                                    isLoading = false,
+                                    rawSegments = emptyList(),
+                                    liveSegments = translatedSegments,
+                                    filteredSegments = all,
+                                    isEmpty = all.isEmpty()
+                                ) }
+                            }
+                        }
+                        is NetworkResult.Error -> {
+                            val all = mergeSegments(emptyList(), translatedSegments)
+                            _uiState.update { it.copy(
+                                isLoading = false,
+                                liveSegments = translatedSegments,
+                                filteredSegments = all,
+                                isEmpty = all.isEmpty()
+                            ) }
+                        }
+                        else -> {
+                            _uiState.update { it.copy(isLoading = false) }
+                        }
+                    }
                 }
             }
         }
@@ -201,6 +219,33 @@ class TranscriptViewModel(
             appendLine()
             segments.forEach { seg ->
                 appendLine("[${seg.time}] ${seg.speaker}: ${seg.text}")
+            }
+        }
+    }
+
+    fun triggerTranscription(recordingId: Long) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
+            when (val result = transcriptRepository.triggerTranscription(meetingId, recordingId)) {
+                is NetworkResult.Success -> {
+                    loadTranscript()
+                }
+                is NetworkResult.Error -> {
+                    _uiState.update { it.copy(isLoading = false, error = result.error.message) }
+                }
+                else -> {
+                    _uiState.update { it.copy(isLoading = false) }
+                }
+            }
+        }
+    }
+
+    fun exportFromServer(onSuccess: (String) -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            when (val result = transcriptRepository.exportTranscript(meetingId)) {
+                is NetworkResult.Success -> onSuccess(result.data)
+                is NetworkResult.Error -> onError(result.error.message ?: "Failed to export transcript")
+                else -> {}
             }
         }
     }
