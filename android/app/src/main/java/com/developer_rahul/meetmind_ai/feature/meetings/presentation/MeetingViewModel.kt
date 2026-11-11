@@ -32,6 +32,9 @@ class MeetingViewModel(
     val currentUserId: Long
         get() = tokenProvider.getUserId()
 
+    val currentUserName: String
+        get() = tokenProvider.getUserName()?.takeIf { it.isNotBlank() } ?: "there"
+
     private val _uiState = MutableStateFlow(MeetingUiState())
     val uiState = _uiState.asStateFlow()
 

@@ -4,3 +4,4 @@ data class PredefinedQa(
     val question: String,
     val answer: String
 )
+

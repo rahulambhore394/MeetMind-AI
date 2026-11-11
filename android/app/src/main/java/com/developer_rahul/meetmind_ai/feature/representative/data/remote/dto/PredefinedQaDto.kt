@@ -7,3 +7,4 @@ data class PredefinedQaDto(
     val question: String,
     val answer: String
 )
+
