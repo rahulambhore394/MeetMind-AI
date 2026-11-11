@@ -39,6 +39,12 @@ public class AiRepresentative {
     @Column(name = "notification_preferences_json", columnDefinition = "TEXT")
     private String notificationPreferencesJson;
 
+    @Column(name = "avatar_url", columnDefinition = "TEXT")
+    private String avatarUrl;
+
+    @Column(name = "predefined_qa_json", columnDefinition = "TEXT")
+    private String predefinedQaJson;
+
     @Column(name = "consent_disclosure", nullable = false)
     private Boolean consentDisclosure = true;
 
@@ -97,6 +103,12 @@ public class AiRepresentative {
 
     public String getNotificationPreferencesJson() { return notificationPreferencesJson; }
     public void setNotificationPreferencesJson(String notificationPreferencesJson) { this.notificationPreferencesJson = notificationPreferencesJson; }
+
+    public String getAvatarUrl() { return avatarUrl; }
+    public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }
+
+    public String getPredefinedQaJson() { return predefinedQaJson; }
+    public void setPredefinedQaJson(String predefinedQaJson) { this.predefinedQaJson = predefinedQaJson; }
 
     public Boolean getConsentDisclosure() { return consentDisclosure; }
     public void setConsentDisclosure(Boolean consentDisclosure) { this.consentDisclosure = consentDisclosure; }

@@ -8,5 +8,7 @@ data class CreateRepresentativeRequestDto(
     val monitoredQuestions: List<String>,
     val importantPeople: List<String>,
     val reportPreferences: String? = null,
-    val notificationPreferences: String? = null
+    val notificationPreferences: String? = null,
+    val avatarUrl: String? = null,
+    val predefinedQa: List<PredefinedQaDto> = emptyList()
 )

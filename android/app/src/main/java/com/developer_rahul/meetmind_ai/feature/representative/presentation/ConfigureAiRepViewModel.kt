@@ -7,6 +7,7 @@ import com.developer_rahul.meetmind_ai.feature.meetings.data.repository.MeetingR
 import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Meeting
 import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.MeetingStatus
 import com.developer_rahul.meetmind_ai.feature.representative.domain.model.AiRepresentative
+import com.developer_rahul.meetmind_ai.feature.representative.domain.model.PredefinedQa
 import com.developer_rahul.meetmind_ai.feature.representative.domain.repository.LiveRepresentativeRepository
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -59,6 +60,33 @@ class ConfigureAiRepViewModel(
         _uiState.update { it.copy(importantPeople = people) }
     }
 
+    fun setAvatarPhoto(base64: String?) {
+        _uiState.update { it.copy(avatarPhotoBase64 = base64) }
+    }
+
+    fun addPredefinedQa(question: String, answer: String) {
+        if (question.isBlank() || answer.isBlank()) return
+        val current = _uiState.value.predefinedQaList.toMutableList()
+        current.add(PredefinedQa(question = question.trim(), answer = answer.trim()))
+        _uiState.update { it.copy(predefinedQaList = current) }
+    }
+
+    fun removePredefinedQa(index: Int) {
+        val current = _uiState.value.predefinedQaList.toMutableList()
+        if (index in current.indices) {
+            current.removeAt(index)
+            _uiState.update { it.copy(predefinedQaList = current) }
+        }
+    }
+
+    fun updatePredefinedQa(index: Int, question: String, answer: String) {
+        val current = _uiState.value.predefinedQaList.toMutableList()
+        if (index in current.indices) {
+            current[index] = PredefinedQa(question = question.trim(), answer = answer.trim())
+            _uiState.update { it.copy(predefinedQaList = current) }
+        }
+    }
+
     fun saveConfiguration() {
         val meetingId = _uiState.value.selectedMeeting?.id ?: return
         
@@ -67,12 +95,16 @@ class ConfigureAiRepViewModel(
             val topics = _uiState.value.monitoredTopics.split(",").map { it.trim() }.filter { it.isNotEmpty() }
             val questions = _uiState.value.monitoredQuestions.split(",").map { it.trim() }.filter { it.isNotEmpty() }
             val people = _uiState.value.importantPeople.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+            val avatarPhoto = _uiState.value.avatarPhotoBase64
+            val predefinedQa = _uiState.value.predefinedQaList
             
             val result = representativeRepository.createRepresentative(
                 meetingId = meetingId,
                 monitoredTopics = topics,
                 monitoredQuestions = questions,
-                importantPeople = people
+                importantPeople = people,
+                avatarUrl = avatarPhoto,
+                predefinedQa = predefinedQa
             )
             
             when (result) {
@@ -117,6 +149,8 @@ data class ConfigureAiRepUiState(
     val monitoredTopics: String = "",
     val monitoredQuestions: String = "",
     val importantPeople: String = "",
+    val avatarPhotoBase64: String? = null,
+    val predefinedQaList: List<PredefinedQa> = emptyList(),
     val isLoadingMeetings: Boolean = false,
     val isSaving: Boolean = false,
     val saveSuccess: Boolean = false,

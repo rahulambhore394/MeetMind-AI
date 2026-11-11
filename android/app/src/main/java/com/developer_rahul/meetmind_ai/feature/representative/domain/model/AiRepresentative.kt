@@ -12,6 +12,8 @@ data class AiRepresentative(
     val reportPreferences: String,
     val notificationPreferences: String,
     val consentDisclosure: Boolean,
+    val avatarUrl: String? = null,
+    val predefinedQa: List<PredefinedQa> = emptyList(),
     val startedAt: String?,
     val endedAt: String?,
     val createdAt: String

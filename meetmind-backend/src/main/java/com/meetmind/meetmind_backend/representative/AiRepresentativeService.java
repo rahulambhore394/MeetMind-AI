@@ -70,6 +70,21 @@ public class AiRepresentativeService {
             String reportPreferences,
             String notificationPreferences
     ) {
+        return createRepresentative(meetingId, owner, monitoredTopics, monitoredQuestions, importantPeople, reportPreferences, notificationPreferences, null, List.of());
+    }
+
+    @Transactional
+    public AiRepresentative createRepresentative(
+            Long meetingId,
+            User owner,
+            List<String> monitoredTopics,
+            List<String> monitoredQuestions,
+            List<String> importantPeople,
+            String reportPreferences,
+            String notificationPreferences,
+            String avatarUrl,
+            List<com.meetmind.meetmind_backend.representative.dto.PredefinedQa> predefinedQa
+    ) {
         verifyMeetingAccess(meetingId, owner.getId());
 
         AiRepresentative rep = representativeRepository.findByMeetingIdAndOwnerId(meetingId, owner.getId())
@@ -88,9 +103,16 @@ public class AiRepresentativeService {
         rep.setReportPreferencesJson(reportPreferences != null ? reportPreferences : "FULL_REPORT");
         rep.setNotificationPreferencesJson(notificationPreferences != null ? notificationPreferences : "IMMEDIATE");
         rep.setConsentDisclosure(true);
+        if (avatarUrl != null && !avatarUrl.isBlank()) {
+            rep.setAvatarUrl(avatarUrl);
+        }
+        if (predefinedQa != null) {
+            rep.setPredefinedQaJson(toJson(predefinedQa));
+        }
 
         rep = representativeRepository.save(rep);
-        log.info("AiRepresentativeService: Created representative {} for owner {} in meeting {}", rep.getId(), owner.getId(), meetingId);
+        log.info("AiRepresentativeService: Created representative {} for owner {} in meeting {} (avatarPresent={}, qaCount={})",
+                rep.getId(), owner.getId(), meetingId, rep.getAvatarUrl() != null, predefinedQa != null ? predefinedQa.size() : 0);
         return rep;
     }
 
@@ -228,6 +250,16 @@ public class AiRepresentativeService {
         try {
             return objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {});
         } catch (JsonProcessingException e) {
+            return new ArrayList<>();
+        }
+    }
+
+    public List<com.meetmind.meetmind_backend.representative.dto.PredefinedQa> parsePredefinedQa(String json) {
+        if (json == null || json.isBlank()) return new ArrayList<>();
+        try {
+            return objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<com.meetmind.meetmind_backend.representative.dto.PredefinedQa>>() {});
+        } catch (Exception e) {
+            log.warn("AiRepresentativeService: Failed to parse predefined QA JSON: {}", e.getMessage());
             return new ArrayList<>();
         }
     }

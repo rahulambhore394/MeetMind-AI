@@ -11,5 +11,6 @@ data class AiProxySpeechDto(
     val query: String,
     val spokenText: String,
     val language: String = "en",
-    val timestamp: Long = 0L
+    val timestamp: Long = 0L,
+    val avatarUrl: String? = null
 )

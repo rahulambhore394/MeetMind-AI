@@ -72,6 +72,8 @@ public class AiProxySpeechService {
 
             List<String> monitoredTopics = representativeService.fromJsonList(rep.getMonitoredTopicsJson());
             List<String> monitoredQuestions = representativeService.fromJsonList(rep.getMonitoredQuestionsJson());
+            List<com.meetmind.meetmind_backend.representative.dto.PredefinedQa> predefinedQaList =
+                    representativeService.parsePredefinedQa(rep.getPredefinedQaJson());
 
             boolean isDirectMention = normalizedMsg.contains("@ai") ||
                     normalizedMsg.contains("@proxy") ||
@@ -79,6 +81,20 @@ public class AiProxySpeechService {
                     (!ownerFirstName.isBlank() && normalizedMsg.contains("@" + ownerFirstName)) ||
                     (!ownerFirstName.isBlank() && ownerFirstName.length() >= 3 && 
                      java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(ownerFirstName) + "\\b").matcher(normalizedMsg).find());
+
+            // 1. Check Predefined Questions & Answers (High Priority)
+            boolean matchesPredefined = false;
+            String matchedAnswer = "";
+            for (com.meetmind.meetmind_backend.representative.dto.PredefinedQa qa : predefinedQaList) {
+                if (qa.question() != null && !qa.question().isBlank()) {
+                    String cleanQ = qa.question().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9\\s]", " ").trim();
+                    if (isQuestionMatch(normalizedMsg, cleanQ)) {
+                        matchesPredefined = true;
+                        matchedAnswer = (qa.answer() != null) ? qa.answer().trim() : "";
+                        break;
+                    }
+                }
+            }
 
             boolean matchesTopic = false;
             String matchedTopicName = "";
@@ -95,14 +111,7 @@ public class AiProxySpeechService {
             for (String q : monitoredQuestions) {
                 if (!q.isBlank()) {
                     String cleanQ = q.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9\\s]", " ").trim();
-                    String[] words = cleanQ.split("\\s+");
-                    int matchCount = 0;
-                    for (String w : words) {
-                        if (w.length() > 3 && normalizedMsg.contains(w)) {
-                            matchCount++;
-                        }
-                    }
-                    if (matchCount >= 2 || normalizedMsg.contains(cleanQ)) {
+                    if (isQuestionMatch(normalizedMsg, cleanQ)) {
                         matchesQuestion = true;
                         matchedQuestionText = q.trim();
                         break;
@@ -110,11 +119,17 @@ public class AiProxySpeechService {
                 }
             }
 
-            if (isDirectMention || matchesTopic || matchesQuestion) {
-                log.info("AiProxySpeechService: Active representative {} for owner {} triggered in meeting {} by message: '{}'",
-                        rep.getId(), ownerName, meetingId, messageText);
+            if (matchesPredefined || isDirectMention || matchesTopic || matchesQuestion) {
+                log.info("AiProxySpeechService: Active representative {} for owner {} triggered in meeting {} (matchesPredefined={}) by message: '{}'",
+                        rep.getId(), ownerName, meetingId, matchesPredefined, messageText);
 
-                String spokenAnswer = formulateSpeechResponse(ownerName, messageText, matchedTopicName, matchedQuestionText);
+                String spokenAnswer;
+                if (matchesPredefined && !matchedAnswer.isBlank()) {
+                    spokenAnswer = "Speaking on behalf of " + ownerName + ": " + matchedAnswer;
+                } else {
+                    spokenAnswer = formulateSpeechResponse(ownerName, messageText, matchedTopicName, matchedQuestionText);
+                }
+
                 AiProxySpeechMessage speechMessage = dispatchSpeech(meetingId, rep, owner, messageText, spokenAnswer, "en");
                 responses.add(speechMessage);
             }
@@ -138,8 +153,40 @@ public class AiProxySpeechService {
         User owner = userRepository.findById(rep.getOwnerId()).orElse(null);
         String ownerName = owner != null ? owner.getName() : "Representative";
 
-        String spokenAnswer = formulateSpeechResponse(ownerName, query, "", "");
+        List<com.meetmind.meetmind_backend.representative.dto.PredefinedQa> predefinedQaList =
+                representativeService.parsePredefinedQa(rep.getPredefinedQaJson());
+        String cleanQuery = query.toLowerCase(Locale.ROOT).trim();
+        String spokenAnswer = "";
+        for (com.meetmind.meetmind_backend.representative.dto.PredefinedQa qa : predefinedQaList) {
+            if (qa.question() != null && isQuestionMatch(cleanQuery, qa.question().toLowerCase(Locale.ROOT).trim())) {
+                spokenAnswer = "Speaking on behalf of " + ownerName + ": " + (qa.answer() != null ? qa.answer().trim() : "");
+                break;
+            }
+        }
+        if (spokenAnswer.isBlank()) {
+            spokenAnswer = formulateSpeechResponse(ownerName, query, "", "");
+        }
         return dispatchSpeech(meetingId, rep, owner, query, spokenAnswer, language != null ? language : "en");
+    }
+
+    private boolean isQuestionMatch(String message, String cleanQuestion) {
+        if (message == null || cleanQuestion == null || cleanQuestion.isBlank()) return false;
+        if (message.contains(cleanQuestion)) return true;
+
+        String[] qWords = cleanQuestion.replaceAll("[^a-z0-9\\s]", " ").split("\\s+");
+        int meaningfulWords = 0;
+        int matchedWords = 0;
+        for (String w : qWords) {
+            if (w.length() >= 3) {
+                meaningfulWords++;
+                if (message.contains(w)) {
+                    matchedWords++;
+                }
+            }
+        }
+        if (meaningfulWords == 0) return false;
+        double ratio = (double) matchedWords / meaningfulWords;
+        return (meaningfulWords <= 2 && matchedWords >= 1) || (ratio >= 0.5);
     }
 
     /**
@@ -164,7 +211,8 @@ public class AiProxySpeechService {
                 query,
                 spokenText,
                 language != null ? language : "en",
-                timestamp
+                timestamp,
+                rep.getAvatarUrl()
         );
 
         // 1. Broadcast synthesized speech event for in-call voice generation

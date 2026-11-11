@@ -28,12 +28,22 @@ class RealLiveRepresentativeRepository(
         monitoredQuestions: List<String>,
         importantPeople: List<String>,
         reportPreferences: String?,
-        notificationPreferences: String?
+        notificationPreferences: String?,
+        avatarUrl: String?,
+        predefinedQa: List<com.developer_rahul.meetmind_ai.feature.representative.domain.model.PredefinedQa>
     ): NetworkResult<AiRepresentative> {
         return try {
+            val qaDtos = predefinedQa.map { 
+                com.developer_rahul.meetmind_ai.feature.representative.data.remote.dto.PredefinedQaDto(it.question, it.answer) 
+            }
             val request = CreateRepresentativeRequestDto(
-                monitoredTopics, monitoredQuestions, importantPeople, 
-                reportPreferences, notificationPreferences
+                monitoredTopics = monitoredTopics, 
+                monitoredQuestions = monitoredQuestions, 
+                importantPeople = importantPeople, 
+                reportPreferences = reportPreferences, 
+                notificationPreferences = notificationPreferences,
+                avatarUrl = avatarUrl,
+                predefinedQa = qaDtos
             )
             val response = apiService.createRepresentative(meetingId, request)
             NetworkResult.Success(response.toDomain())
@@ -79,6 +89,18 @@ class RealLiveRepresentativeRepository(
     }
 
     private fun AiRepresentativeDto.toDomain(): AiRepresentative {
+        val qaList = try {
+            if (!predefinedQaJson.isNullOrBlank() && predefinedQaJson != "[]") {
+                json.decodeFromString<List<com.developer_rahul.meetmind_ai.feature.representative.data.remote.dto.PredefinedQaDto>>(predefinedQaJson).map {
+                    com.developer_rahul.meetmind_ai.feature.representative.domain.model.PredefinedQa(it.question, it.answer)
+                }
+            } else {
+                emptyList()
+            }
+        } catch (_: Exception) {
+            emptyList()
+        }
+
         return AiRepresentative(
             id = id,
             ownerId = ownerId,
@@ -91,6 +113,8 @@ class RealLiveRepresentativeRepository(
             reportPreferences = reportPreferencesJson ?: "FULL_REPORT",
             notificationPreferences = notificationPreferencesJson ?: "IMMEDIATE",
             consentDisclosure = consentDisclosure,
+            avatarUrl = avatarUrl,
+            predefinedQa = qaList,
             startedAt = startedAt,
             endedAt = endedAt,
             createdAt = createdAt

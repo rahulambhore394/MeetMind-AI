@@ -42,7 +42,9 @@ public class AiRepresentativeController {
                 request.monitoredQuestions() != null ? request.monitoredQuestions() : List.of(),
                 request.importantPeople() != null ? request.importantPeople() : List.of(),
                 request.reportPreferences(),
-                request.notificationPreferences()
+                request.notificationPreferences(),
+                request.avatarUrl(),
+                request.predefinedQa() != null ? request.predefinedQa() : List.of()
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(rep);
     }
@@ -118,6 +120,18 @@ public class AiRepresentativeController {
             List<String> monitoredQuestions,
             List<String> importantPeople,
             String reportPreferences,
-            String notificationPreferences
-    ) {}
+            String notificationPreferences,
+            String avatarUrl,
+            List<com.meetmind.meetmind_backend.representative.dto.PredefinedQa> predefinedQa
+    ) {
+        public CreateRepresentativeRequest(
+                List<String> monitoredTopics,
+                List<String> monitoredQuestions,
+                List<String> importantPeople,
+                String reportPreferences,
+                String notificationPreferences
+        ) {
+            this(monitoredTopics, monitoredQuestions, importantPeople, reportPreferences, notificationPreferences, null, List.of());
+        }
+    }
 }

@@ -14,6 +14,8 @@ data class AiRepresentativeDto(
     val importantPeopleJson: String? = null,
     val reportPreferencesJson: String? = null,
     val notificationPreferencesJson: String? = null,
+    val avatarUrl: String? = null,
+    val predefinedQaJson: String? = null,
     val consentDisclosure: Boolean,
     val startedAt: String? = null,
     val endedAt: String? = null,

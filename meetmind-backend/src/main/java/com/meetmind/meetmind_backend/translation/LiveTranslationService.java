@@ -36,6 +36,9 @@ public class LiveTranslationService {
     private final TranscriptRepository transcriptRepository;
     private final TranscriptSegmentRepository segmentRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.meetmind.meetmind_backend.representative.AiProxySpeechService aiProxySpeechService;
+
     public LiveTranslationService(
             TranslationProvider provider,
             LiveTranslationRepository translationRepository,
@@ -251,6 +254,14 @@ public class LiveTranslationService {
                             "timestamp", System.currentTimeMillis()
                     )
             );
+        }
+
+        if (aiProxySpeechService != null) {
+            try {
+                aiProxySpeechService.handleIncomingChatMessage(meetingId, null, segment.getSpeaker(), sourceText);
+            } catch (Exception e) {
+                log.warn("LiveTranslationService: Failed to trigger AI Proxy speech check for transcript: {}", e.getMessage());
+            }
         }
 
         return segment.getId();

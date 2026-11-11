@@ -8,5 +8,19 @@ public record AiProxySpeechMessage(
         String query,
         String spokenText,
         String language,
-        long timestamp
-) {}
+        long timestamp,
+        String avatarUrl
+) {
+    public AiProxySpeechMessage(
+            Long meetingId,
+            Long representativeId,
+            Long ownerId,
+            String ownerName,
+            String query,
+            String spokenText,
+            String language,
+            long timestamp
+    ) {
+        this(meetingId, representativeId, ownerId, ownerName, query, spokenText, language, timestamp, null);
+    }
+}

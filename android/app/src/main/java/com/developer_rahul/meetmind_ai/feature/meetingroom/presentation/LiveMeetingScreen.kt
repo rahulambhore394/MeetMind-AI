@@ -80,6 +80,9 @@ import com.developer_rahul.meetmind_ai.feature.meetings.presentation.MeetingView
 import com.developer_rahul.meetmind_ai.feature.translation.domain.model.Subtitle
 import com.developer_rahul.meetmind_ai.feature.translation.presentation.LiveTranslationViewModel
 import org.webrtc.VideoTrack
+import androidx.compose.foundation.Image
+import androidx.compose.ui.layout.ContentScale
+import com.developer_rahul.meetmind_ai.core.ui.util.ImageUtils
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -733,6 +736,7 @@ fun LiveMeetingScreen(
             val isAiAgent = participant.role == ParticipantRole.AI_REPRESENTATIVE || participant.role == ParticipantRole.AUTOMATED_AGENT
             val currentAiSpeech = callState.activeAiSpeech
             val isAiCurrentlySpeaking = isAiAgent && currentAiSpeech != null && (currentAiSpeech.ownerId == participant.userId || participant.name.contains(currentAiSpeech.ownerName, ignoreCase = true))
+            val proxyAvatar = if (isAiAgent && currentAiSpeech != null) currentAiSpeech.avatarUrl else null
 
             return Participant(
                 id = participant.id.toString(),
@@ -746,7 +750,8 @@ fun LiveMeetingScreen(
                 isVideoOn = mediaState?.videoEnabled ?: (mediaState?.videoTrack != null || mediaState?.sfuVideoTrack != null),
                 isActiveSpeaker = isAiCurrentlySpeaking || (mediaState?.isSpeaking ?: false),
                 screenTrack = mediaState?.screenTrack,
-                sfuScreenTrack = mediaState?.sfuScreenTrack
+                sfuScreenTrack = mediaState?.sfuScreenTrack,
+                avatarUrl = proxyAvatar
             )
         }
 
@@ -1215,6 +1220,9 @@ fun LiveMeetingScreen(
         // Active AI Speaking Banner
         val activeSpeech = callState.activeAiSpeech
         if (activeSpeech != null) {
+            val proxyAvatarBitmap = remember(activeSpeech.avatarUrl) {
+                ImageUtils.decodeBase64ToBitmap(activeSpeech.avatarUrl)
+            }
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopCenter)
@@ -1232,17 +1240,29 @@ fun LiveMeetingScreen(
                 ) {
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(42.dp)
                             .background(NeonCyan.copy(alpha = 0.15f), CircleShape)
+                            .border(1.5.dp, NeonCyan, CircleShape)
                             .pulse(color = NeonCyan),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            Icons.Default.GraphicEq,
-                            contentDescription = "Speaking",
-                            tint = NeonCyan,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        if (proxyAvatarBitmap != null) {
+                            Image(
+                                bitmap = proxyAvatarBitmap,
+                                contentDescription = "AI Proxy Photo",
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clip(CircleShape),
+                                contentScale = ContentScale.Crop
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.GraphicEq,
+                                contentDescription = "Speaking",
+                                tint = NeonCyan,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
                     }
                     Spacer(modifier = Modifier.width(10.dp))
                     Column(modifier = Modifier.weight(1f)) {
@@ -1254,7 +1274,7 @@ fun LiveMeetingScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            StatusChip(text = "SPEAKING", color = EmeraldGreen)
+                            StatusChip(text = "TALKING", color = EmeraldGreen)
                         }
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
@@ -1601,7 +1621,8 @@ fun ParticipantVideoTile(
                 AvatarPlaceholder(
                     name = participant.name, 
                     isActiveSpeaker = participant.isActiveSpeaker && participant.isOnline, 
-                    sizeDp = 68
+                    sizeDp = 68,
+                    avatarUrl = participant.avatarUrl
                 )
             }
         }
@@ -2289,7 +2310,8 @@ data class Participant(
     val videoTrack: VideoTrack? = null,
     val sfuVideoTrack: io.livekit.android.room.track.VideoTrack? = null,
     val screenTrack: VideoTrack? = null,
-    val sfuScreenTrack: io.livekit.android.room.track.VideoTrack? = null
+    val sfuScreenTrack: io.livekit.android.room.track.VideoTrack? = null,
+    val avatarUrl: String? = null
 )
 
 @Composable
@@ -2554,7 +2576,15 @@ fun TranslationSettingsContent(
 }
 
 @Composable
-fun AvatarPlaceholder(name: String, isActiveSpeaker: Boolean = false, sizeDp: Int = 72) {
+fun AvatarPlaceholder(
+    name: String,
+    isActiveSpeaker: Boolean = false,
+    sizeDp: Int = 72,
+    avatarUrl: String? = null
+) {
+    val avatarBitmap = remember(avatarUrl) {
+        ImageUtils.decodeBase64ToBitmap(avatarUrl)
+    }
     val initials = name.split(" ")
         .mapNotNull { it.firstOrNull()?.uppercase() }
         .take(2)
@@ -2598,12 +2628,21 @@ fun AvatarPlaceholder(name: String, isActiveSpeaker: Boolean = false, sizeDp: In
                 .background(Brush.linearGradient(gradientColors)),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = initials,
-                style = if (sizeDp > 50) Typography.headlineMedium else Typography.titleMedium,
-                color = Color.White,
-                fontWeight = FontWeight.Black
-            )
+            if (avatarBitmap != null) {
+                Image(
+                    bitmap = avatarBitmap,
+                    contentDescription = name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Text(
+                    text = initials,
+                    style = if (sizeDp > 50) Typography.headlineMedium else Typography.titleMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Black
+                )
+            }
         }
     }
 }

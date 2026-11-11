@@ -409,4 +409,55 @@ public class AiRepresentativeIntegrationTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody().spokenText()).contains("Rep Participant");
     }
+
+    @Test
+    @Order(13)
+    void testAiRepresentative_PredefinedQaAndPhoto_VoiceResponse() {
+        reset(messagingTemplate);
+
+        com.meetmind.meetmind_backend.representative.dto.PredefinedQa qa =
+                new com.meetmind.meetmind_backend.representative.dto.PredefinedQa(
+                        "When will the project be delivered?",
+                        "The project deliverables will be submitted by Friday 5 PM."
+                );
+
+        String sampleAvatarBase64 = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+        AiRepresentative rep = representativeService.createRepresentative(
+                meeting.getId(),
+                participant,
+                List.of("delivery"),
+                List.of(),
+                List.of("Rep Host"),
+                "FULL_REPORT",
+                "IMMEDIATE",
+                sampleAvatarBase64,
+                List.of(qa)
+        );
+
+        assertThat(rep.getAvatarUrl()).isEqualTo(sampleAvatarBase64);
+        assertThat(rep.getPredefinedQaJson()).contains("When will the project be delivered?");
+
+        representativeService.activateForMeeting(meeting.getId());
+
+        // Someone in the meeting asks the predefined question
+        List<com.meetmind.meetmind_backend.representative.dto.AiProxySpeechMessage> responses =
+                speechService.handleIncomingChatMessage(
+                        meeting.getId(),
+                        host.getId(),
+                        host.getName(),
+                        "Hey team, when will the project be delivered?"
+                );
+
+        assertThat(responses).isNotEmpty();
+        com.meetmind.meetmind_backend.representative.dto.AiProxySpeechMessage speech = responses.get(0);
+        assertThat(speech.spokenText()).contains("The project deliverables will be submitted by Friday 5 PM");
+        assertThat(speech.avatarUrl()).isEqualTo(sampleAvatarBase64);
+
+        // Verify WebSocket speech event dispatched with the photo
+        verify(messagingTemplate).convertAndSend(
+                eq("/topic/meetings/" + meeting.getId() + "/ai-proxy/speech"),
+                eq(speech)
+        );
+    }
 }

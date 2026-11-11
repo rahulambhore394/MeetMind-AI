@@ -14,7 +14,9 @@ interface LiveRepresentativeRepository {
         monitoredQuestions: List<String>,
         importantPeople: List<String>,
         reportPreferences: String? = null,
-        notificationPreferences: String? = null
+        notificationPreferences: String? = null,
+        avatarUrl: String? = null,
+        predefinedQa: List<com.developer_rahul.meetmind_ai.feature.representative.domain.model.PredefinedQa> = emptyList()
     ): NetworkResult<AiRepresentative>
 
     suspend fun getRepresentative(meetingId: Long): NetworkResult<AiRepresentative>
