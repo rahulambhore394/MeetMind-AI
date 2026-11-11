@@ -117,36 +117,41 @@ fun DashboardScreen(
         topBar = {
             TopAppBar(
                 title = { 
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Surface(
-                            shape = RoundedCornerShape(14.dp),
+                            shape = RoundedCornerShape(12.dp),
                             color = ElectricIndigo.copy(alpha = 0.18f),
                             border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.4f)),
-                            modifier = Modifier.size(42.dp)
+                            modifier = Modifier.size(38.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     Icons.Default.AutoAwesome,
                                     contentDescription = null,
                                     tint = NeonCyan,
-                                    modifier = Modifier.size(22.dp)
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
-                        Spacer(Modifier.width(12.dp))
-                        Column {
+                        Spacer(Modifier.width(10.dp))
+                        Column(modifier = Modifier.weight(1f)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(
                                     "MEETMIND AI", 
                                     style = Typography.titleMedium, 
                                     fontWeight = FontWeight.Black,
-                                    letterSpacing = 1.4.sp,
-                                    color = NeonCyan
+                                    letterSpacing = 1.2.sp,
+                                    color = NeonCyan,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                                 Spacer(Modifier.width(6.dp))
                                 Box(
                                     modifier = Modifier
-                                        .size(7.dp)
+                                        .size(6.dp)
                                         .background(EmeraldGreen, CircleShape)
                                         .pulse(color = EmeraldGreen)
                                 )
@@ -155,7 +160,8 @@ fun DashboardScreen(
                                 "Live Intelligence & AI Proxy", 
                                 style = Typography.labelSmall,
                                 color = TextSecondary,
-                                fontWeight = FontWeight.Medium
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             ) 
                         }
                     }
@@ -168,7 +174,7 @@ fun DashboardScreen(
                             Toast.makeText(context, "Refreshing schedule...", Toast.LENGTH_SHORT).show()
                         },
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .background(GlassWhite, CircleShape)
                             .bounceClick()
                     ) {
@@ -180,13 +186,13 @@ fun DashboardScreen(
                         )
                     }
 
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(6.dp))
 
                     // Notifications button with unread count
                     IconButton(
                         onClick = onNotifications,
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .background(GlassWhite, CircleShape)
                             .bounceClick()
                     ) {
@@ -205,18 +211,18 @@ fun DashboardScreen(
                                 Icons.Default.Notifications,
                                 contentDescription = "Notifications",
                                 tint = TextPrimary,
-                                modifier = Modifier.size(20.dp)
+                                modifier = Modifier.size(19.dp)
                             )
                         }
                     }
 
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(6.dp))
 
                     // User Profile button
                     Surface(
                         onClick = onProfile,
                         modifier = Modifier
-                            .size(38.dp)
+                            .size(36.dp)
                             .bounceClick(),
                         shape = CircleShape,
                         color = ElectricIndigo.copy(alpha = 0.25f),
@@ -244,13 +250,13 @@ fun DashboardScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(18.dp),
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(bottom = 120.dp)
         ) {
-            // 1. Personalized Greeting & Status Header
+            // 1. Personalized Greeting Header with scrollable superpower pills
             item {
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
                 GreetingHeader(
                     greeting = greeting,
                     userName = viewModel.currentUserName,
@@ -274,7 +280,7 @@ fun DashboardScreen(
                 }
             }
 
-            // 3. 4-Action Quick Control Bento Grid
+            // 3. 2x2 Bento Quick Controls Grid (Device-compatible on any screen width)
             item {
                 Text(
                     "Quick Controls",
@@ -283,7 +289,7 @@ fun DashboardScreen(
                     color = TextPrimary
                 )
                 Spacer(modifier = Modifier.height(10.dp))
-                QuickControlsGrid(
+                ResponsiveQuickControlsGrid(
                     onNewMeeting = onNewMeeting,
                     onJoinCall = { showJoinDialog = true },
                     onSchedule = onViewAllSchedule,
@@ -291,7 +297,7 @@ fun DashboardScreen(
                 )
             }
 
-            // 4. AI Intelligence & Realtime Features Banner
+            // 4. AI Post-Meeting Intelligence Hub Banner
             item {
                 AiIntelligenceHubCard(
                     onSummariesClick = onSummaries,
@@ -325,7 +331,7 @@ fun DashboardScreen(
 
                     // Search input
                     Surface(
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(14.dp),
                         color = CardSurface,
                         border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor),
                         modifier = Modifier.fillMaxWidth()
@@ -333,16 +339,16 @@ fun DashboardScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 4.dp),
+                                .padding(horizontal = 12.dp, vertical = 2.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.Search, null, tint = TextSecondary, modifier = Modifier.size(20.dp))
-                            Spacer(Modifier.width(10.dp))
+                            Icon(Icons.Default.Search, null, tint = TextSecondary, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
                             TextField(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
                                 placeholder = {
-                                    Text("Search meetings by title, host, or code...", style = Typography.bodyMedium, color = TextDisabled)
+                                    Text("Search by title, host, or code...", style = Typography.bodyMedium, color = TextDisabled)
                                 },
                                 singleLine = true,
                                 colors = TextFieldDefaults.colors(
@@ -360,7 +366,7 @@ fun DashboardScreen(
                                     onClick = { searchQuery = "" },
                                     modifier = Modifier.size(28.dp)
                                 ) {
-                                    Icon(Icons.Default.Close, "Clear search", tint = TextSecondary, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.Close, "Clear search", tint = TextSecondary, modifier = Modifier.size(16.dp))
                                 }
                             }
                         }
@@ -401,7 +407,7 @@ fun DashboardScreen(
                     )
                 }
             } else {
-                items(filteredMeetings.take(8), key = { it.id }) { meeting ->
+                items(filteredMeetings.take(10), key = { it.id }) { meeting ->
                     MeetingScheduleItem(
                         meeting = meeting,
                         onClick = { onMeetingClick(meeting.id.toString()) }
@@ -439,11 +445,13 @@ private fun GreetingHeader(
                         text = "$greeting, $userName 👋",
                         style = Typography.headlineMedium,
                         fontWeight = FontWeight.ExtraBold,
-                        color = TextPrimary
+                        color = TextPrimary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(modifier = Modifier.height(3.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "$todayFormatted • Your day at a glance",
+                        text = todayFormatted,
                         style = Typography.bodySmall,
                         color = TextSecondary
                     )
@@ -455,7 +463,7 @@ private fun GreetingHeader(
                     border = androidx.compose.foundation.BorderStroke(1.dp, EmeraldGreen.copy(alpha = 0.35f))
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Box(
@@ -464,7 +472,7 @@ private fun GreetingHeader(
                                 .background(EmeraldGreen, CircleShape)
                                 .pulse(color = EmeraldGreen)
                         )
-                        Spacer(Modifier.width(6.dp))
+                        Spacer(Modifier.width(5.dp))
                         Text(
                             "AI Engine Ready",
                             style = Typography.labelSmall,
@@ -477,29 +485,39 @@ private fun GreetingHeader(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // AI Capabilities pill bar
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            // Scrollable AI Capabilities pill bar (never truncates on 360dp or smaller screens)
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                SuperpowerPill(
-                    icon = Icons.Default.GraphicEq,
-                    text = "Live Speech STT",
-                    accent = NeonCyan,
-                    modifier = Modifier.weight(1f)
-                )
-                SuperpowerPill(
-                    icon = Icons.Default.Translate,
-                    text = "12+ Languages",
-                    accent = PurpleViolet,
-                    modifier = Modifier.weight(1f)
-                )
-                SuperpowerPill(
-                    icon = Icons.Default.SmartToy,
-                    text = "Talking AI Proxy",
-                    accent = AmberGold,
-                    modifier = Modifier.weight(1f)
-                )
+                item {
+                    SuperpowerPill(
+                        icon = Icons.Default.GraphicEq,
+                        text = "Live Speech STT",
+                        accent = NeonCyan
+                    )
+                }
+                item {
+                    SuperpowerPill(
+                        icon = Icons.Default.Translate,
+                        text = "12+ Languages",
+                        accent = PurpleViolet
+                    )
+                }
+                item {
+                    SuperpowerPill(
+                        icon = Icons.Default.SmartToy,
+                        text = "Talking AI Proxy",
+                        accent = AmberGold
+                    )
+                }
+                item {
+                    SuperpowerPill(
+                        icon = Icons.Default.Assessment,
+                        text = "Smart Summaries",
+                        accent = EmeraldGreen
+                    )
+                }
             }
         }
     }
@@ -509,19 +527,16 @@ private fun GreetingHeader(
 private fun SuperpowerPill(
     icon: ImageVector,
     text: String,
-    accent: Color,
-    modifier: Modifier = Modifier
+    accent: Color
 ) {
     Surface(
         shape = RoundedCornerShape(10.dp),
         color = accent.copy(alpha = 0.08f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.25f)),
-        modifier = modifier
+        border = androidx.compose.foundation.BorderStroke(1.dp, accent.copy(alpha = 0.25f))
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(icon, null, tint = accent, modifier = Modifier.size(14.dp))
             Spacer(Modifier.width(6.dp))
@@ -529,9 +544,7 @@ private fun SuperpowerPill(
                 text = text,
                 style = Typography.labelSmall,
                 color = TextPrimary,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                fontWeight = FontWeight.Medium
             )
         }
     }
@@ -549,7 +562,7 @@ fun UpcomingMeetingHero(
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(22.dp),
         color = CardSurface,
         border = androidx.compose.foundation.BorderStroke(
             1.5.dp,
@@ -558,8 +571,8 @@ fun UpcomingMeetingHero(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 16.dp,
-                shape = RoundedCornerShape(24.dp),
+                elevation = 12.dp,
+                shape = RoundedCornerShape(22.dp),
                 spotColor = if (isLive) EmeraldGreen.copy(alpha = 0.35f) else ElectricIndigo.copy(alpha = 0.25f)
             )
             .bounceClick()
@@ -569,7 +582,7 @@ fun UpcomingMeetingHero(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(130.dp)
+                    .height(110.dp)
                     .background(
                         Brush.linearGradient(
                             colors = if (isLive) {
@@ -589,26 +602,30 @@ fun UpcomingMeetingHero(
                     )
             )
 
-            Column(modifier = Modifier.padding(20.dp)) {
+            Column(modifier = Modifier.padding(16.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
                         Box(
                             modifier = Modifier
-                                .size(9.dp)
+                                .size(8.dp)
                                 .background(if (isLive) EmeraldGreen else ElectricIndigo, CircleShape)
                                 .pulse(color = if (isLive) EmeraldGreen else ElectricIndigo)
                         )
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = if (isLive) "IN PROGRESS NOW 🟢" else "NEXT UPCOMING CALL",
+                            text = if (isLive) "LIVE NOW 🟢" else "NEXT UP",
                             style = Typography.labelMedium,
                             fontWeight = FontWeight.Black,
-                            letterSpacing = 1.3.sp,
-                            color = if (isLive) EmeraldGreen else NeonCyan
+                            letterSpacing = 1.1.sp,
+                            color = if (isLive) EmeraldGreen else NeonCyan,
+                            maxLines = 1
                         )
                     }
 
@@ -623,47 +640,56 @@ fun UpcomingMeetingHero(
                         border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(code, style = Typography.labelSmall, color = NeonCyan, fontWeight = FontWeight.Bold)
-                            Spacer(Modifier.width(6.dp))
-                            Icon(Icons.Default.ContentCopy, "Copy Code", tint = NeonCyan, modifier = Modifier.size(13.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Default.ContentCopy, "Copy Code", tint = NeonCyan, modifier = Modifier.size(11.dp))
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 Text(
                     text = meeting.title, 
-                    style = Typography.headlineMedium, 
+                    style = Typography.titleLarge, 
                     fontWeight = FontWeight.Bold, 
                     color = TextPrimary,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
                 
-                Spacer(modifier = Modifier.height(10.dp))
+                Spacer(modifier = Modifier.height(8.dp))
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Schedule, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(meeting.scheduledAt, style = Typography.bodyMedium, color = TextSecondary)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Schedule, null, tint = TextSecondary, modifier = Modifier.size(13.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(meeting.scheduledAt, style = Typography.bodySmall, color = TextSecondary)
 
                     if (meeting.hostName.isNotBlank()) {
-                        Spacer(modifier = Modifier.width(14.dp))
-                        Icon(Icons.Default.Person, null, tint = TextSecondary, modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Icon(Icons.Default.Person, null, tint = TextSecondary, modifier = Modifier.size(13.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Host: ${meeting.hostName}", style = Typography.bodyMedium, color = TextSecondary, maxLines = 1)
+                        Text(
+                            "Host: ${meeting.hostName}", 
+                            style = Typography.bodySmall, 
+                            color = TextSecondary, 
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(18.dp))
+                Spacer(modifier = Modifier.height(14.dp))
 
                 // Primary CTA Join Button
                 MeetMindButton(
-                    text = if (isLive) "Join Live Meeting Now 🟢" else "Enter Meeting Room",
+                    text = if (isLive) "Join Live Meeting 🟢" else "Enter Meeting Room",
                     onClick = onClick,
                     isAiAction = isLive,
                     modifier = Modifier.fillMaxWidth()
@@ -679,39 +705,39 @@ private fun EmptyHeroCard(
     onSchedule: () -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(24.dp),
+        shape = RoundedCornerShape(22.dp),
         color = CardSurface,
         border = androidx.compose.foundation.BorderStroke(1.dp, GlassBorder),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(20.dp),
+            modifier = Modifier.padding(18.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Surface(
                 shape = CircleShape,
                 color = ElectricIndigo.copy(alpha = 0.15f),
-                modifier = Modifier.size(54.dp)
+                modifier = Modifier.size(48.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.VideoCall, null, tint = ElectricIndigo, modifier = Modifier.size(28.dp))
+                    Icon(Icons.Default.VideoCall, null, tint = ElectricIndigo, modifier = Modifier.size(26.dp))
                 }
             }
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(10.dp))
             Text(
                 "You're All Caught Up 🎉",
-                style = Typography.titleLarge,
+                style = Typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = TextPrimary
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                "No upcoming calls scheduled for today. Start an instant meeting or schedule one for your team.",
-                style = Typography.bodyMedium,
+                "No upcoming calls scheduled. Start an instant meeting or plan one ahead.",
+                style = Typography.bodySmall,
                 color = TextSecondary,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -722,8 +748,8 @@ private fun EmptyHeroCard(
                     colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo),
                     shape = RoundedCornerShape(12.dp)
                 ) {
-                    Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Default.Add, null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
                     Text("Instant Call", fontWeight = FontWeight.Bold)
                 }
                 OutlinedButton(
@@ -732,8 +758,8 @@ private fun EmptyHeroCard(
                     shape = RoundedCornerShape(12.dp),
                     border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor)
                 ) {
-                    Icon(Icons.Default.CalendarMonth, null, tint = TextPrimary, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(6.dp))
+                    Icon(Icons.Default.CalendarMonth, null, tint = TextPrimary, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
                     Text("Schedule", color = TextPrimary)
                 }
             }
@@ -741,49 +767,65 @@ private fun EmptyHeroCard(
     }
 }
 
+/**
+ * 2x2 Bento Grid: Spacious, highly readable, and guaranteed compatible with any screen density (360dp to tablets).
+ */
 @Composable
-private fun QuickControlsGrid(
+private fun ResponsiveQuickControlsGrid(
     onNewMeeting: () -> Unit,
     onJoinCall: () -> Unit,
     onSchedule: () -> Unit,
     onAiProxy: () -> Unit
 ) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        QuickControlCard(
-            title = "Instant Call",
-            subtitle = "New room",
-            icon = Icons.Default.VideoCall,
-            color = ElectricIndigo,
-            modifier = Modifier.weight(1f),
-            onClick = onNewMeeting
-        )
-        QuickControlCard(
-            title = "Join Call",
-            subtitle = "Enter code",
-            icon = Icons.Default.AddBox,
-            color = NeonCyan,
-            modifier = Modifier.weight(1f),
-            onClick = onJoinCall
-        )
-        QuickControlCard(
-            title = "Schedule",
-            subtitle = "Plan agenda",
-            icon = Icons.Default.CalendarMonth,
-            color = AmberGold,
-            modifier = Modifier.weight(1f),
-            onClick = onSchedule
-        )
-        QuickControlCard(
-            title = "AI Proxy",
-            subtitle = "Voice & photo",
-            icon = Icons.Default.SmartToy,
-            color = PurpleViolet,
-            modifier = Modifier.weight(1f),
-            onClick = onAiProxy
-        )
+        // Row 1: Instant Call & Join Call
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            QuickControlCard(
+                title = "Instant Call",
+                subtitle = "Start a new room",
+                icon = Icons.Default.VideoCall,
+                color = ElectricIndigo,
+                modifier = Modifier.weight(1f),
+                onClick = onNewMeeting
+            )
+            QuickControlCard(
+                title = "Join Call",
+                subtitle = "Enter code or ID",
+                icon = Icons.Default.AddBox,
+                color = NeonCyan,
+                modifier = Modifier.weight(1f),
+                onClick = onJoinCall
+            )
+        }
+
+        // Row 2: Schedule & AI Proxy
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            QuickControlCard(
+                title = "Schedule",
+                subtitle = "Plan meeting agenda",
+                icon = Icons.Default.CalendarMonth,
+                color = AmberGold,
+                modifier = Modifier.weight(1f),
+                onClick = onSchedule
+            )
+            QuickControlCard(
+                title = "AI Proxy Agent",
+                subtitle = "Voice & talking photo",
+                icon = Icons.Default.SmartToy,
+                color = PurpleViolet,
+                modifier = Modifier.weight(1f),
+                onClick = onAiProxy
+            )
+        }
     }
 }
 
@@ -803,15 +845,15 @@ private fun QuickControlCard(
         border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.35f)),
         modifier = modifier.bounceClick()
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(vertical = 14.dp, horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 14.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
                 modifier = Modifier.size(44.dp),
-                shape = CircleShape,
+                shape = RoundedCornerShape(12.dp),
                 color = color.copy(alpha = 0.15f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.4f))
             ) {
@@ -819,23 +861,25 @@ private fun QuickControlCard(
                     Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
                 }
             }
-            Spacer(modifier = Modifier.height(10.dp))
-            Text(
-                title, 
-                style = Typography.labelMedium, 
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Spacer(modifier = Modifier.height(2.dp))
-            Text(
-                subtitle,
-                style = Typography.labelSmall,
-                color = TextSecondary,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    title, 
+                    style = Typography.titleSmall, 
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    subtitle,
+                    style = Typography.labelSmall,
+                    color = TextSecondary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
     }
 }
@@ -847,22 +891,22 @@ private fun AiIntelligenceHubCard(
 ) {
     Surface(
         onClick = onSummariesClick,
-        shape = RoundedCornerShape(22.dp),
+        shape = RoundedCornerShape(20.dp),
         color = CardSurface,
         border = androidx.compose.foundation.BorderStroke(1.2.dp, NeonCyan.copy(alpha = 0.35f)),
         modifier = Modifier
             .fillMaxWidth()
-            .shadow(12.dp, RoundedCornerShape(22.dp), spotColor = NeonCyan.copy(alpha = 0.2f))
+            .shadow(8.dp, RoundedCornerShape(20.dp), spotColor = NeonCyan.copy(alpha = 0.2f))
             .bounceClick()
     ) {
-        Column(modifier = Modifier.padding(18.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    modifier = Modifier.size(48.dp),
-                    shape = CircleShape,
+                    modifier = Modifier.size(44.dp),
+                    shape = RoundedCornerShape(12.dp),
                     color = NeonCyan.copy(alpha = 0.15f),
                     border = androidx.compose.foundation.BorderStroke(1.2.dp, NeonCyan.copy(alpha = 0.4f))
                 ) {
@@ -871,30 +915,33 @@ private fun AiIntelligenceHubCard(
                             Icons.Default.Assessment, 
                             contentDescription = null, 
                             tint = NeonCyan, 
-                            modifier = Modifier.size(24.dp)
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "AI Post-Meeting Intelligence", 
+                            "AI Meeting Intelligence", 
                             style = Typography.titleMedium, 
                             color = TextPrimary, 
-                            fontWeight = FontWeight.Bold
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(Modifier.width(6.dp))
-                        StatusChip(text = "AI ENGINE", color = NeonCyan)
+                        StatusChip(text = "AI", color = NeonCyan)
                     }
-                    Spacer(modifier = Modifier.height(3.dp))
+                    Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        "Automatic executive summaries, key decisions, action items, and participant commitments.", 
+                        "Automatic summaries, key decisions, and action items.", 
                         style = Typography.bodySmall, 
                         color = TextSecondary,
-                        lineHeight = 16.sp
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -903,11 +950,11 @@ private fun AiIntelligenceHubCard(
                     Icons.AutoMirrored.Filled.ArrowForward, 
                     null, 
                     tint = NeonCyan, 
-                    modifier = Modifier.size(20.dp)
+                    modifier = Modifier.size(18.dp)
                 )
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Sub-actions row
             Row(
@@ -921,13 +968,13 @@ private fun AiIntelligenceHubCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Icon(Icons.Default.Assignment, null, tint = NeonCyan, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("View Summaries", style = Typography.labelSmall, color = TextPrimary, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(4.dp))
+                        Text("View Summaries", style = Typography.labelSmall, color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                 }
 
@@ -938,13 +985,13 @@ private fun AiIntelligenceHubCard(
                     modifier = Modifier.weight(1f)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center
                     ) {
                         Icon(Icons.Default.RecordVoiceOver, null, tint = PurpleViolet, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("AI Proxy Setup", style = Typography.labelSmall, color = TextPrimary, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.width(4.dp))
+                        Text("AI Proxy Setup", style = Typography.labelSmall, color = TextPrimary, fontWeight = FontWeight.Bold, maxLines = 1)
                     }
                 }
             }
@@ -973,7 +1020,7 @@ private fun FilterTabChip(
         )
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (isLive) {
@@ -983,7 +1030,7 @@ private fun FilterTabChip(
                         .background(EmeraldGreen, CircleShape)
                         .pulse(color = EmeraldGreen)
                 )
-                Spacer(Modifier.width(6.dp))
+                Spacer(Modifier.width(5.dp))
             }
             Text(
                 text = label,
@@ -1015,7 +1062,7 @@ fun MeetingScheduleItem(
 
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(16.dp),
         color = CardSurface,
         border = androidx.compose.foundation.BorderStroke(
             1.dp, 
@@ -1028,12 +1075,12 @@ fun MeetingScheduleItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(14.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                modifier = Modifier.size(46.dp),
-                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier.size(42.dp),
+                shape = RoundedCornerShape(12.dp),
                 color = accentColor.copy(alpha = 0.12f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, accentColor.copy(alpha = 0.35f))
             ) {
@@ -1046,12 +1093,12 @@ fun MeetingScheduleItem(
                         },
                         contentDescription = null,
                         tint = accentColor,
-                        modifier = Modifier.size(24.dp)
+                        modifier = Modifier.size(22.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Row(
@@ -1061,7 +1108,7 @@ fun MeetingScheduleItem(
                 ) {
                     Text(
                         text = meeting.title,
-                        style = Typography.titleMedium,
+                        style = Typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = TextPrimary,
                         maxLines = 1,
@@ -1070,7 +1117,7 @@ fun MeetingScheduleItem(
                     )
                     
                     if (code.isNotBlank()) {
-                        Spacer(Modifier.width(8.dp))
+                        Spacer(Modifier.width(6.dp))
                         Surface(
                             onClick = {
                                 clipboardManager.setText(AnnotatedString(code))
@@ -1098,21 +1145,30 @@ fun MeetingScheduleItem(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.AccessTime, null, tint = TextSecondary, modifier = Modifier.size(13.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text(meeting.scheduledAt, style = Typography.bodySmall, color = TextSecondary)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.AccessTime, null, tint = TextSecondary, modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(meeting.scheduledAt, style = Typography.bodySmall, color = TextSecondary, maxLines = 1)
                     
                     if (meeting.hostName.isNotBlank()) {
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Icon(Icons.Default.Person, null, tint = TextSecondary, modifier = Modifier.size(13.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(meeting.hostName, style = Typography.bodySmall, color = TextSecondary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(Icons.Default.Person, null, tint = TextSecondary, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            meeting.hostName, 
+                            style = Typography.bodySmall, 
+                            color = TextSecondary, 
+                            maxLines = 1, 
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.width(10.dp))
+            Spacer(modifier = Modifier.width(8.dp))
 
             if (isLive) {
                 StatusChip(text = "LIVE 🟢", color = EmeraldGreen)
@@ -1144,16 +1200,16 @@ private fun EmptyMeetingFilterCard(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(24.dp),
+            modifier = Modifier.padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Icon(
                 Icons.Default.SearchOff,
                 contentDescription = null,
                 tint = TextDisabled,
-                modifier = Modifier.size(36.dp)
+                modifier = Modifier.size(32.dp)
             )
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text(
                 if (searchQuery.isNotEmpty()) "No results matching \"$searchQuery\"" else "No $selectedTab meetings found",
                 style = Typography.titleSmall,

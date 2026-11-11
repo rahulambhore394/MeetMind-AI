@@ -239,6 +239,7 @@ fun LiveMeetingScreen(
     var showHostControlsSheet by remember { mutableStateOf(false) }
     var showMuteAllConfirmDialog by remember { mutableStateOf(false) }
     var participantToRemove by remember { mutableStateOf<Participant?>(null) }
+    var isSoloInviteDismissed by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState()
 
     // Host control reaction listeners
@@ -941,25 +942,48 @@ fun LiveMeetingScreen(
                             mirror = true
                         )
 
-                        SoloMeetingInvitationCard(
-                            meetingTitle = meeting?.title ?: "Meeting",
-                            meetingCode = meeting?.meetingCode ?: "mm-$meetingId",
-                            onCopyCode = {
-                                val code = meeting?.meetingCode ?: "mm-$meetingId"
-                                clipboardManager.setText(AnnotatedString(code))
-                                Toast.makeText(context, "Code copied: $code", Toast.LENGTH_SHORT).show()
-                            },
-                            onShareLink = {
-                                val shareIntent = android.content.Intent().apply {
-                                    action = android.content.Intent.ACTION_SEND
-                                    putExtra(android.content.Intent.EXTRA_TEXT, "Join my MeetMind AI live meeting!\nTitle: ${meeting?.title ?: "Meeting"}\nMeeting Code: ${meeting?.meetingCode ?: meetingId}")
-                                    type = "text/plain"
+                        if (!isSoloInviteDismissed) {
+                            SoloMeetingInvitationCard(
+                                meetingTitle = meeting?.title ?: "Meeting",
+                                meetingCode = meeting?.meetingCode ?: "mm-$meetingId",
+                                onCopyCode = {
+                                    val code = meeting?.meetingCode ?: "mm-$meetingId"
+                                    clipboardManager.setText(AnnotatedString(code))
+                                    Toast.makeText(context, "Code copied: $code", Toast.LENGTH_SHORT).show()
+                                },
+                                onShareLink = {
+                                    val shareIntent = android.content.Intent().apply {
+                                        action = android.content.Intent.ACTION_SEND
+                                        putExtra(android.content.Intent.EXTRA_TEXT, "Join my MeetMind AI live meeting!\nTitle: ${meeting?.title ?: "Meeting"}\nMeeting Code: ${meeting?.meetingCode ?: meetingId}")
+                                        type = "text/plain"
+                                    }
+                                    context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Meeting Code"))
+                                },
+                                onInviteEmail = { showInviteDialog = true },
+                                onDismiss = { isSoloInviteDismissed = true },
+                                modifier = Modifier.align(Alignment.Center)
+                            )
+                        } else {
+                            Surface(
+                                onClick = { isSoloInviteDismissed = false },
+                                shape = RoundedCornerShape(20.dp),
+                                color = GlassBackground,
+                                border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.5f)),
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 96.dp)
+                                    .bounceClick()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.PersonAdd, contentDescription = null, tint = NeonCyan, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Invite Others", color = NeonCyan, style = Typography.labelMedium, fontWeight = FontWeight.Bold)
                                 }
-                                context.startActivity(android.content.Intent.createChooser(shareIntent, "Share Meeting Code"))
-                            },
-                            onInviteEmail = { showInviteDialog = true },
-                            modifier = Modifier.align(Alignment.Center)
-                        )
+                            }
+                        }
                     }
                 } else if (remoteParticipants.size == 1) {
                     // DUET MODE (Google Meet Standard: Remote full stage, local in bottom-right PIP)
@@ -1381,6 +1405,7 @@ fun AudioDeviceSelectorSheet(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp)
             .navigationBarsPadding()
     ) {
@@ -1475,6 +1500,7 @@ fun MoreControlsContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(24.dp)
             .navigationBarsPadding()
     ) {
@@ -1717,7 +1743,7 @@ fun TopMeetingBar(
     Surface(
         modifier = modifier
             .statusBarsPadding()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 10.dp, vertical = 6.dp)
             .fillMaxWidth()
             .glassmorphism(),
         shape = RoundedCornerShape(24.dp),
@@ -1726,7 +1752,7 @@ fun TopMeetingBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -1744,21 +1770,21 @@ fun TopMeetingBar(
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = meetingTitle,
-                    style = Typography.titleMedium,
+                    style = Typography.titleSmall,
                     color = TextPrimary,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
                 Surface(
                     onClick = onCopyMeetingCode,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(10.dp),
                     color = Color.White.copy(alpha = 0.12f),
                     modifier = Modifier.bounceClick()
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
@@ -1767,32 +1793,35 @@ fun TopMeetingBar(
                             color = NeonCyan,
                             fontWeight = FontWeight.Bold
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Icon(Icons.Default.ContentCopy, null, tint = NeonCyan, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Icon(Icons.Default.ContentCopy, null, tint = NeonCyan, modifier = Modifier.size(11.dp))
                     }
                 }
 
                 if (isLocked) {
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Spacer(modifier = Modifier.width(4.dp))
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = Color(0xFFF59E0B).copy(alpha = 0.2f),
                         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f))
                     ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(Icons.Default.Lock, contentDescription = "Locked", tint = Color(0xFFF59E0B), modifier = Modifier.size(10.dp))
-                            Spacer(modifier = Modifier.width(3.dp))
-                            Text("Locked", style = Typography.labelSmall, color = Color(0xFFF59E0B), fontWeight = FontWeight.Bold)
-                        }
+                        Icon(
+                            Icons.Default.Lock,
+                            contentDescription = "Locked",
+                            tint = Color(0xFFF59E0B),
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 3.dp).size(10.dp)
+                        )
                     }
                 }
             }
 
+            Spacer(modifier = Modifier.width(6.dp))
+
             // Right Action Controls
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 // Duration & REC Pill
                 if (isRecording) {
                     Surface(
@@ -1802,7 +1831,7 @@ fun TopMeetingBar(
                         modifier = Modifier.bounceClick()
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Box(
@@ -1811,7 +1840,7 @@ fun TopMeetingBar(
                                     .background(Color.White, CircleShape)
                                     .pulse(color = Color.White)
                             )
-                            Spacer(modifier = Modifier.width(5.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 "REC ${formatDuration(recordingDurationMs)}",
                                 color = Color.White,
@@ -1820,7 +1849,6 @@ fun TopMeetingBar(
                             )
                         }
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
                 } else {
                     Surface(
                         shape = CircleShape,
@@ -1831,13 +1859,23 @@ fun TopMeetingBar(
                             style = Typography.labelSmall,
                             color = TextSecondary,
                             fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                         )
                     }
-                    Spacer(modifier = Modifier.width(6.dp))
                 }
 
-                // Audio Route Quick Switcher
+                // Camera Flip Quick Switcher (32dp)
+                IconButton(
+                    onClick = onFlipCamera,
+                    modifier = Modifier
+                        .size(32.dp)
+                        .background(Color.White.copy(alpha = 0.12f), CircleShape)
+                        .bounceClick()
+                ) {
+                    Icon(Icons.Default.Cameraswitch, contentDescription = "Flip Camera", tint = Color.White, modifier = Modifier.size(16.dp))
+                }
+
+                // Audio Route Quick Switcher (32dp)
                 val audioIcon = when (selectedAudioDevice) {
                     "Bluetooth" -> Icons.Default.BluetoothAudio
                     "Headset" -> Icons.Default.Headset
@@ -1847,92 +1885,36 @@ fun TopMeetingBar(
                 IconButton(
                     onClick = onToggleAudioDevice,
                     modifier = Modifier
-                        .size(34.dp)
+                        .size(32.dp)
                         .background(Color.White.copy(alpha = 0.12f), CircleShape)
                         .bounceClick()
                 ) {
-                    Icon(audioIcon, contentDescription = "Audio Output", tint = Color.White, modifier = Modifier.size(17.dp))
+                    Icon(audioIcon, contentDescription = "Audio Output", tint = Color.White, modifier = Modifier.size(16.dp))
                 }
 
-                Spacer(modifier = Modifier.width(6.dp))
-
-                // Camera Flip Quick Switcher
-                IconButton(
-                    onClick = onFlipCamera,
-                    modifier = Modifier
-                        .size(34.dp)
-                        .background(Color.White.copy(alpha = 0.12f), CircleShape)
-                        .bounceClick()
-                ) {
-                    Icon(Icons.Default.Cameraswitch, contentDescription = "Flip Camera", tint = Color.White, modifier = Modifier.size(17.dp))
-                }
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                // Chat Shortcut
+                // Chat Shortcut (32dp)
                 IconButton(
                     onClick = onOpenChat,
                     modifier = Modifier
-                        .size(34.dp)
+                        .size(32.dp)
                         .background(Color.White.copy(alpha = 0.12f), CircleShape)
                         .bounceClick()
                 ) {
-                    Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat", tint = Color.White, modifier = Modifier.size(16.dp))
+                    Icon(Icons.AutoMirrored.Filled.Chat, contentDescription = "Chat", tint = Color.White, modifier = Modifier.size(15.dp))
                 }
 
-                Spacer(modifier = Modifier.width(6.dp))
-
-                // CC Subtitles & Translation Quick Toggle
-                IconButton(
-                    onClick = onToggleSubtitles,
-                    modifier = Modifier
-                        .size(34.dp)
-                        .background(
-                            if (isSubtitlesEnabled) EmeraldGreen.copy(alpha = 0.25f) else Color.White.copy(alpha = 0.12f),
-                            CircleShape
-                        )
-                        .bounceClick()
-                ) {
-                    Icon(
-                        Icons.Default.ClosedCaption,
-                        contentDescription = "Live Subtitles & Translation",
-                        tint = if (isSubtitlesEnabled) EmeraldGreen else Color.White,
-                        modifier = Modifier.size(17.dp)
-                    )
-                }
-
-                Spacer(modifier = Modifier.width(6.dp))
-
-                // AI Meeting Intelligence Button
-                IconButton(
-                    onClick = onOpenIntelligence,
-                    modifier = Modifier
-                        .size(34.dp)
-                        .background(ElectricIndigo.copy(alpha = 0.25f), CircleShape)
-                        .bounceClick()
-                ) {
-                    Icon(
-                        Icons.Default.AutoAwesome,
-                        contentDescription = "AI Meeting Intelligence",
-                        tint = ElectricIndigo,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
-
+                // Host Controls (if host) (32dp)
                 if (isHost && onOpenHostControls != null) {
-                    Spacer(modifier = Modifier.width(6.dp))
                     IconButton(
                         onClick = onOpenHostControls,
                         modifier = Modifier
-                            .size(34.dp)
+                            .size(32.dp)
                             .background(Color(0xFFF59E0B).copy(alpha = 0.15f), CircleShape)
                             .bounceClick()
                     ) {
-                        Icon(Icons.Default.AdminPanelSettings, contentDescription = "Host Controls", tint = Color(0xFFF59E0B), modifier = Modifier.size(17.dp))
+                        Icon(Icons.Default.AdminPanelSettings, contentDescription = "Host Controls", tint = Color(0xFFF59E0B), modifier = Modifier.size(16.dp))
                     }
                 }
-
-                Spacer(modifier = Modifier.width(6.dp))
 
                 // Participants Badge Button
                 Surface(
@@ -1943,15 +1925,15 @@ fun TopMeetingBar(
                     modifier = Modifier.bounceClick()
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.People, null, tint = ElectricIndigo, modifier = Modifier.size(14.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(Icons.Default.People, null, tint = ElectricIndigo, modifier = Modifier.size(13.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
                             "$totalParticipants",
                             color = TextPrimary,
-                            style = Typography.labelMedium,
+                            style = Typography.labelSmall,
                             fontWeight = FontWeight.Bold
                         )
                     }
@@ -1978,7 +1960,7 @@ fun MeetingBottomDock(
     Surface(
         modifier = modifier
             .navigationBarsPadding()
-            .padding(bottom = 14.dp, start = 14.dp, end = 14.dp)
+            .padding(bottom = 12.dp, start = 16.dp, end = 16.dp)
             .fillMaxWidth()
             .shadow(16.dp, RoundedCornerShape(32.dp)),
         shape = RoundedCornerShape(32.dp),
@@ -1988,29 +1970,29 @@ fun MeetingBottomDock(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceEvenly
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // 1. Mic Button (52dp)
+            // 1. Mic Button (48dp)
             MeetingControlButton(
                 icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
                 isActive = !isMuted,
                 activeColor = Color(0xFF3C4043),
                 inactiveColor = RoseRed,
-                size = 52.dp,
-                iconSize = 24.dp,
+                size = 48.dp,
+                iconSize = 22.dp,
                 onClick = onToggleMic
             )
 
-            // 2. Camera Button (52dp)
+            // 2. Camera Button (48dp)
             MeetingControlButton(
                 icon = if (isVideoOff) Icons.Default.VideocamOff else Icons.Default.Videocam,
                 isActive = !isVideoOff,
                 activeColor = Color(0xFF3C4043),
                 inactiveColor = RoseRed,
-                size = 52.dp,
-                iconSize = 24.dp,
+                size = 48.dp,
+                iconSize = 22.dp,
                 onClick = onToggleVideo
             )
 
@@ -2026,25 +2008,7 @@ fun MeetingBottomDock(
                 onClick = onToggleScreenShare
             )
 
-            // 4. Audio Output Selector (48dp)
-            val audioDeviceIcon = when (selectedAudioDevice) {
-                "Bluetooth" -> Icons.Default.BluetoothAudio
-                "Headset" -> Icons.Default.Headset
-                "Earpiece" -> Icons.Default.PhoneInTalk
-                else -> Icons.Default.VolumeUp
-            }
-            MeetingControlButton(
-                icon = audioDeviceIcon,
-                isActive = selectedAudioDevice != "Speaker",
-                activeColor = NeonCyan,
-                inactiveColor = Color(0xFF3C4043),
-                contentColor = if (selectedAudioDevice != "Speaker") Color.Black else Color.White,
-                size = 48.dp,
-                iconSize = 22.dp,
-                onClick = onToggleAudioDevice
-            )
-
-            // 5. More Options (48dp)
+            // 4. More Options (48dp)
             MeetingControlButton(
                 icon = Icons.Default.MoreHoriz,
                 isActive = false,
@@ -2054,14 +2018,14 @@ fun MeetingBottomDock(
                 onClick = onOpenMore
             )
 
-            // 6. End Call Button (52dp)
+            // 5. End Call Button (50dp)
             Surface(
                 onClick = onEndCall,
                 shape = CircleShape,
                 color = RoseRed,
                 shadowElevation = 8.dp,
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(50.dp)
                     .bounceClick()
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -2084,109 +2048,130 @@ fun SoloMeetingInvitationCard(
     onCopyCode: () -> Unit,
     onShareLink: () -> Unit,
     onInviteEmail: () -> Unit,
+    onDismiss: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Surface(
         modifier = modifier
-            .padding(24.dp)
+            .padding(20.dp)
             .fillMaxWidth()
             .shadow(20.dp, RoundedCornerShape(24.dp)),
         shape = RoundedCornerShape(24.dp),
         color = Color(0xE61A1E29),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.15f))
     ) {
-        Column(
-            modifier = Modifier.padding(20.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(52.dp)
-                    .background(ElectricIndigo.copy(alpha = 0.2f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    Icons.Default.PersonAdd,
-                    contentDescription = null,
-                    tint = ElectricIndigo,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(
-                "You're the only one here",
-                style = Typography.titleLarge,
-                color = TextPrimary,
-                fontWeight = FontWeight.Bold,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                "Share this meeting link with others you want in the call",
-                style = Typography.bodyMedium,
-                color = TextSecondary,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Surface(
-                onClick = onCopyCode,
-                color = CardSurface,
-                shape = RoundedCornerShape(12.dp),
-                border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .bounceClick()
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+        Box(modifier = Modifier.fillMaxWidth().padding(18.dp)) {
+            if (onDismiss != null) {
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .size(28.dp)
+                        .background(Color.White.copy(alpha = 0.1f), CircleShape)
+                        .bounceClick()
                 ) {
-                    Text(
-                        meetingCode,
-                        style = Typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = NeonCyan
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = "Dismiss",
+                        tint = TextSecondary,
+                        modifier = Modifier.size(16.dp)
                     )
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Copy", style = Typography.labelMedium, color = TextSecondary)
-                        Spacer(Modifier.width(4.dp))
-                        Icon(Icons.Default.ContentCopy, null, tint = TextPrimary, modifier = Modifier.size(16.dp))
+                }
+            }
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(48.dp)
+                        .background(ElectricIndigo.copy(alpha = 0.2f), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.PersonAdd,
+                        contentDescription = null,
+                        tint = ElectricIndigo,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Text(
+                    "You're the only one here",
+                    style = Typography.titleMedium,
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "Share this meeting link with others you want in the call",
+                    style = Typography.bodySmall,
+                    color = TextSecondary,
+                    textAlign = TextAlign.Center
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Surface(
+                    onClick = onCopyCode,
+                    color = CardSurface,
+                    shape = RoundedCornerShape(12.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .bounceClick()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            meetingCode,
+                            style = Typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = NeonCyan
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("Copy", style = Typography.labelSmall, color = TextSecondary)
+                            Spacer(Modifier.width(4.dp))
+                            Icon(Icons.Default.ContentCopy, null, tint = TextPrimary, modifier = Modifier.size(14.dp))
+                        }
                     }
                 }
-            }
 
-            Spacer(modifier = Modifier.height(14.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Button(
-                    onClick = onShareLink,
-                    modifier = Modifier
-                        .weight(1f)
-                        .bounceClick(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Icon(Icons.Default.Share, null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Share Link", fontWeight = FontWeight.Bold, style = Typography.labelMedium)
-                }
+                    Button(
+                        onClick = onShareLink,
+                        modifier = Modifier
+                            .weight(1f)
+                            .bounceClick(),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = ElectricIndigo)
+                    ) {
+                        Icon(Icons.Default.Share, null, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Share Link", fontWeight = FontWeight.Bold, style = Typography.labelSmall)
+                    }
 
-                OutlinedButton(
-                    onClick = onInviteEmail,
-                    modifier = Modifier
-                        .weight(1f)
-                        .bounceClick(),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.6f))
-                ) {
-                    Icon(Icons.Default.PersonAdd, null, tint = NeonCyan, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(6.dp))
-                    Text("Invite Email", color = NeonCyan, fontWeight = FontWeight.Bold, style = Typography.labelMedium)
+                    OutlinedButton(
+                        onClick = onInviteEmail,
+                        modifier = Modifier
+                            .weight(1f)
+                            .bounceClick(),
+                        shape = RoundedCornerShape(12.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, NeonCyan.copy(alpha = 0.6f))
+                    ) {
+                        Icon(Icons.Default.PersonAdd, null, tint = NeonCyan, modifier = Modifier.size(15.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Invite Email", color = NeonCyan, fontWeight = FontWeight.Bold, style = Typography.labelSmall)
+                    }
                 }
             }
         }
@@ -2870,6 +2855,7 @@ fun HostControlsSheetContent(
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 12.dp)
             .navigationBarsPadding()
     ) {
