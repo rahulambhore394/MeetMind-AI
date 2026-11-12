@@ -1,8 +1,10 @@
 package com.meetmind.meetmind_backend.translation;
 
+import com.meetmind.meetmind_backend.event.SpringLiveSpeechTranscribedEvent;
 import com.meetmind.meetmind_backend.user.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.handler.annotation.Payload;
@@ -18,13 +20,16 @@ public class TranslationWebSocketController {
 
     private final LiveTranslationService translationService;
     private final TranslationPreferenceService preferenceService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public TranslationWebSocketController(
             LiveTranslationService translationService,
-            TranslationPreferenceService preferenceService
+            TranslationPreferenceService preferenceService,
+            ApplicationEventPublisher eventPublisher
     ) {
         this.translationService = translationService;
         this.preferenceService = preferenceService;
+        this.eventPublisher = eventPublisher;
     }
 
     /**
@@ -63,6 +68,18 @@ public class TranslationWebSocketController {
                         speaker,
                         message.timestamp()
                 );
+            }
+
+            // Bridge verbal speech recognition into AI Proxy answering system
+            if (message.sourceText() != null && !message.sourceText().isBlank()) {
+                Long userId = currentUser != null ? currentUser.getId() : null;
+                eventPublisher.publishEvent(new SpringLiveSpeechTranscribedEvent(
+                        this,
+                        meetingId,
+                        userId,
+                        speaker,
+                        message.sourceText()
+                ));
             }
         } catch (Exception e) {
             log.error("TranslationWebSocketController: Error translating message in meeting {}: {}",
