@@ -344,7 +344,8 @@ fun AppNavigation(navController: NavHostController) {
             ProfileScreen(
                 onBack = { navController.popBackStack() },
                 onLogout = { navController.navigate(Screen.Welcome.route) { popUpTo(0) } },
-                onNavigateToSettings = { navController.navigate(Screen.Settings.route) }
+                onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
+                onNavigateToAiProxy = { navController.navigate(Screen.AiRepresentativeDashboard.route) }
             )
         }
 

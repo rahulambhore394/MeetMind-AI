@@ -57,6 +57,10 @@ class AppContainer(context: Context) {
         SecureTokenProvider(context)
     }
 
+    val appPreferences: com.developer_rahul.meetmind_ai.core.preferences.MeetMindPreferences by lazy {
+        com.developer_rahul.meetmind_ai.core.preferences.MeetMindPreferences.getInstance(context)
+    }
+
     private val okHttpClient: OkHttpClient by lazy {
         NetworkModule.provideOkHttpClient(tokenProvider)
     }

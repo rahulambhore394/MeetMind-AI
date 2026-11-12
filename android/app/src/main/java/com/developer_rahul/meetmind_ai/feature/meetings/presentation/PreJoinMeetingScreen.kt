@@ -93,8 +93,9 @@ fun PreJoinMeetingScreen(
         }
     }
 
-    var isMicOn by remember { mutableStateOf(true) }
-    var isCameraOn by remember { mutableStateOf(true) }
+    val preferences = remember(context) { com.developer_rahul.meetmind_ai.core.preferences.MeetMindPreferences.getInstance(context) }
+    var isMicOn by remember { mutableStateOf(!preferences.muteMicOnJoin.value) }
+    var isCameraOn by remember { mutableStateOf(!preferences.turnOffCameraOnJoin.value) }
     var isFrontCamera by remember { mutableStateOf(true) }
 
     val availableAudioDevices = remember(context) { AudioDeviceManager.getAvailableAudioDevices(context) }

@@ -155,7 +155,8 @@ fun MainScreen(
                 ProfileScreen(
                     onBack = { navController.navigate("home_tab") },
                     onLogout = onLogout,
-                    onNavigateToSettings = onNavigateToSettings
+                    onNavigateToSettings = onNavigateToSettings,
+                    onNavigateToAiProxy = onAiRepConfig
                 )
             }
         }
