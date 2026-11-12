@@ -1,7 +1,9 @@
 package com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto
 
 import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation
+import kotlinx.serialization.Serializable
 
+@Serializable
 data class InvitationDto(
     val id: Long? = null,
     val meetingId: Long,
