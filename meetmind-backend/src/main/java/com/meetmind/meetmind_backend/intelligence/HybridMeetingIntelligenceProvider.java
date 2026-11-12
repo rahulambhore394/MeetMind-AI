@@ -2,6 +2,7 @@ package com.meetmind.meetmind_backend.intelligence;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.meetmind.meetmind_backend.ai.GeminiService;
 import com.meetmind.meetmind_backend.transcription.TranscriptSegment;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,17 +32,12 @@ public class HybridMeetingIntelligenceProvider implements MeetingIntelligencePro
     private static final Logger log = LoggerFactory.getLogger(HybridMeetingIntelligenceProvider.class);
 
     private final LocalMeetingIntelligenceProvider localProvider;
+    private final GeminiService geminiService;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
     @Value("${intelligence.provider:hybrid}")
     private String providerMode;
-
-    @Value("${intelligence.gemini.api-key:${GEMINI_API_KEY:}}")
-    private String geminiApiKey;
-
-    @Value("${intelligence.gemini.model:gemini-1.5-flash}")
-    private String geminiModel;
 
     @Value("${intelligence.openai.api-key:${OPENAI_API_KEY:}}")
     private String openaiApiKey;
@@ -51,9 +47,11 @@ public class HybridMeetingIntelligenceProvider implements MeetingIntelligencePro
 
     public HybridMeetingIntelligenceProvider(
             LocalMeetingIntelligenceProvider localProvider,
+            GeminiService geminiService,
             ObjectMapper objectMapper
     ) {
         this.localProvider = localProvider;
+        this.geminiService = geminiService;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
@@ -87,7 +85,7 @@ public class HybridMeetingIntelligenceProvider implements MeetingIntelligencePro
             // Attempt 1: Gemini Generative AI
             if (hasGeminiKey()) {
                 try {
-                    log.info("Synthesizing executive brief using Gemini LLM (model: {})...", geminiModel);
+                    log.info("Synthesizing executive brief using Gemini LLM (model: {})...", geminiService.getModel());
                     IntelligenceResult result = callGeminiLlm(fullText, segments);
                     if (result != null && result.summary() != null && !result.summary().isBlank()) {
                         log.info("Gemini LLM executive synthesis succeeded with {} key points", result.keyPoints().size());
@@ -119,7 +117,7 @@ public class HybridMeetingIntelligenceProvider implements MeetingIntelligencePro
     }
 
     private boolean hasGeminiKey() {
-        return geminiApiKey != null && !geminiApiKey.trim().isEmpty() && !geminiApiKey.contains("your-");
+        return geminiService != null && geminiService.isAvailable();
     }
 
     private boolean hasOpenAiKey() {
@@ -127,42 +125,8 @@ public class HybridMeetingIntelligenceProvider implements MeetingIntelligencePro
     }
 
     private IntelligenceResult callGeminiLlm(String fullText, List<TranscriptSegment> segments) throws Exception {
-        String prompt = buildExecutivePrompt(fullText);
-
-        Map<String, Object> part = Map.of("text", prompt);
-        Map<String, Object> content = Map.of("parts", List.of(part));
-        Map<String, Object> generationConfig = Map.of(
-                "response_mime_type", "application/json",
-                "temperature", 0.2
-        );
-        Map<String, Object> payload = Map.of(
-                "contents", List.of(content),
-                "generationConfig", generationConfig
-        );
-
-        String jsonPayload = objectMapper.writeValueAsString(payload);
-        String url = "https://generativelanguage.googleapis.com/v1beta/models/" + geminiModel + ":generateContent?key=" + geminiApiKey.trim();
-
-        HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(url))
-                .header("Content-Type", "application/json")
-                .timeout(Duration.ofSeconds(15))
-                .POST(HttpRequest.BodyPublishers.ofString(jsonPayload, StandardCharsets.UTF_8))
-                .build();
-
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8));
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IllegalStateException("Gemini API returned status " + response.statusCode() + ": " + response.body());
-        }
-
-        JsonNode root = objectMapper.readTree(response.body());
-        JsonNode candidates = root.path("candidates");
-        if (candidates.isEmpty()) {
-            throw new IllegalStateException("No candidates returned from Gemini");
-        }
-
-        String rawJson = candidates.get(0).path("content").path("parts").get(0).path("text").asText();
-        return parseLlmOutput(rawJson, fullText, segments, "gemini-llm", "Google Gemini " + geminiModel);
+        String rawJson = geminiService.synthesizeMeetingIntelligenceJson(fullText);
+        return parseLlmOutput(rawJson, fullText, segments, "gemini-llm", "Google Gemini " + geminiService.getModel());
     }
 
     private IntelligenceResult callOpenAiLlm(String fullText, List<TranscriptSegment> segments) throws Exception {

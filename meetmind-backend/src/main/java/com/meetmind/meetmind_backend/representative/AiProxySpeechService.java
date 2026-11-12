@@ -1,9 +1,11 @@
 package com.meetmind.meetmind_backend.representative;
 
+import com.meetmind.meetmind_backend.ai.GeminiService;
 import com.meetmind.meetmind_backend.chat.ChatMessage;
 import com.meetmind.meetmind_backend.chat.ChatMessageRepository;
 import com.meetmind.meetmind_backend.chat.dto.ChatMessageResponse;
 import com.meetmind.meetmind_backend.representative.dto.AiProxySpeechMessage;
+import com.meetmind.meetmind_backend.representative.dto.PredefinedQa;
 import com.meetmind.meetmind_backend.user.User;
 import com.meetmind.meetmind_backend.user.UserRepository;
 import org.slf4j.Logger;
@@ -27,19 +29,22 @@ public class AiProxySpeechService {
     private final UserRepository userRepository;
     private final ChatMessageRepository chatMessageRepository;
     private final SimpMessagingTemplate messagingTemplate;
+    private final GeminiService geminiService;
 
     public AiProxySpeechService(
             AiRepresentativeService representativeService,
             AiRepresentativeRepository representativeRepository,
             UserRepository userRepository,
             ChatMessageRepository chatMessageRepository,
-            SimpMessagingTemplate messagingTemplate
+            SimpMessagingTemplate messagingTemplate,
+            GeminiService geminiService
     ) {
         this.representativeService = representativeService;
         this.representativeRepository = representativeRepository;
         this.userRepository = userRepository;
         this.chatMessageRepository = chatMessageRepository;
         this.messagingTemplate = messagingTemplate;
+        this.geminiService = geminiService;
     }
 
     /**
@@ -123,10 +128,21 @@ public class AiProxySpeechService {
                 log.info("AiProxySpeechService: Active representative {} for owner {} triggered in meeting {} (matchesPredefined={}) by message: '{}'",
                         rep.getId(), ownerName, meetingId, matchesPredefined, messageText);
 
-                String spokenAnswer;
+                String spokenAnswer = "";
                 if (matchesPredefined && !matchedAnswer.isBlank()) {
                     spokenAnswer = "Speaking on behalf of " + ownerName + ": " + matchedAnswer;
-                } else {
+                } else if (geminiService != null && geminiService.isAvailable()) {
+                    try {
+                        log.info("AiProxySpeechService: Formulating live intelligent persona response using Gemini AI for {}", ownerName);
+                        spokenAnswer = geminiService.generateProxySpokenResponse(
+                                ownerName, monitoredTopics, monitoredQuestions, predefinedQaList, messageText, ""
+                        );
+                    } catch (Exception e) {
+                        log.warn("Gemini proxy response generation failed ({}), falling back to local heuristic", e.getMessage());
+                    }
+                }
+
+                if (spokenAnswer.isBlank()) {
                     spokenAnswer = formulateSpeechResponse(ownerName, messageText, matchedTopicName, matchedQuestionText);
                 }
 
@@ -161,6 +177,21 @@ public class AiProxySpeechService {
             if (qa.question() != null && isQuestionMatch(cleanQuery, qa.question().toLowerCase(Locale.ROOT).trim())) {
                 spokenAnswer = "Speaking on behalf of " + ownerName + ": " + (qa.answer() != null ? qa.answer().trim() : "");
                 break;
+            }
+        }
+        if (spokenAnswer.isBlank() && geminiService != null && geminiService.isAvailable()) {
+            try {
+                log.info("AiProxySpeechService: Formulating direct query persona response using Gemini AI for {}", ownerName);
+                spokenAnswer = geminiService.generateProxySpokenResponse(
+                        ownerName,
+                        representativeService.fromJsonList(rep.getMonitoredTopicsJson()),
+                        representativeService.fromJsonList(rep.getMonitoredQuestionsJson()),
+                        predefinedQaList,
+                        query,
+                        ""
+                );
+            } catch (Exception e) {
+                log.warn("Gemini direct query response generation failed ({}), falling back to local heuristic", e.getMessage());
             }
         }
         if (spokenAnswer.isBlank()) {

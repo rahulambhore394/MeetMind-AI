@@ -2,6 +2,7 @@ package com.meetmind.meetmind_backend.translation;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.meetmind.meetmind_backend.ai.GeminiService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.annotation.Primary;
@@ -20,8 +21,9 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * High-performance, hybrid real-time translation provider.
  * 1. Checks in-memory fast phrase cache for zero-latency instant response.
- * 2. Queries dynamic multi-language translation engine for high-accuracy live speech.
- * 3. Gracefully falls back to LocalTranslationProvider if offline or network unavailable.
+ * 2. Uses Google Gemini API when available for contextual, idiom-aware translation.
+ * 3. Queries dynamic multi-language translation engine for high-accuracy live speech.
+ * 4. Gracefully falls back to LocalTranslationProvider if offline or network unavailable.
  */
 @Component
 @Primary
@@ -30,14 +32,20 @@ public class HybridTranslationProvider implements TranslationProvider {
     private static final Logger log = LoggerFactory.getLogger(HybridTranslationProvider.class);
 
     private final LocalTranslationProvider localProvider;
+    private final GeminiService geminiService;
     private final ObjectMapper objectMapper;
     private final HttpClient httpClient;
 
     // In-memory translation cache: key = "src:tgt:text" -> translated text
     private final Map<String, String> cache = new ConcurrentHashMap<>(256);
 
-    public HybridTranslationProvider(LocalTranslationProvider localProvider, ObjectMapper objectMapper) {
+    public HybridTranslationProvider(
+            LocalTranslationProvider localProvider,
+            GeminiService geminiService,
+            ObjectMapper objectMapper
+    ) {
         this.localProvider = localProvider;
+        this.geminiService = geminiService;
         this.objectMapper = objectMapper;
         this.httpClient = HttpClient.newBuilder()
                 .version(HttpClient.Version.HTTP_1_1)
@@ -86,6 +94,21 @@ public class HybridTranslationProvider implements TranslationProvider {
         String cachedTranslation = cache.get(cacheKey);
         if (cachedTranslation != null) {
             return new TranslationResult(text, cachedTranslation, s, t, "cache");
+        }
+
+        // Try Gemini High-Fidelity Multilingual Translation
+        if (geminiService != null && geminiService.isAvailable()) {
+            try {
+                String translated = geminiService.translateLiveTranscript(trimmed, s, t);
+                if (translated != null && !translated.isBlank()) {
+                    if (cache.size() < 2000) {
+                        cache.put(cacheKey, translated);
+                    }
+                    return new TranslationResult(text, translated, s, t, "gemini-live-translation");
+                }
+            } catch (Exception e) {
+                log.debug("HybridTranslationProvider: Gemini translation unavailable ({}), trying online fallback...", e.getMessage());
+            }
         }
 
         // Try Online Multi-Lingual API (Google GTX)

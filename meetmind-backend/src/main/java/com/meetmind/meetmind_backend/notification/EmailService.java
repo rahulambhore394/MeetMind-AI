@@ -34,7 +34,8 @@ public class EmailService {
     @Value("${mail.replyto.address:noreply@meetmind.ai}")
     private String configuredReplyToAddress;
 
-    private final java.util.concurrent.ExecutorService emailExecutor = java.util.concurrent.Executors.newFixedThreadPool(5);
+    private final java.util.concurrent.ExecutorService emailExecutor = java.util.concurrent.Executors
+            .newFixedThreadPool(5);
 
     public void sendBatchMeetingInvitationEmailsAsync(
             java.util.List<String> recipientEmails,
@@ -43,15 +44,17 @@ public class EmailService {
             String meetingDescription,
             String meetingCode,
             LocalDateTime scheduledAt,
-            java.util.function.Function<String, Boolean> isRegisteredUserChecker
-    ) {
-        if (recipientEmails == null || recipientEmails.isEmpty()) return;
-        
+            java.util.function.Function<String, Boolean> isRegisteredUserChecker) {
+        if (recipientEmails == null || recipientEmails.isEmpty())
+            return;
+
         emailExecutor.submit(() -> {
             for (String email : recipientEmails) {
-                if (email == null || email.isBlank()) continue;
+                if (email == null || email.isBlank())
+                    continue;
                 try {
-                    boolean isRegistered = isRegisteredUserChecker != null && Boolean.TRUE.equals(isRegisteredUserChecker.apply(email.trim()));
+                    boolean isRegistered = isRegisteredUserChecker != null
+                            && Boolean.TRUE.equals(isRegisteredUserChecker.apply(email.trim()));
                     sendMeetingInvitationEmail(
                             email.trim(),
                             hostName,
@@ -59,8 +62,7 @@ public class EmailService {
                             meetingDescription,
                             meetingCode,
                             scheduledAt,
-                            isRegistered
-                    );
+                            isRegistered);
                 } catch (Exception e) {
                     log.error("Failed batch email dispatch to {}: {}", email, e.getMessage());
                 }
@@ -75,8 +77,7 @@ public class EmailService {
             String meetingDescription,
             String meetingCode,
             LocalDateTime scheduledAt,
-            boolean isRegisteredUser
-    ) {
+            boolean isRegisteredUser) {
         String safeHostName = HtmlUtils.htmlEscape(hostName != null ? hostName : "Host");
         String safeMeetingTitle = HtmlUtils.htmlEscape(meetingTitle != null ? meetingTitle : "Meeting");
         String safeDescription = meetingDescription != null ? HtmlUtils.htmlEscape(meetingDescription.trim()) : "";
@@ -87,7 +88,7 @@ public class EmailService {
         String rawMeetingTitle = meetingTitle != null ? meetingTitle : "Meeting";
         String rawMeetingCode = meetingCode != null ? meetingCode : "";
 
-        String formattedDate = scheduledAt != null 
+        String formattedDate = scheduledAt != null
                 ? scheduledAt.format(DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' hh:mm a"))
                 : "Now / Live Meeting";
 
@@ -124,7 +125,8 @@ public class EmailService {
         plainBody.append("Sent by MeetMind AI Platform\n");
 
         StringBuilder htmlBody = new StringBuilder();
-        htmlBody.append("<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>")
+        htmlBody.append(
+                "<!DOCTYPE html><html lang='en'><head><meta charset='UTF-8'><meta name='viewport' content='width=device-width, initial-scale=1.0'>")
                 .append("<title>MeetMind AI Invitation</title>")
                 .append("<style>")
                 .append("@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap'); ")
@@ -146,39 +148,53 @@ public class EmailService {
                 .append("</td></tr>")
                 .append("<tr><td style='padding: 32px 36px 20px 36px;'>")
                 .append("<div style='display: inline-block; background-color: #eef2ff; border: 1px solid #c7d2fe; border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 700; color: #4338ca; letter-spacing: 0.5px; text-transform: uppercase; margin-bottom: 16px;'>Meeting Invitation</div>")
-                .append("<h1 style='margin: 0 0 12px 0; font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1.3;'>Join <span style='color: #4f46e5;'>").append(safeHostName).append("</span>'s Session</h1>")
-                .append("<p style='margin: 0; font-size: 15px; color: #475569; line-height: 1.6;'><strong>").append(safeHostName).append("</strong> has invited you to collaborate on <strong>MeetMind AI</strong> featuring real-time AI transcriptions and summaries.</p>")
+                .append("<h1 style='margin: 0 0 12px 0; font-size: 24px; font-weight: 800; color: #0f172a; line-height: 1.3;'>Join <span style='color: #4f46e5;'>")
+                .append(safeHostName).append("</span>'s Session</h1>")
+                .append("<p style='margin: 0; font-size: 15px; color: #475569; line-height: 1.6;'><strong>")
+                .append(safeHostName)
+                .append("</strong> has invited you to collaborate on <strong>MeetMind AI</strong> featuring real-time AI transcriptions and summaries.</p>")
                 .append("</td></tr>")
                 .append("<tr><td style='padding: 0 36px 28px 36px;'>")
                 .append("<table role='presentation' width='100%' border='0' cellspacing='0' cellpadding='0' style='background-color: #f8fafc; border-radius: 16px; border: 1px solid #e2e8f0; padding: 24px;'>")
                 .append("<tr><td>")
                 .append("<div style='font-size: 11px; font-weight: 700; color: #4f46e5; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 6px;'>Meeting Title</div>")
-                .append("<div style='font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 18px; line-height: 1.4;'>").append(safeMeetingTitle).append("</div>")
+                .append("<div style='font-size: 18px; font-weight: 700; color: #0f172a; margin-bottom: 18px; line-height: 1.4;'>")
+                .append(safeMeetingTitle).append("</div>")
                 .append("<table role='presentation' width='100%' border='0' cellspacing='0' cellpadding='0' style='margin-bottom: 18px;'><tr>")
                 .append("<td width='50%' style='padding-right: 10px; vertical-align: top;'>")
                 .append("<div style='font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;'>Host</div>")
-                .append("<div style='font-size: 14px; font-weight: 600; color: #1e293b;'>").append(safeHostName).append("</div></td>")
+                .append("<div style='font-size: 14px; font-weight: 600; color: #1e293b;'>").append(safeHostName)
+                .append("</div></td>")
                 .append("<td width='50%' style='padding-left: 10px; vertical-align: top;'>")
                 .append("<div style='font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px;'>Scheduled For</div>")
-                .append("<div style='font-size: 14px; font-weight: 600; color: #1e293b;'>").append(formattedDate).append("</div></td>")
+                .append("<div style='font-size: 14px; font-weight: 600; color: #1e293b;'>").append(formattedDate)
+                .append("</div></td>")
                 .append("</tr></table>");
 
         if (!safeDescription.isEmpty()) {
-            htmlBody.append("<div style='margin-bottom: 18px; background-color: #ffffff; padding: 12px 16px; border-radius: 8px; border-left: 3px solid #4f46e5; border: 1px solid #e2e8f0; border-left-width: 3px;'>")
+            htmlBody.append(
+                    "<div style='margin-bottom: 18px; background-color: #ffffff; padding: 12px 16px; border-radius: 8px; border-left: 3px solid #4f46e5; border: 1px solid #e2e8f0; border-left-width: 3px;'>")
                     .append("<div style='font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; margin-bottom: 4px;'>Description</div>")
-                    .append("<div style='font-size: 13.5px; color: #334155; line-height: 1.5;'>").append(safeDescription).append("</div>")
+                    .append("<div style='font-size: 13.5px; color: #334155; line-height: 1.5;'>")
+                    .append(safeDescription).append("</div>")
                     .append("</div>");
         }
 
-        htmlBody.append("<div style='margin-top: 20px; background-color: #f0f9ff; border-radius: 12px; border: 1.5px dashed #93c5fd; padding: 16px; text-align: center;'>")
+        htmlBody.append(
+                "<div style='margin-top: 20px; background-color: #f0f9ff; border-radius: 12px; border: 1.5px dashed #93c5fd; padding: 16px; text-align: center;'>")
                 .append("<div style='font-size: 11px; font-weight: 700; color: #0369a1; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;'>Meeting Access Code</div>")
-                .append("<div style='font-family: \"Courier New\", Courier, monospace; font-size: 24px; font-weight: 800; color: #0284c7; letter-spacing: 3px;'>").append(safeMeetingCode).append("</div>")
+                .append("<div style='font-family: \"Courier New\", Courier, monospace; font-size: 24px; font-weight: 800; color: #0284c7; letter-spacing: 3px;'>")
+                .append(safeMeetingCode).append("</div>")
                 .append("</div>")
                 .append("<div style='margin-top: 24px; text-align: center;'>")
-                .append("<a href='").append(inviteUrl).append("' style='display: inline-block; width: 85%; background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); color: #ffffff !important; text-decoration: none; font-size: 15px; font-weight: 700; padding: 14px 28px; border-radius: 12px; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3); letter-spacing: 0.3px;'>Accept Invitation & Join Meeting</a>")
+                .append("<a href='").append(inviteUrl)
+                .append("' style='display: inline-block; width: 85%; background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); color: #ffffff !important; text-decoration: none; font-size: 15px; font-weight: 700; padding: 14px 28px; border-radius: 12px; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3); letter-spacing: 0.3px;'>Accept Invitation & Join Meeting</a>")
                 .append("</div>")
                 .append("<div style='margin-top: 10px; text-align: center;'>")
-                .append("<a href='intent://invite/").append(safeMeetingCode).append("#Intent;scheme=meetmind;package=com.developer_rahul.meetmind_ai;S.browser_fallback_url=https%3A%2F%2Fmeetmind-backend-s3yy.onrender.com%2Finvite%2F").append(safeMeetingCode).append(";end' style='display: inline-block; font-size: 13.5px; font-weight: 700; color: #4f46e5; text-decoration: none; padding: 7px 14px; background: #eef2ff; border-radius: 8px; border: 1px solid #c7d2fe;'>📱 Open Directly in Android App ↗</a>")
+                .append("<a href='intent://invite/").append(safeMeetingCode)
+                .append("#Intent;scheme=meetmind;package=com.developer_rahul.meetmind_ai;S.browser_fallback_url=https%3A%2F%2Fmeetmind-backend-s3yy.onrender.com%2Finvite%2F")
+                .append(safeMeetingCode)
+                .append(";end' style='display: inline-block; font-size: 13.5px; font-weight: 700; color: #4f46e5; text-decoration: none; padding: 7px 14px; background: #eef2ff; border-radius: 8px; border: 1px solid #c7d2fe;'>📱 Open Directly in Android App ↗</a>")
                 .append("</div>")
                 .append("<div style='margin-top: 12px; text-align: center;'>")
                 .append("<span style='font-size: 12px; color: #64748b;'>Tap either button to open in MeetMind AI App or browser</span>")
@@ -196,13 +212,17 @@ public class EmailService {
                     .append("<tr><td><strong style='color: #0284c7;'>3.</strong> The app opens and accepts your invite automatically!</td></tr>")
                     .append("</table>")
                     .append("<div style='margin-top: 14px;'>")
-                    .append("<a href='").append(appDownloadUrl).append("' style='display: inline-block; background-color: #0284c7; color: #ffffff !important; text-decoration: none; font-size: 13px; font-weight: 700; padding: 10px 20px; border-radius: 8px;'>Download Android App</a>")
+                    .append("<a href='").append(appDownloadUrl)
+                    .append("' style='display: inline-block; background-color: #0284c7; color: #ffffff !important; text-decoration: none; font-size: 13px; font-weight: 700; padding: 10px 20px; border-radius: 8px;'>Download Android App</a>")
                     .append("</div></td></tr></table></td></tr>");
         }
 
-        htmlBody.append("<tr><td style='padding: 24px 36px 32px 36px; border-top: 1px solid #f1f5f9; text-align: center;'>")
+        htmlBody.append(
+                "<tr><td style='padding: 24px 36px 32px 36px; border-top: 1px solid #f1f5f9; text-align: center;'>")
                 .append("<p style='margin: 0 0 8px 0; font-size: 13px; font-weight: 600; color: #64748b;'>Powered by <span style='color: #4f46e5;'>MeetMind AI</span> Platform</p>")
-                .append("<p style='margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;'>This invitation was sent to <span style='color: #64748b;'>").append(safeRecipientEmail).append("</span>.<br/>If you were not expecting this invitation, you can safely ignore this email.</p>")
+                .append("<p style='margin: 0; font-size: 12px; color: #94a3b8; line-height: 1.5;'>This invitation was sent to <span style='color: #64748b;'>")
+                .append(safeRecipientEmail)
+                .append("</span>.<br/>If you were not expecting this invitation, you can safely ignore this email.</p>")
                 .append("</td></tr></table></td></tr></table></body></html>");
 
         log.info("=================== MEETING INVITATION EMAIL ===================");

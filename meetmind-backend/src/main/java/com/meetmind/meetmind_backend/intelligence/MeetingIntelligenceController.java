@@ -228,6 +228,21 @@ public class MeetingIntelligenceController {
         return ResponseEntity.ok(intelligenceService.getSummaryDetail(meetingId, user));
     }
 
+    @PostMapping("/api/meetings/{meetingId}/assistant/ask")
+    public ResponseEntity<Map<String, String>> askAssistant(
+            @PathVariable Long meetingId,
+            @RequestBody Map<String, String> body,
+            Authentication authentication
+    ) {
+        User user = extractUser(authentication);
+        String question = body != null ? body.get("question") : null;
+        if (question == null || question.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Question cannot be blank");
+        }
+        String answer = intelligenceService.askMeetingAssistant(meetingId, question, user);
+        return ResponseEntity.ok(Map.of("question", question, "answer", answer));
+    }
+
     private User extractUser(Authentication authentication) {
         if (authentication == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Unauthenticated user");

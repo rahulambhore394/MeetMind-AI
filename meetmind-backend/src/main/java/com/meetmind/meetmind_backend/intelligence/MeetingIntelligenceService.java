@@ -48,6 +48,7 @@ public class MeetingIntelligenceService {
     private final RepresentativeReportRepository representativeReportRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final com.meetmind.meetmind_backend.ai.GeminiService geminiService;
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private org.springframework.messaging.simp.SimpMessagingTemplate messagingTemplate;
@@ -63,7 +64,8 @@ public class MeetingIntelligenceService {
             AiRepresentativeRepository aiRepresentativeRepository,
             RepresentativeReportRepository representativeReportRepository,
             ApplicationEventPublisher eventPublisher,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            com.meetmind.meetmind_backend.ai.GeminiService geminiService
     ) {
         this.provider = provider;
         this.summaryRepository = summaryRepository;
@@ -76,6 +78,7 @@ public class MeetingIntelligenceService {
         this.representativeReportRepository = representativeReportRepository;
         this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
+        this.geminiService = geminiService;
     }
 
     @Transactional
@@ -821,6 +824,35 @@ public class MeetingIntelligenceService {
         }
 
         return items;
+    }
+
+    /**
+     * Answers an ad-hoc participant question about the meeting using the transcript and Gemini AI.
+     */
+    public String askMeetingAssistant(Long meetingId, String question, User user) {
+        verifyAccess(meetingId, user.getId());
+
+        List<MeetingTranscript> transcripts = transcriptRepository.findByMeetingId(meetingId);
+        String fullText = transcripts.stream()
+                .map(MeetingTranscript::getFullText)
+                .filter(t -> t != null && !t.isBlank())
+                .collect(Collectors.joining("\n"));
+
+        if (fullText.isBlank()) {
+            return "No transcript has been recorded for this meeting yet.";
+        }
+
+        if (geminiService != null && geminiService.isAvailable()) {
+            try {
+                log.info("MeetingIntelligenceService: Answering assistant query for meeting {}: '{}'", meetingId, question);
+                return geminiService.askMeetingAssistant(fullText, question);
+            } catch (Exception e) {
+                log.error("MeetingIntelligenceService: Gemini assistant query failed: {}", e.getMessage());
+                return "Gemini AI assistant encountered an error: " + e.getMessage();
+            }
+        } else {
+            return "Gemini AI is not active. Please supply a valid GEMINI_API_KEY in the backend configuration to enable live meeting AI assistant queries.";
+        }
     }
 
     public record SummaryDetailView(

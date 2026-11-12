@@ -30,6 +30,7 @@ public class RepresentativeReportService {
     private final UserRepository userRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final com.meetmind.meetmind_backend.ai.GeminiService geminiService;
 
     public RepresentativeReportService(
             RepresentativeReportRepository reportRepository,
@@ -37,7 +38,8 @@ public class RepresentativeReportService {
             ActionItemRepository actionItemRepository,
             UserRepository userRepository,
             ApplicationEventPublisher eventPublisher,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            com.meetmind.meetmind_backend.ai.GeminiService geminiService
     ) {
         this.reportRepository = reportRepository;
         this.summaryRepository = summaryRepository;
@@ -45,6 +47,7 @@ public class RepresentativeReportService {
         this.userRepository = userRepository;
         this.eventPublisher = eventPublisher;
         this.objectMapper = objectMapper;
+        this.geminiService = geminiService;
     }
 
     @Transactional
@@ -98,6 +101,30 @@ public class RepresentativeReportService {
         List<String> actionItemStrings = new ArrayList<>();
         for (ActionItem item : actionItems) {
             actionItemStrings.add(item.getDescription() + " (Assigned: " + (item.getAssignedUser() != null ? item.getAssignedUser() : "Unassigned") + ")");
+        }
+
+        // Generate tailored executive debrief for owner if Gemini AI is available
+        if (geminiService != null && geminiService.isAvailable()) {
+            try {
+                String debriefPrompt = String.format("""
+                        You are the autonomous AI representative for %s.
+                        Synthesize a tailored, personal 2-3 sentence executive debrief for %s regarding what happened in their absence during meeting #%d:
+                        - Any key decisions affecting their domain.
+                        - Any action items or questions directed at them.
+                        
+                        Meeting Summary: %s
+                        Key Points: %s
+                        Decisions: %s
+                        Action Items: %s
+                        """, ownerName, ownerName, meetingId, summaryText, discussions, decisions, actionItemStrings);
+
+                String personalDebrief = geminiService.executeGenerateContent(debriefPrompt, "You are a concise executive AI assistant.", false, 0.2);
+                if (personalDebrief != null && !personalDebrief.isBlank()) {
+                    summaryText = "[Personalized Executive Debrief for " + ownerName + "]:\n" + personalDebrief.trim();
+                }
+            } catch (Exception e) {
+                log.warn("RepresentativeReportService: Personalized Gemini debrief failed ({}), retaining baseline summary", e.getMessage());
+            }
         }
 
         RepresentativeReport report = reportRepository.findByRepresentativeId(representative.getId())
