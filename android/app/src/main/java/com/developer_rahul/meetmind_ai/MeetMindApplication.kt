@@ -11,6 +11,7 @@ class MeetMindApplication : Application() {
         super.onCreate()
         instance = this
         container = AppContainer(this)
+        com.developer_rahul.meetmind_ai.core.notifications.MeetMindNotificationManager.initNotificationChannels(this)
     }
 
     companion object {

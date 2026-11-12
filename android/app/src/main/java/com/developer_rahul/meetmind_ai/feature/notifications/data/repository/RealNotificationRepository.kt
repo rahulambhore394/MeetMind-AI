@@ -1,8 +1,10 @@
 package com.developer_rahul.meetmind_ai.feature.notifications.data.repository
 
+import android.content.Context
 import com.developer_rahul.meetmind_ai.core.network.error.ErrorMapper
 import com.developer_rahul.meetmind_ai.core.network.model.NetworkResult
 import com.developer_rahul.meetmind_ai.core.network.websocket.MeetingWebSocketManager
+import com.developer_rahul.meetmind_ai.core.notifications.MeetMindNotificationManager
 import com.developer_rahul.meetmind_ai.feature.notifications.data.remote.NotificationApiService
 import com.developer_rahul.meetmind_ai.feature.notifications.data.remote.dto.NotificationDto
 import com.developer_rahul.meetmind_ai.feature.notifications.domain.model.Notification
@@ -19,18 +21,21 @@ import java.util.ArrayList
 import java.util.HashMap
 
 class RealNotificationRepository(
+    private val context: Context,
     private val apiService: NotificationApiService,
     private val webSocketManager: MeetingWebSocketManager
 ) : NotificationRepository {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
-    private val _notificationEvents = MutableSharedFlow<Notification>(extraBufferCapacity = 10)
+    private val _notificationEvents = MutableSharedFlow<Notification>(extraBufferCapacity = 64)
     override val notificationEvents: SharedFlow<Notification> = _notificationEvents.asSharedFlow()
 
     init {
         webSocketManager.notifications
             .onEach { dto: NotificationDto ->
-                _notificationEvents.emit(dto.toDomain())
+                val domain = dto.toDomain()
+                _notificationEvents.emit(domain)
+                MeetMindNotificationManager.showSystemNotification(context, domain)
             }
             .launchIn(scope)
     }
@@ -42,7 +47,7 @@ class RealNotificationRepository(
             for (dto in response) {
                 domainList.add(dto.toDomain())
             }
-            NetworkResult.Success(domainList as List<Notification>)
+            NetworkResult.Success(domainList)
         } catch (e: Exception) {
             NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
         }
@@ -76,6 +81,48 @@ class RealNotificationRepository(
         }
     }
 
+    override suspend fun deleteNotification(id: Long): NetworkResult<Unit> {
+        return try {
+            apiService.deleteNotification(id)
+            NetworkResult.Success(Unit)
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun clearAllNotifications(): NetworkResult<Unit> {
+        return try {
+            apiService.clearAllNotifications()
+            NetworkResult.Success(Unit)
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun createTestNotification(type: String): NetworkResult<Notification> {
+        return try {
+            val dto = apiService.createTestNotification(type)
+            val domain = dto.toDomain()
+            MeetMindNotificationManager.showSystemNotification(context, domain)
+            NetworkResult.Success(domain)
+        } catch (e: Exception) {
+            // Local fallback simulation if offline or error
+            val fallback = Notification(
+                id = System.currentTimeMillis() % 100000,
+                userId = 1L,
+                type = type,
+                title = if (type == "MEETING_INVITATION") "New Meeting Invitation" else "AI Meeting Summary Ready",
+                body = if (type == "MEETING_INVITATION") "Alex Chen invited you to 'Quarterly Product Review'." else "Your recent strategy call has been summarized with 5 key decisions and 3 action items.",
+                relatedMeetingId = 1L,
+                relatedRepresentativeId = null,
+                isRead = false,
+                createdAt = java.time.LocalDateTime.now().toString()
+            )
+            MeetMindNotificationManager.showSystemNotification(context, fallback)
+            NetworkResult.Success(fallback)
+        }
+    }
+
     override suspend fun registerDevice(fcmToken: String): NetworkResult<Unit> {
         return try {
             val body = HashMap<String, String>()
@@ -96,19 +143,5 @@ class RealNotificationRepository(
         } catch (e: Exception) {
             NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
         }
-    }
-
-    private fun NotificationDto.toDomain(): Notification {
-        return Notification(
-            id = this.id,
-            userId = this.userId,
-            type = this.type,
-            title = this.title,
-            body = this.body,
-            relatedMeetingId = this.relatedMeetingId,
-            relatedRepresentativeId = this.relatedRepresentativeId,
-            isRead = this.isRead,
-            createdAt = this.createdAt
-        )
     }
 }

@@ -162,7 +162,7 @@ class AppContainer(context: Context) {
     }
 
     val notificationRepository: NotificationRepository by lazy {
-        RealNotificationRepository(notificationApiService, meetingWebSocketManager)
+        RealNotificationRepository(context, notificationApiService, meetingWebSocketManager)
     }
 
     val liveSpeechProvider: LiveSpeechProvider by lazy {

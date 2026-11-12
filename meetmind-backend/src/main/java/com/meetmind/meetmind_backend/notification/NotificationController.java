@@ -40,6 +40,38 @@ public class NotificationController {
         return ResponseEntity.noContent().build();
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteNotification(@PathVariable Long id, @AuthenticationPrincipal User user) {
+        notificationService.deleteNotification(id, user.getId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/clear-all")
+    public ResponseEntity<Void> clearAllNotifications(@AuthenticationPrincipal User user) {
+        notificationService.clearAllNotifications(user.getId());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/test")
+    public ResponseEntity<Notification> createTestNotification(
+            @RequestParam(required = false, defaultValue = "AI_SUMMARY_READY") String type,
+            @AuthenticationPrincipal User user
+    ) {
+        String title = "AI_SUMMARY_READY".equals(type) ? "AI Meeting Summary Ready" : "New Meeting Invitation";
+        String body = "AI_SUMMARY_READY".equals(type) 
+                ? "Your recent strategy call has been summarized with 5 key decisions and 3 action items."
+                : "Alex Chen invited you to 'Quarterly Product Review'.";
+        Notification notification = notificationService.createNotification(
+                user.getId(),
+                type,
+                title,
+                body,
+                null,
+                null
+        );
+        return ResponseEntity.ok(notification);
+    }
+
     @GetMapping("/preferences")
     public ResponseEntity<NotificationPreference> getPreferences(@AuthenticationPrincipal User user) {
         return ResponseEntity.ok(notificationService.getPreferences(user.getId()));

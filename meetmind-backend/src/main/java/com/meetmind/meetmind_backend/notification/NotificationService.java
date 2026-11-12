@@ -88,12 +88,16 @@ public class NotificationService {
         String destination = "/topic/users/" + notification.getUserId() + "/notifications";
         Map<String, Object> payload = new HashMap<>();
         payload.put("id", notification.getId());
+        payload.put("userId", notification.getUserId());
         payload.put("type", notification.getType());
         payload.put("title", notification.getTitle());
         payload.put("body", notification.getBody());
         payload.put("meetingId", notification.getRelatedMeetingId());
+        payload.put("relatedMeetingId", notification.getRelatedMeetingId());
         payload.put("representativeId", notification.getRelatedRepresentativeId());
-        payload.put("createdAt", notification.getCreatedAt().toString());
+        payload.put("relatedRepresentativeId", notification.getRelatedRepresentativeId());
+        payload.put("isRead", notification.isRead());
+        payload.put("createdAt", notification.getCreatedAt() != null ? notification.getCreatedAt().toString() : LocalDateTime.now().toString());
 
         messagingTemplate.convertAndSend(destination, payload);
     }
@@ -139,6 +143,20 @@ public class NotificationService {
             }
         }
         notificationRepository.saveAll(unread);
+    }
+
+    @Transactional
+    public void deleteNotification(Long notificationId, Long userId) {
+        notificationRepository.findById(notificationId).ifPresent(n -> {
+            if (n.getUserId().equals(userId)) {
+                notificationRepository.delete(n);
+            }
+        });
+    }
+
+    @Transactional
+    public void clearAllNotifications(Long userId) {
+        notificationRepository.deleteByUserId(userId);
     }
 
     public List<Notification> getNotifications(Long userId) {

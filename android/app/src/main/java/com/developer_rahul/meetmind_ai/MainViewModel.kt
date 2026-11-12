@@ -17,11 +17,21 @@ class MainViewModel(
     val unauthorizedEvent = _unauthorizedEvent.asSharedFlow()
 
     init {
+        // Handle unauthorized session expiration
         viewModelScope.launch {
             tokenProvider.unauthorizedEvent.collect {
                 webSocketManager.disconnect()
                 tokenProvider.clearToken()
                 _unauthorizedEvent.emit(Unit)
+            }
+        }
+
+        // Auto-subscribe to real-time notifications for the authenticated user
+        viewModelScope.launch {
+            val userId = tokenProvider.getUserId()
+            if (userId > 0) {
+                webSocketManager.connect()
+                webSocketManager.subscribeToUserNotifications(userId)
             }
         }
     }

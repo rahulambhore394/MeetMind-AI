@@ -16,6 +16,15 @@ interface NotificationApiService {
     @PATCH("api/notifications/read-all")
     suspend fun markAllAsRead()
 
+    @DELETE("api/notifications/{id}")
+    suspend fun deleteNotification(@Path("id") id: Long)
+
+    @DELETE("api/notifications/clear-all")
+    suspend fun clearAllNotifications()
+
+    @POST("api/notifications/test")
+    suspend fun createTestNotification(@Query("type") type: String = "AI_SUMMARY_READY"): NotificationDto
+
     @POST("api/notifications/devices/register")
     suspend fun registerDevice(@Body body: Map<String, String>)
 

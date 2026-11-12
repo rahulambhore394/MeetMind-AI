@@ -337,7 +337,14 @@ fun AppNavigation(navController: NavHostController) {
         }
 
         composable(Screen.Notifications.route) {
-            NotificationsScreen(onBack = { navController.popBackStack() })
+            NotificationsScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToMeeting = { id -> navController.navigate(Screen.MeetingDetails.createRoute(id)) },
+                onNavigateToLiveMeeting = { id -> navController.navigate(Screen.LiveMeeting.createRoute(id)) },
+                onNavigateToSummary = { id -> navController.navigate(Screen.MeetingIntelligence.createRoute(id)) },
+                onNavigateToTranscript = { id -> navController.navigate(Screen.Transcript.createRoute(id)) },
+                onNavigateToRepresentativeReport = { mId, rId -> navController.navigate(Screen.RepresentativeReport.createRoute(mId, rId)) }
+            )
         }
 
         composable(Screen.Profile.route) {

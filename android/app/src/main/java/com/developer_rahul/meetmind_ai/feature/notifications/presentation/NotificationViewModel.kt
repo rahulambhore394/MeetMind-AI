@@ -11,6 +11,29 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import java.util.ArrayList
 
+enum class NotificationFilterTab {
+    ALL,
+    UNREAD,
+    MEETINGS,
+    AI_INSIGHTS
+}
+
+data class NotificationUiState(
+    val notifications: List<Notification> = emptyList(),
+    val selectedTab: NotificationFilterTab = NotificationFilterTab.ALL,
+    val unreadCount: Long = 0,
+    val isLoading: Boolean = false,
+    val error: String? = null
+) {
+    val filteredNotifications: List<Notification>
+        get() = when (selectedTab) {
+            NotificationFilterTab.ALL -> notifications
+            NotificationFilterTab.UNREAD -> notifications.filter { !it.isRead }
+            NotificationFilterTab.MEETINGS -> notifications.filter { it.isMeetingRelated }
+            NotificationFilterTab.AI_INSIGHTS -> notifications.filter { it.isAiRelated }
+        }
+}
+
 class NotificationViewModel(
     private val notificationRepository: NotificationRepository
 ) : ViewModel() {
@@ -23,13 +46,17 @@ class NotificationViewModel(
         observeNotifications()
     }
 
+    fun setFilterTab(tab: NotificationFilterTab) {
+        _uiState.update { it.copy(selectedTab = tab) }
+    }
+
     fun loadNotifications() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = it.notifications.isEmpty()) }
+            _uiState.update { it.copy(isLoading = it.notifications.isEmpty(), error = null) }
             coroutineScope {
                 val notificationsDeferred = async { notificationRepository.getNotifications() }
                 val unreadDeferred = async { notificationRepository.getUnreadCount() }
-                
+
                 val result = notificationsDeferred.await()
                 val unreadResult = unreadDeferred.await()
 
@@ -55,10 +82,14 @@ class NotificationViewModel(
                 _uiState.update { state ->
                     val newList = ArrayList<Notification>()
                     newList.add(notification)
-                    newList.addAll(state.notifications)
-                    state.copy(notifications = newList)
+                    // avoid duplicates by ID if already present
+                    for (n in state.notifications) {
+                        if (n.id != notification.id) {
+                            newList.add(n)
+                        }
+                    }
+                    state.copy(notifications = newList, unreadCount = state.unreadCount + 1)
                 }
-                updateUnreadCount()
             }
             .launchIn(viewModelScope)
     }
@@ -76,16 +107,10 @@ class NotificationViewModel(
         viewModelScope.launch {
             notificationRepository.markAsRead(id)
             _uiState.update { state ->
-                val currentNotifications = state.notifications
-                val newList = ArrayList<Notification>()
-                for (n in currentNotifications) {
-                    if (n.id == id) {
-                        newList.add(n.copy(isRead = true))
-                    } else {
-                        newList.add(n)
-                    }
+                val updated = state.notifications.map {
+                    if (it.id == id) it.copy(isRead = true) else it
                 }
-                state.copy(notifications = newList)
+                state.copy(notifications = updated)
             }
             updateUnreadCount()
         }
@@ -95,21 +120,45 @@ class NotificationViewModel(
         viewModelScope.launch {
             notificationRepository.markAllAsRead()
             _uiState.update { state ->
-                val currentNotifications = state.notifications
-                val newList = ArrayList<Notification>()
-                for (n in currentNotifications) {
-                    newList.add(n.copy(isRead = true))
-                }
-                state.copy(notifications = newList)
+                val updated = state.notifications.map { it.copy(isRead = true) }
+                state.copy(notifications = updated, unreadCount = 0)
             }
-            updateUnreadCount()
+        }
+    }
+
+    fun deleteNotification(id: Long) {
+        viewModelScope.launch {
+            notificationRepository.deleteNotification(id)
+            _uiState.update { state ->
+                val updated = state.notifications.filter { it.id != id }
+                val wasUnread = state.notifications.find { it.id == id }?.isRead == false
+                val newUnread = if (wasUnread && state.unreadCount > 0) state.unreadCount - 1 else state.unreadCount
+                state.copy(notifications = updated, unreadCount = newUnread)
+            }
+        }
+    }
+
+    fun clearAllNotifications() {
+        viewModelScope.launch {
+            notificationRepository.clearAllNotifications()
+            _uiState.update { state ->
+                state.copy(notifications = emptyList(), unreadCount = 0)
+            }
+        }
+    }
+
+    fun sendTestNotification(type: String = "AI_SUMMARY_READY") {
+        viewModelScope.launch {
+            val result = notificationRepository.createTestNotification(type)
+            if (result is NetworkResult.Success) {
+                val newNotification = result.data
+                _uiState.update { state ->
+                    val newList = ArrayList<Notification>()
+                    newList.add(newNotification)
+                    newList.addAll(state.notifications)
+                    state.copy(notifications = newList, unreadCount = state.unreadCount + 1)
+                }
+            }
         }
     }
 }
-
-data class NotificationUiState(
-    val notifications: List<Notification> = ArrayList<Notification>(),
-    val unreadCount: Long = 0,
-    val isLoading: Boolean = false,
-    val error: String? = null
-)
