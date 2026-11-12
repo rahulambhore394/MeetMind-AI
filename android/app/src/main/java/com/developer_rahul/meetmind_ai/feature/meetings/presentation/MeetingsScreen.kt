@@ -140,6 +140,12 @@ fun MeetingsScreen(
                     },
                     actions = {
                         IconButton(
+                            onClick = onCreateMeeting,
+                            modifier = Modifier.bounceClick()
+                        ) {
+                            Icon(Icons.Default.Add, contentDescription = "New Meeting", tint = ElectricIndigo)
+                        }
+                        IconButton(
                             onClick = { isSearchActive = !isSearchActive },
                             modifier = Modifier.bounceClick()
                         ) {
@@ -332,13 +338,6 @@ fun MeetingsScreen(
                 }
             }
         },
-        floatingActionButton = {
-            GradientFloatingActionButton(
-                text = if (layout.isSmallPhone) "New" else "New Meeting",
-                onClick = onCreateMeeting,
-                icon = Icons.Default.VideoCall
-            )
-        },
         containerColor = BackgroundSurface
     ) { padding ->
         if (uiState.isLoading && uiState.meetings.isEmpty()) {
@@ -399,7 +398,7 @@ fun MeetingsScreen(
                             .padding(horizontal = layout.horizontalPadding),
                         horizontalArrangement = Arrangement.spacedBy(16.dp),
                         verticalArrangement = Arrangement.spacedBy(14.dp),
-                        contentPadding = PaddingValues(top = 10.dp, bottom = 140.dp)
+                        contentPadding = PaddingValues(top = 10.dp, bottom = 96.dp)
                     ) {
                         // LIVE MEETING HERO BANNER (Spans 2 columns)
                         if (uiState.liveMeetings.isNotEmpty() && searchQuery.isBlank() && selectedTab != 2) {
@@ -457,7 +456,7 @@ fun MeetingsScreen(
                             .padding(padding)
                             .padding(horizontal = layout.horizontalPadding),
                         verticalArrangement = Arrangement.spacedBy(layout.itemSpacing),
-                        contentPadding = PaddingValues(top = 10.dp, bottom = 140.dp)
+                        contentPadding = PaddingValues(top = 10.dp, bottom = 96.dp)
                     ) {
                         // LIVE MEETING HERO BANNER
                         if (uiState.liveMeetings.isNotEmpty() && searchQuery.isBlank() && selectedTab != 2) {
