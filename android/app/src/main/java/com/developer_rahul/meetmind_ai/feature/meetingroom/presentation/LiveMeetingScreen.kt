@@ -240,6 +240,7 @@ fun LiveMeetingScreen(
     var showMuteAllConfirmDialog by remember { mutableStateOf(false) }
     var participantToRemove by remember { mutableStateOf<Participant?>(null) }
     var isSoloInviteDismissed by remember { mutableStateOf(false) }
+    var pinnedId by remember { mutableStateOf<String?>(null) }
     val sheetState = rememberModalBottomSheetState()
 
     // Host control reaction listeners
@@ -762,6 +763,14 @@ fun LiveMeetingScreen(
             listOf(localUiParticipant) + remoteParticipants.map { toUiParticipant(it) }
         }
 
+        LaunchedEffect(allUiParticipants, hasActiveScreenShare) {
+            if (pinnedId == "SCREEN" && !hasActiveScreenShare) {
+                pinnedId = null
+            } else if (pinnedId != null && pinnedId != "SCREEN" && allUiParticipants.none { it.id == pinnedId }) {
+                pinnedId = null
+            }
+        }
+
         if (showMuteAllConfirmDialog) {
             MuteAllConfirmDialog(
                 onDismiss = { showMuteAllConfirmDialog = false },
@@ -798,6 +807,13 @@ fun LiveMeetingScreen(
                     participants = allUiParticipants,
                     currentUserId = currentUserId,
                     isHost = isHost,
+                    pinnedParticipantId = pinnedId,
+                    onTogglePinParticipant = { targetId ->
+                        pinnedId = if (pinnedId == targetId) null else targetId
+                        val pName = allUiParticipants.find { it.id == targetId }?.name ?: "Participant"
+                        val msg = if (pinnedId == targetId) "Pinned $pName" else "Unpinned $pName"
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                    },
                     onMuteAll = { showMuteAllConfirmDialog = true },
                     onMuteParticipant = { targetId ->
                         callViewModel.muteParticipant(targetId)
@@ -872,7 +888,119 @@ fun LiveMeetingScreen(
                     .padding(top = stageTopPadding, bottom = stageBottomPadding)
                     .padding(horizontal = 6.dp, vertical = 4.dp)
             ) {
-                if (hasActiveScreenShare) {
+                val pinnedParticipant = if (pinnedId != null && pinnedId != "SCREEN") {
+                    allUiParticipants.find { it.id == pinnedId }
+                } else null
+
+                if (pinnedParticipant != null) {
+                    // PARTICIPANT PINNED SPOTLIGHT HERO VIEW
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1.5f)
+                        ) {
+                            ParticipantVideoTile(
+                                participant = pinnedParticipant,
+                                modifier = Modifier.fillMaxSize(),
+                                mirror = (pinnedParticipant.id == localUiParticipant.id),
+                                isPinned = true,
+                                onTogglePin = { pinnedId = null }
+                            )
+
+                            Surface(
+                                onClick = { pinnedId = null },
+                                modifier = Modifier
+                                    .align(Alignment.TopStart)
+                                    .padding(10.dp)
+                                    .bounceClick(),
+                                color = Color.Black.copy(alpha = 0.75f),
+                                shape = RoundedCornerShape(20.dp),
+                                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B).copy(alpha = 0.6f))
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Default.PushPin, contentDescription = "Pinned", tint = Color(0xFFF59E0B), modifier = Modifier.size(13.dp))
+                                    Spacer(Modifier.width(5.dp))
+                                    Text("Pinned • Tap to Unpin", color = Color(0xFFF59E0B), style = Typography.labelSmall, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        // Strip of remaining participants & screen share thumbnail
+                        LazyRow(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (hasActiveScreenShare) {
+                                item(key = "screen_share_thumb") {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxHeight()
+                                            .width(135.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(Color.Black)
+                                            .border(1.5.dp, NeonCyan, RoundedCornerShape(16.dp))
+                                            .clickable { pinnedId = "SCREEN" }
+                                    ) {
+                                        VideoRenderer(
+                                            modifier = Modifier.fillMaxSize(),
+                                            videoTrack = activeP2pScreenTrack,
+                                            sfuVideoTrack = activeSfuScreenTrack,
+                                            isOverlay = true
+                                        )
+                                        Surface(
+                                            modifier = Modifier
+                                                .align(Alignment.TopStart)
+                                                .padding(6.dp),
+                                            color = Color.Black.copy(alpha = 0.7f),
+                                            shape = RoundedCornerShape(6.dp)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(Icons.Default.PresentToAll, null, tint = NeonCyan, modifier = Modifier.size(11.dp))
+                                                Spacer(Modifier.width(3.dp))
+                                                Text("Screen", style = Typography.labelSmall, color = Color.White)
+                                            }
+                                        }
+                                        IconButton(
+                                            onClick = { pinnedId = "SCREEN" },
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .padding(4.dp)
+                                                .size(26.dp)
+                                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                        ) {
+                                            Icon(Icons.Default.PushPin, "Pin Screen", tint = Color.White, modifier = Modifier.size(13.dp))
+                                        }
+                                    }
+                                }
+                            }
+
+                            val otherParticipants = allUiParticipants.filter { it.id != pinnedParticipant.id }
+                            items(otherParticipants, key = { it.id }) { p ->
+                                ParticipantVideoTile(
+                                    participant = p,
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .width(130.dp),
+                                    mirror = (p.id == localUiParticipant.id),
+                                    isPinned = false,
+                                    onTogglePin = { pinnedId = p.id }
+                                )
+                            }
+                        }
+                    }
+                } else if (hasActiveScreenShare || pinnedId == "SCREEN") {
                     // SCREEN SHARE HERO VIEW + PARTICIPANT ROW
                     Column(modifier = Modifier.fillMaxSize()) {
                         Box(
@@ -881,7 +1009,11 @@ fun LiveMeetingScreen(
                                 .weight(1.5f)
                                 .clip(RoundedCornerShape(20.dp))
                                 .background(Color.Black)
-                                .border(1.5.dp, NeonCyan, RoundedCornerShape(20.dp))
+                                .border(
+                                    if (pinnedId == "SCREEN") 2.dp else 1.5.dp,
+                                    if (pinnedId == "SCREEN") Color(0xFFF59E0B) else NeonCyan,
+                                    RoundedCornerShape(20.dp)
+                                )
                         ) {
                             VideoRenderer(
                                 modifier = Modifier.fillMaxSize(),
@@ -910,6 +1042,39 @@ fun LiveMeetingScreen(
                                     )
                                 }
                             }
+
+                            // Pin Screen Button
+                            Surface(
+                                onClick = {
+                                    pinnedId = if (pinnedId == "SCREEN") null else "SCREEN"
+                                },
+                                modifier = Modifier
+                                    .align(Alignment.TopEnd)
+                                    .padding(8.dp)
+                                    .bounceClick(),
+                                color = if (pinnedId == "SCREEN") Color(0xFFF59E0B).copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.65f),
+                                shape = RoundedCornerShape(16.dp),
+                                border = if (pinnedId == "SCREEN") androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B)) else null
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        Icons.Default.PushPin,
+                                        contentDescription = if (pinnedId == "SCREEN") "Unpin Screen" else "Pin Screen",
+                                        tint = if (pinnedId == "SCREEN") Color(0xFFF59E0B) else Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Spacer(Modifier.width(4.dp))
+                                    Text(
+                                        if (pinnedId == "SCREEN") "Pinned" else "Pin Screen",
+                                        color = if (pinnedId == "SCREEN") Color(0xFFF59E0B) else Color.White,
+                                        style = Typography.labelSmall,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
                         }
 
                         Spacer(Modifier.height(8.dp))
@@ -922,13 +1087,15 @@ fun LiveMeetingScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            items(allUiParticipants) { p ->
+                            items(allUiParticipants, key = { it.id }) { p ->
                                 ParticipantVideoTile(
                                     participant = p,
                                     modifier = Modifier
                                         .fillMaxHeight()
                                         .width(130.dp),
-                                    mirror = (p.id == localUiParticipant.id)
+                                    mirror = (p.id == localUiParticipant.id),
+                                    isPinned = false,
+                                    onTogglePin = { pinnedId = p.id }
                                 )
                             }
                         }
@@ -939,7 +1106,9 @@ fun LiveMeetingScreen(
                         ParticipantVideoTile(
                             participant = localUiParticipant,
                             modifier = Modifier.fillMaxSize(),
-                            mirror = true
+                            mirror = true,
+                            isPinned = (pinnedId == localUiParticipant.id),
+                            onTogglePin = { pinnedId = if (pinnedId == localUiParticipant.id) null else localUiParticipant.id }
                         )
 
                         if (!isSoloInviteDismissed) {
@@ -995,7 +1164,11 @@ fun LiveMeetingScreen(
                         ParticipantVideoTile(
                             participant = fullScreenParticipant,
                             modifier = Modifier.fillMaxSize(),
-                            mirror = (fullScreenParticipant.id == localUiParticipant.id)
+                            mirror = (fullScreenParticipant.id == localUiParticipant.id),
+                            isPinned = (pinnedId == fullScreenParticipant.id),
+                            onTogglePin = {
+                                pinnedId = if (pinnedId == fullScreenParticipant.id) null else fullScreenParticipant.id
+                            }
                         )
 
                         FloatingPipTile(
@@ -1023,14 +1196,18 @@ fun LiveMeetingScreen(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(1f),
-                                mirror = false
+                                mirror = false,
+                                isPinned = (pinnedId == remote0.id),
+                                onTogglePin = { pinnedId = if (pinnedId == remote0.id) null else remote0.id }
                             )
                             ParticipantVideoTile(
                                 participant = remote1,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .weight(1f),
-                                mirror = false
+                                mirror = false,
+                                isPinned = (pinnedId == remote1.id),
+                                onTogglePin = { pinnedId = if (pinnedId == remote1.id) null else remote1.id }
                             )
                         }
 
@@ -1073,14 +1250,18 @@ fun LiveMeetingScreen(
                                     modifier = Modifier
                                         .fillMaxHeight()
                                         .weight(1f),
-                                    mirror = (gridList[0].id == localUiParticipant.id)
+                                    mirror = (gridList[0].id == localUiParticipant.id),
+                                    isPinned = (pinnedId == gridList[0].id),
+                                    onTogglePin = { pinnedId = if (pinnedId == gridList[0].id) null else gridList[0].id }
                                 )
                                 ParticipantVideoTile(
                                     participant = gridList[1],
                                     modifier = Modifier
                                         .fillMaxHeight()
                                         .weight(1f),
-                                    mirror = (gridList[1].id == localUiParticipant.id)
+                                    mirror = (gridList[1].id == localUiParticipant.id),
+                                    isPinned = (pinnedId == gridList[1].id),
+                                    onTogglePin = { pinnedId = if (pinnedId == gridList[1].id) null else gridList[1].id }
                                 )
                             }
                             Row(
@@ -1094,14 +1275,18 @@ fun LiveMeetingScreen(
                                     modifier = Modifier
                                         .fillMaxHeight()
                                         .weight(1f),
-                                    mirror = (gridList[2].id == localUiParticipant.id)
+                                    mirror = (gridList[2].id == localUiParticipant.id),
+                                    isPinned = (pinnedId == gridList[2].id),
+                                    onTogglePin = { pinnedId = if (pinnedId == gridList[2].id) null else gridList[2].id }
                                 )
                                 ParticipantVideoTile(
                                     participant = gridList[3],
                                     modifier = Modifier
                                         .fillMaxHeight()
                                         .weight(1f),
-                                    mirror = (gridList[3].id == localUiParticipant.id)
+                                    mirror = (gridList[3].id == localUiParticipant.id),
+                                    isPinned = (pinnedId == gridList[3].id),
+                                    onTogglePin = { pinnedId = if (pinnedId == gridList[3].id) null else gridList[3].id }
                                 )
                             }
                         }
@@ -1126,13 +1311,15 @@ fun LiveMeetingScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(allUiParticipants) { p ->
+                        items(allUiParticipants, key = { it.id }) { p ->
                             ParticipantVideoTile(
                                 participant = p,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(180.dp),
-                                mirror = (p.id == localUiParticipant.id)
+                                mirror = (p.id == localUiParticipant.id),
+                                isPinned = (pinnedId == p.id),
+                                onTogglePin = { pinnedId = if (pinnedId == p.id) null else p.id }
                             )
                         }
                     }
@@ -1615,14 +1802,18 @@ fun ParticipantVideoTile(
     participant: Participant,
     modifier: Modifier = Modifier,
     isOverlay: Boolean = false,
-    mirror: Boolean = false
+    mirror: Boolean = false,
+    isPinned: Boolean = false,
+    onTogglePin: (() -> Unit)? = null
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(16.dp))
             .background(CardSurface)
             .then(
-                if (participant.isActiveSpeaker && participant.isOnline) {
+                if (isPinned) {
+                    Modifier.border(2.5.dp, Color(0xFFF59E0B), RoundedCornerShape(16.dp))
+                } else if (participant.isActiveSpeaker && participant.isOnline) {
                     val speakerBorderColor = if (participant.isAiRep) NeonCyan else EmeraldGreen
                     Modifier.border(2.5.dp, speakerBorderColor, RoundedCornerShape(16.dp))
                 } else if (participant.isAiRep) {
@@ -1650,6 +1841,32 @@ fun ParticipantVideoTile(
                     sizeDp = 68,
                     avatarUrl = participant.avatarUrl
                 )
+            }
+        }
+
+        // Pin Button in Top-Start
+        if (onTogglePin != null) {
+            Surface(
+                onClick = onTogglePin,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(8.dp)
+                    .bounceClick(),
+                color = if (isPinned) Color(0xFFF59E0B).copy(alpha = 0.35f) else Color.Black.copy(alpha = 0.55f),
+                shape = CircleShape,
+                border = if (isPinned) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFF59E0B)) else null
+            ) {
+                Box(
+                    modifier = Modifier.size(28.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.PushPin,
+                        contentDescription = if (isPinned) "Unpin" else "Pin",
+                        tint = if (isPinned) Color(0xFFF59E0B) else Color.White.copy(alpha = 0.85f),
+                        modifier = Modifier.size(15.dp)
+                    )
+                }
             }
         }
 
@@ -3497,6 +3714,8 @@ fun InMeetingParticipantsSheetContent(
     participants: List<Participant>,
     currentUserId: Long,
     isHost: Boolean,
+    pinnedParticipantId: String? = null,
+    onTogglePinParticipant: (String) -> Unit = {},
     onMuteAll: () -> Unit,
     onMuteParticipant: (Long) -> Unit,
     onStopParticipantVideo: (Long) -> Unit,
@@ -3611,8 +3830,23 @@ fun InMeetingParticipantsSheetContent(
                             }
                         }
 
-                        // Media Status Icons
+                        // Media Status Icons + Pin
                         Row(verticalAlignment = Alignment.CenterVertically) {
+                            val isItemPinned = (pinnedParticipantId == participant.id)
+                            IconButton(
+                                onClick = { onTogglePinParticipant(participant.id) },
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .bounceClick()
+                            ) {
+                                Icon(
+                                    Icons.Default.PushPin,
+                                    contentDescription = if (isItemPinned) "Unpin ${participant.name}" else "Pin ${participant.name}",
+                                    tint = if (isItemPinned) Color(0xFFF59E0B) else TextSecondary.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(17.dp)
+                                )
+                            }
+                            Spacer(Modifier.width(6.dp))
                             Icon(
                                 if (participant.isMicOn) Icons.Default.Mic else Icons.Default.MicOff,
                                 contentDescription = if (participant.isMicOn) "Mic on" else "Mic muted",
@@ -3642,6 +3876,14 @@ fun InMeetingParticipantsSheetContent(
                                         onDismissRequest = { menuExpanded = false },
                                         modifier = Modifier.background(Color(0xFF1F242C))
                                     ) {
+                                        DropdownMenuItem(
+                                            text = { Text(if (isItemPinned) "Unpin from main screen" else "Pin to main screen", color = TextPrimary) },
+                                            leadingIcon = { Icon(Icons.Default.PushPin, null, tint = if (isItemPinned) Color(0xFFF59E0B) else TextPrimary) },
+                                            onClick = {
+                                                menuExpanded = false
+                                                onTogglePinParticipant(participant.id)
+                                            }
+                                        )
                                         DropdownMenuItem(
                                             text = { Text("Mute microphone", color = TextPrimary) },
                                             leadingIcon = { Icon(Icons.Default.MicOff, null, tint = TextPrimary) },
