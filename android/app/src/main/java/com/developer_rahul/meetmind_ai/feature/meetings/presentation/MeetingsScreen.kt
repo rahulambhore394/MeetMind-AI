@@ -1,5 +1,6 @@
 package com.developer_rahul.meetmind_ai.feature.meetings.presentation
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -41,6 +42,12 @@ import com.developer_rahul.meetmind_ai.core.ui.components.*
 import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Meeting
 import com.developer_rahul.meetmind_ai.feature.meetings.domain.model.MeetingStatus
 
+enum class MeetingScopeFilter {
+    ALL,
+    HOSTED_BY_ME,
+    INVITED
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MeetingsScreen(
@@ -49,7 +56,8 @@ fun MeetingsScreen(
     viewModel: MeetingViewModel = viewModel(factory = ViewModelFactory)
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedTab by remember { mutableIntStateOf(0) } // 0: Upcoming, 1: Live, 2: History
+    var scopeFilter by remember { mutableStateOf(MeetingScopeFilter.ALL) }
     var searchQuery by remember { mutableStateOf("") }
     var isSearchActive by remember { mutableStateOf(false) }
     var showFilterSheet by remember { mutableStateOf(false) }
@@ -57,6 +65,9 @@ fun MeetingsScreen(
     val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val layout = LocalResponsiveLayout.current
+
+    val currentUserId = viewModel.currentUserId
+    val currentUserEmail = viewModel.currentUserEmail
 
     val tabs = remember(uiState.upcomingMeetings.size, uiState.liveMeetings.size, uiState.pastMeetings.size, layout.isSmallPhone) {
         if (layout.isSmallPhone) {
@@ -216,11 +227,11 @@ fun MeetingsScreen(
                     }
                 }
 
-                // Adaptive Pill Tabs Row
+                // Adaptive Status Tabs Row
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = layout.horizontalPadding, vertical = 6.dp),
+                        .padding(horizontal = layout.horizontalPadding, vertical = 4.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Row(
@@ -270,6 +281,55 @@ fun MeetingsScreen(
                         }
                     }
                 }
+
+                // Scope Filter Chips: [All] [Hosted by Me] [Invited to Me]
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = layout.horizontalPadding, vertical = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .widthIn(max = 560.dp)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            MeetingScopeFilter.ALL to "All Calls",
+                            MeetingScopeFilter.HOSTED_BY_ME to "Hosted by Me",
+                            MeetingScopeFilter.INVITED to "Invited to Me"
+                        ).forEach { (scope, label) ->
+                            val isSelected = scopeFilter == scope
+                            Surface(
+                                onClick = { scopeFilter = scope },
+                                shape = RoundedCornerShape(10.dp),
+                                color = if (isSelected) NeonCyan.copy(alpha = 0.15f) else Color.Transparent,
+                                border = androidx.compose.foundation.BorderStroke(
+                                    1.dp,
+                                    if (isSelected) NeonCyan else BorderColor.copy(alpha = 0.6f)
+                                ),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .bounceClick()
+                            ) {
+                                Box(
+                                    modifier = Modifier.padding(vertical = 5.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = label,
+                                        style = Typography.labelSmall.copy(fontSize = if (layout.isSmallPhone) 10.sp else 11.sp),
+                                        color = if (isSelected) NeonCyan else TextSecondary,
+                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         floatingActionButton = {
@@ -286,17 +346,38 @@ fun MeetingsScreen(
                 CircularProgressIndicator(color = ElectricIndigo)
             }
         } else {
+            // 1. Tab Filtering
             val baseMeetings = when (selectedTab) {
                 0 -> uiState.upcomingMeetings
                 1 -> uiState.liveMeetings
                 else -> uiState.pastMeetings
             }
 
-            val filteredMeetings = remember(baseMeetings, searchQuery) {
+            // 2. Scope Filtering (Hosted by Me vs Invited)
+            val scopeMeetings = remember(baseMeetings, scopeFilter, currentUserId, currentUserEmail) {
+                when (scopeFilter) {
+                    MeetingScopeFilter.HOSTED_BY_ME -> {
+                        baseMeetings.filter {
+                            (currentUserId > 0 && it.hostId == currentUserId) ||
+                            (!currentUserEmail.isNullOrBlank() && it.hostEmail.equals(currentUserEmail, ignoreCase = true))
+                        }
+                    }
+                    MeetingScopeFilter.INVITED -> {
+                        baseMeetings.filter {
+                            (currentUserId > 0 && it.hostId != currentUserId) &&
+                            (currentUserEmail.isNullOrBlank() || !it.hostEmail.equals(currentUserEmail, ignoreCase = true))
+                        }
+                    }
+                    MeetingScopeFilter.ALL -> baseMeetings
+                }
+            }
+
+            // 3. Search Query Filtering
+            val filteredMeetings = remember(scopeMeetings, searchQuery) {
                 if (searchQuery.isBlank()) {
-                    baseMeetings
+                    scopeMeetings
                 } else {
-                    baseMeetings.filter { meeting ->
+                    scopeMeetings.filter { meeting ->
                         meeting.title.contains(searchQuery, ignoreCase = true) ||
                         meeting.hostName.contains(searchQuery, ignoreCase = true) ||
                         (meeting.meetingCode?.contains(searchQuery, ignoreCase = true) == true) ||
@@ -309,7 +390,7 @@ fun MeetingsScreen(
                 val useGridLayout = layout.isTabletOrLarger || layout.isLandscape
 
                 if (useGridLayout) {
-                    // Wide / Tablet / Landscape 2-Column Grid Layout
+                    // Wide Display / Tablet 2-Column Grid
                     LazyVerticalGrid(
                         columns = GridCells.Fixed(2),
                         modifier = Modifier
@@ -320,7 +401,7 @@ fun MeetingsScreen(
                         verticalArrangement = Arrangement.spacedBy(14.dp),
                         contentPadding = PaddingValues(top = 10.dp, bottom = 140.dp)
                     ) {
-                        // LIVE MEETING HERO BANNER (Spans all columns)
+                        // LIVE MEETING HERO BANNER (Spans 2 columns)
                         if (uiState.liveMeetings.isNotEmpty() && searchQuery.isBlank() && selectedTab != 2) {
                             val activeMeeting = uiState.liveMeetings.first()
                             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -332,34 +413,44 @@ fun MeetingsScreen(
                             }
                         }
 
-                        // QUICK JOIN BY CODE CARD (Spans all columns)
+                        // QUICK METRICS & JOIN BY CODE CARD (Spans 2 columns)
                         item(span = { GridItemSpan(maxLineSpan) }) {
                             QuickJoinByCodeCard(
-                                onJoinCode = { code -> viewModel.joinByCode(code) }
+                                onJoinCode = { code -> viewModel.joinByCode(code) },
+                                onCreateInstant = onCreateMeeting
                             )
                         }
 
-                        // MEETING LIST OR EMPTY STATE
+                        // MEETING ITEMS OR EMPTY STATE
                         if (filteredMeetings.isEmpty()) {
                             item(span = { GridItemSpan(maxLineSpan) }) {
                                 EmptyMeetingsState(
                                     searchQuery = searchQuery,
                                     selectedTab = selectedTab,
+                                    scopeFilter = scopeFilter,
                                     onAction = onCreateMeeting
                                 )
                             }
                         } else {
                             items(filteredMeetings, key = { it.id }) { meeting ->
+                                val isHost = (currentUserId > 0 && meeting.hostId == currentUserId) ||
+                                             (!currentUserEmail.isNullOrBlank() && meeting.hostEmail.equals(currentUserEmail, ignoreCase = true))
+
                                 EnhancedMeetingItemCard(
                                     meeting = meeting,
+                                    isHost = isHost,
                                     onClick = { onMeetingClick(meeting.id.toString()) },
-                                    onJoinDirect = { onMeetingClick(meeting.id.toString()) }
+                                    onJoinDirect = { onMeetingClick(meeting.id.toString()) },
+                                    onStartMeeting = {
+                                        viewModel.startMeeting(meeting.id)
+                                        onMeetingClick(meeting.id.toString())
+                                    }
                                 )
                             }
                         }
                     }
                 } else {
-                    // Smartphone Single-Column List Layout
+                    // Smartphone Single-Column Feed
                     LazyColumn(
                         modifier = Modifier
                             .fillMaxSize()
@@ -383,7 +474,8 @@ fun MeetingsScreen(
                         // QUICK JOIN BY CODE CARD
                         item {
                             QuickJoinByCodeCard(
-                                onJoinCode = { code -> viewModel.joinByCode(code) }
+                                onJoinCode = { code -> viewModel.joinByCode(code) },
+                                onCreateInstant = onCreateMeeting
                             )
                         }
 
@@ -393,15 +485,24 @@ fun MeetingsScreen(
                                 EmptyMeetingsState(
                                     searchQuery = searchQuery,
                                     selectedTab = selectedTab,
+                                    scopeFilter = scopeFilter,
                                     onAction = onCreateMeeting
                                 )
                             }
                         } else {
                             items(filteredMeetings, key = { it.id }) { meeting ->
+                                val isHost = (currentUserId > 0 && meeting.hostId == currentUserId) ||
+                                             (!currentUserEmail.isNullOrBlank() && meeting.hostEmail.equals(currentUserEmail, ignoreCase = true))
+
                                 EnhancedMeetingItemCard(
                                     meeting = meeting,
+                                    isHost = isHost,
                                     onClick = { onMeetingClick(meeting.id.toString()) },
-                                    onJoinDirect = { onMeetingClick(meeting.id.toString()) }
+                                    onJoinDirect = { onMeetingClick(meeting.id.toString()) },
+                                    onStartMeeting = {
+                                        viewModel.startMeeting(meeting.id)
+                                        onMeetingClick(meeting.id.toString())
+                                    }
                                 )
                             }
                         }
@@ -422,7 +523,6 @@ private fun LiveMeetingHeroBanner(
     isTablet: Boolean
 ) {
     val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current
     val layout = LocalResponsiveLayout.current
 
     Surface(
@@ -493,18 +593,34 @@ private fun LiveMeetingHeroBanner(
 
                     Spacer(modifier = Modifier.width(16.dp))
 
-                    Button(
-                        onClick = onRejoin,
-                        modifier = Modifier
-                            .widthIn(min = 180.dp)
-                            .height(48.dp)
-                            .bounceClick(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen)
-                    ) {
-                        Icon(Icons.Default.VideoCall, null, tint = Color.White)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("REJOIN NOW 🟢", fontWeight = FontWeight.Bold, color = Color.White)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Native Share Action
+                        IconButton(
+                            onClick = { shareMeetingInvite(context, meeting) },
+                            modifier = Modifier
+                                .size(44.dp)
+                                .background(CardSurface, CircleShape)
+                                .border(1.dp, BorderColor, CircleShape)
+                                .bounceClick()
+                        ) {
+                            Icon(Icons.Default.Share, "Share", tint = NeonCyan, modifier = Modifier.size(18.dp))
+                        }
+
+                        Spacer(Modifier.width(10.dp))
+
+                        Button(
+                            onClick = onRejoin,
+                            modifier = Modifier
+                                .widthIn(min = 180.dp)
+                                .height(48.dp)
+                                .bounceClick(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = EmeraldGreen)
+                        ) {
+                            Icon(Icons.Default.VideoCall, null, tint = Color.White)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("REJOIN NOW 🟢", fontWeight = FontWeight.Bold, color = Color.White)
+                        }
                     }
                 }
             } else {
@@ -531,8 +647,17 @@ private fun LiveMeetingHeroBanner(
                             )
                         }
 
-                        if (!meeting.meetingCode.isNullOrEmpty()) {
-                            MeetingCodePill(code = meeting.meetingCode)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (!meeting.meetingCode.isNullOrEmpty()) {
+                                MeetingCodePill(code = meeting.meetingCode)
+                            }
+                            Spacer(Modifier.width(6.dp))
+                            IconButton(
+                                onClick = { shareMeetingInvite(context, meeting) },
+                                modifier = Modifier.size(28.dp).bounceClick()
+                            ) {
+                                Icon(Icons.Default.Share, "Share", tint = TextSecondary, modifier = Modifier.size(16.dp))
+                            }
                         }
                     }
 
@@ -574,10 +699,13 @@ private fun LiveMeetingHeroBanner(
 }
 
 /**
- * Responsive Join with a Code Card with clipboard auto-paste detection.
+ * Responsive Quick Join by Code Card with clipboard auto-paste detection and instant shortcut.
  */
 @Composable
-private fun QuickJoinByCodeCard(onJoinCode: (String) -> Unit) {
+private fun QuickJoinByCodeCard(
+    onJoinCode: (String) -> Unit,
+    onCreateInstant: () -> Unit
+) {
     var inputCode by remember { mutableStateOf("") }
     val clipboardManager = LocalClipboardManager.current
     val layout = LocalResponsiveLayout.current
@@ -658,26 +786,34 @@ private fun QuickJoinByCodeCard(onJoinCode: (String) -> Unit) {
 fun MeetingItemCard(meeting: Meeting, onClick: () -> Unit) {
     EnhancedMeetingItemCard(
         meeting = meeting,
+        isHost = false,
         onClick = onClick,
-        onJoinDirect = onClick
+        onJoinDirect = onClick,
+        onStartMeeting = onClick
     )
 }
 
 /**
- * Enhanced Meeting Card with timing breakdown, status indicator, and direct action triggers.
+ * Enhanced Meeting Card with timing breakdown, role chip, native share trigger, and contextual actions.
  */
 @Composable
 fun EnhancedMeetingItemCard(
     meeting: Meeting,
+    isHost: Boolean = false,
     onClick: () -> Unit,
-    onJoinDirect: () -> Unit
+    onJoinDirect: () -> Unit,
+    onStartMeeting: () -> Unit = onJoinDirect
 ) {
+    val context = LocalContext.current
     val layout = LocalResponsiveLayout.current
     val parsedTime = remember(meeting.scheduledAt) {
         MeetingDateTimeUtils.parseMeetingTime(meeting.scheduledAt)
     }
 
     val isLive = meeting.status == MeetingStatus.LIVE
+    val isScheduled = meeting.status == MeetingStatus.SCHEDULED
+    val isEnded = meeting.status == MeetingStatus.ENDED || meeting.status == MeetingStatus.CANCELLED
+
     val statusColor = when (meeting.status) {
         MeetingStatus.LIVE -> EmeraldGreen
         MeetingStatus.SCHEDULED -> ElectricIndigo
@@ -704,7 +840,7 @@ fun EnhancedMeetingItemCard(
             Box(
                 modifier = Modifier
                     .width(4.dp)
-                    .height(if (layout.isSmallPhone) 64.dp else 76.dp)
+                    .height(if (layout.isSmallPhone) 74.dp else 84.dp)
                     .clip(CircleShape)
                     .background(statusColor)
             )
@@ -712,35 +848,61 @@ fun EnhancedMeetingItemCard(
             Spacer(modifier = Modifier.width(if (layout.isSmallPhone) 10.dp else 14.dp))
 
             Column(modifier = Modifier.weight(1f)) {
-                // Header Row: Title & Status Chip
+                // Header Row: Title & Role Chip + Status Chip
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        meeting.title,
-                        style = if (layout.isSmallPhone) Typography.titleSmall else Typography.titleMedium,
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.weight(1f, fill = false)
-                    )
+                    ) {
+                        Text(
+                            meeting.title,
+                            style = if (layout.isSmallPhone) Typography.titleSmall else Typography.titleMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
 
                     Spacer(Modifier.width(6.dp))
 
-                    val isRejoin = meeting.hasJoinedBefore || meeting.userParticipantStatus == "LEFT"
-                    val statusLabel = when {
-                        isLive && isRejoin -> "RE-JOIN"
-                        isLive -> "LIVE 🟢"
-                        else -> meeting.status.name
-                    }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        // Role Chip (Host vs Attendee)
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isHost) ElectricIndigo.copy(alpha = 0.18f) else CardSurface,
+                            border = androidx.compose.foundation.BorderStroke(
+                                1.dp,
+                                if (isHost) ElectricIndigo.copy(alpha = 0.6f) else BorderColor
+                            )
+                        ) {
+                            Text(
+                                text = if (isHost) "👑 Host" else "👤 Guest",
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                style = Typography.labelSmall.copy(fontSize = 10.sp),
+                                color = if (isHost) ElectricIndigo else TextSecondary,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
 
-                    StatusChip(
-                        text = statusLabel,
-                        color = statusColor
-                    )
+                        Spacer(Modifier.width(4.dp))
+
+                        val isRejoin = meeting.hasJoinedBefore || meeting.userParticipantStatus == "LEFT"
+                        val statusLabel = when {
+                            isLive && isRejoin -> "RE-JOIN"
+                            isLive -> "LIVE 🟢"
+                            else -> meeting.status.name
+                        }
+
+                        StatusChip(
+                            text = statusLabel,
+                            color = statusColor
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -765,17 +927,22 @@ fun EnhancedMeetingItemCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+
+                    if (meeting.isLocked) {
+                        Spacer(Modifier.width(8.dp))
+                        Icon(Icons.Default.Lock, "Locked", tint = RoseRed, modifier = Modifier.size(12.dp))
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(6.dp))
 
-                // Host & Meeting Code Row
+                // Host, Meeting Code, & Share Row
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    // Host initials badge
+                    // Host Initials Badge
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier.weight(1f, fill = false)
@@ -810,49 +977,105 @@ fun EnhancedMeetingItemCard(
                         )
                     }
 
-                    // Meeting Code Copy Chip
-                    if (!meeting.meetingCode.isNullOrEmpty()) {
-                        MeetingCodePill(code = meeting.meetingCode)
+                    // Meeting Code & Share Icon
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (!meeting.meetingCode.isNullOrEmpty()) {
+                            MeetingCodePill(code = meeting.meetingCode)
+                            Spacer(Modifier.width(6.dp))
+                        }
+
+                        IconButton(
+                            onClick = { shareMeetingInvite(context, meeting) },
+                            modifier = Modifier.size(24.dp).bounceClick()
+                        ) {
+                            Icon(Icons.Default.Share, "Share", tint = TextSecondary, modifier = Modifier.size(14.dp))
+                        }
                     }
                 }
             }
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            // Direct Join Button or Chevron Details Arrow
-            if (isLive) {
-                Surface(
-                    onClick = onJoinDirect,
-                    shape = RoundedCornerShape(12.dp),
-                    color = EmeraldGreen,
-                    modifier = Modifier.bounceClick()
-                ) {
-                    Box(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                        contentAlignment = Alignment.Center
+            // Contextual Action Button or Details Chevron
+            when {
+                isLive -> {
+                    Surface(
+                        onClick = onJoinDirect,
+                        shape = RoundedCornerShape(12.dp),
+                        color = EmeraldGreen,
+                        modifier = Modifier.bounceClick()
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.VideoCall, null, tint = Color.White, modifier = Modifier.size(16.dp))
-                            if (!layout.isSmallPhone) {
-                                Spacer(Modifier.width(4.dp))
-                                Text("Join", style = Typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.VideoCall, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                if (!layout.isSmallPhone) {
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Join", style = Typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
                     }
                 }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .background(Color.White.copy(alpha = 0.05f), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        Icons.Default.ChevronRight,
-                        contentDescription = "Details",
-                        tint = TextSecondary,
-                        modifier = Modifier.size(18.dp)
-                    )
+                isScheduled && isHost -> {
+                    Surface(
+                        onClick = onStartMeeting,
+                        shape = RoundedCornerShape(12.dp),
+                        color = ElectricIndigo,
+                        modifier = Modifier.bounceClick()
+                    ) {
+                        Box(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.PlayArrow, null, tint = Color.White, modifier = Modifier.size(16.dp))
+                                if (!layout.isSmallPhone) {
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Start", style = Typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+                isEnded -> {
+                    Surface(
+                        onClick = onClick,
+                        shape = RoundedCornerShape(12.dp),
+                        color = CardSurface,
+                        border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor),
+                        modifier = Modifier.bounceClick()
+                    ) {
+                        Box(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.AutoAwesome, null, tint = NeonCyan, modifier = Modifier.size(14.dp))
+                                if (!layout.isSmallPhone) {
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Notes", style = Typography.labelSmall, color = TextPrimary)
+                                }
+                            }
+                        }
+                    }
+                }
+                else -> {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .background(Color.White.copy(alpha = 0.05f), CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.ChevronRight,
+                            contentDescription = "Details",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
             }
         }
@@ -893,24 +1116,52 @@ fun MeetingCodePill(code: String) {
 }
 
 /**
- * Responsive Empty State with contextual messages and creation trigger.
+ * Native Android Share Sheet Trigger for meeting invitations.
+ */
+private fun shareMeetingInvite(context: android.content.Context, meeting: Meeting) {
+    val code = meeting.meetingCode ?: "mm-${meeting.id}"
+    val shareBody = """
+        🚀 Join my MeetMind AI Meeting!
+        📌 Title: ${meeting.title}
+        🕒 Scheduled: ${meeting.scheduledAt}
+        🔑 Code: $code
+        🔗 Link: https://meetmind-backend-s3yy.onrender.com/join/$code
+    """.trimIndent()
+
+    val sendIntent = Intent().apply {
+        action = Intent.ACTION_SEND
+        putExtra(Intent.EXTRA_SUBJECT, "MeetMind AI: ${meeting.title}")
+        putExtra(Intent.EXTRA_TEXT, shareBody)
+        type = "text/plain"
+    }
+    val shareIntent = Intent.createChooser(sendIntent, "Share Meeting Invitation")
+    context.startActivity(shareIntent)
+}
+
+/**
+ * Responsive Empty State with contextual messages based on search, tab, and scope filters.
  */
 @Composable
 fun EmptyMeetingsState(
     searchQuery: String,
     selectedTab: Int,
+    scopeFilter: MeetingScopeFilter,
     onAction: () -> Unit
 ) {
     val title = when {
         searchQuery.isNotBlank() -> "No matching meetings"
+        scopeFilter == MeetingScopeFilter.HOSTED_BY_ME -> "No meetings hosted by you"
+        scopeFilter == MeetingScopeFilter.INVITED -> "No invitations found"
         selectedTab == 1 -> "No live meetings right now"
         selectedTab == 0 -> "No upcoming meetings scheduled"
         else -> "No past meetings found"
     }
 
     val description = when {
-        searchQuery.isNotBlank() -> "No results found for \"$searchQuery\". Try checking the spelling or meeting code."
-        selectedTab == 1 -> "When someone starts a meeting or an AI Proxy starts monitoring, it will appear here."
+        searchQuery.isNotBlank() -> "No calls match \"$searchQuery\". Try checking the meeting title or code."
+        scopeFilter == MeetingScopeFilter.HOSTED_BY_ME -> "You haven't scheduled any meetings as host yet. Tap below to create one."
+        scopeFilter == MeetingScopeFilter.INVITED -> "When colleagues invite you to their calls or AI proxy sessions, they will appear here."
+        selectedTab == 1 -> "When someone starts a meeting or an AI Proxy activates, it will appear here."
         selectedTab == 0 -> "Schedule a meeting with AI Proxy assistance or start an instant call anytime."
         else -> "Your past recorded and analyzed calls will be cataloged here."
     }

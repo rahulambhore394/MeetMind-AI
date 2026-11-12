@@ -32,6 +32,9 @@ class MeetingViewModel(
     val currentUserId: Long
         get() = tokenProvider.getUserId()
 
+    val currentUserEmail: String?
+        get() = tokenProvider.getUserEmail()
+
     val currentUserName: String
         get() = tokenProvider.getUserName()?.takeIf { it.isNotBlank() } ?: "there"
 
