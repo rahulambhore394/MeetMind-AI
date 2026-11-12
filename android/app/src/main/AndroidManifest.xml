@@ -88,7 +88,7 @@
                 <data android:scheme="meetmind" />
             </intent-filter>
 
-            <!-- Universal App Links for HTTP / HTTPS -->
+            <!-- Verified Production App Links for Render backend -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -101,6 +101,13 @@
                     android:scheme="https"
                     android:host="meetmind-backend-s3yy.onrender.com"
                     android:pathPrefix="/join" />
+            </intent-filter>
+
+            <!-- Web & Local Fallback Deep Links (without autoVerify to prevent failing App Link validation) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
                 <data
                     android:scheme="https"
                     android:host="meetmind-ai.vercel.app"

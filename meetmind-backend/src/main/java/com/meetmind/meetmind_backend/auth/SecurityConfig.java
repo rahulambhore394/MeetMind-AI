@@ -69,13 +69,14 @@ public class SecurityConfig {
                 .headers(headers -> headers
                     .frameOptions(frame -> frame.deny())
                     .xssProtection(xss -> xss.disable()) // Deprecated in modern browsers, but can be configured if needed
-                    .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self'; script-src 'self'; object-src 'none';"))
+                    .contentSecurityPolicy(csp -> csp.policyDirectives("default-src 'self' 'unsafe-inline' https:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; object-src 'none';"))
                     .referrerPolicy(referrer -> referrer.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
                 )
                 .authorizeHttpRequests(auth -> auth
 
-                        // Public authentication endpoints & Invitation Landing Pages
+                        // Public authentication endpoints, App Links, & Invitation Landing Pages
                         .requestMatchers(
+                                "/.well-known/**",
                                 "/api/auth/**",
                                 "/error",
                                 "/actuator/health",

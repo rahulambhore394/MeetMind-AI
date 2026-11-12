@@ -177,8 +177,11 @@ public class EmailService {
                 .append("<div style='margin-top: 24px; text-align: center;'>")
                 .append("<a href='").append(inviteUrl).append("' style='display: inline-block; width: 85%; background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); color: #ffffff !important; text-decoration: none; font-size: 15px; font-weight: 700; padding: 14px 28px; border-radius: 12px; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3); letter-spacing: 0.3px;'>Accept Invitation & Join Meeting</a>")
                 .append("</div>")
+                .append("<div style='margin-top: 10px; text-align: center;'>")
+                .append("<a href='intent://invite/").append(safeMeetingCode).append("#Intent;scheme=meetmind;package=com.developer_rahul.meetmind_ai;S.browser_fallback_url=https%3A%2F%2Fmeetmind-backend-s3yy.onrender.com%2Finvite%2F").append(safeMeetingCode).append(";end' style='display: inline-block; font-size: 13.5px; font-weight: 700; color: #4f46e5; text-decoration: none; padding: 7px 14px; background: #eef2ff; border-radius: 8px; border: 1px solid #c7d2fe;'>📱 Open Directly in Android App ↗</a>")
+                .append("</div>")
                 .append("<div style='margin-top: 12px; text-align: center;'>")
-                .append("<span style='font-size: 12px; color: #64748b;'>📱 Tap to open in MeetMind AI App or browser</span>")
+                .append("<span style='font-size: 12px; color: #64748b;'>Tap either button to open in MeetMind AI App or browser</span>")
                 .append("</div></td></tr></table></td></tr>");
 
         if (!isRegisteredUser) {

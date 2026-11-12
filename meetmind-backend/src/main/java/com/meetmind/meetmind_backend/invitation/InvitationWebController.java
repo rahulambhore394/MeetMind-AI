@@ -58,6 +58,7 @@ public class InvitationWebController {
 
         String rawCode = meetingOpt.map(Meeting::getMeetingCode).orElse(safeCode);
         String deepLink = "meetmind://invite/" + rawCode;
+        String androidIntentUrl = "intent://invite/" + rawCode + "#Intent;scheme=meetmind;package=com.developer_rahul.meetmind_ai;S.browser_fallback_url=https%3A%2F%2Fmeetmind-backend-s3yy.onrender.com%2Fdownload;end";
         String webJoinUrl = "https://meetmind-ai.vercel.app/join?code=" + rawCode;
         String downloadUrl = "https://github.com/rahulambhore394/MeetMind-AI/releases";
 
@@ -66,6 +67,7 @@ public class InvitationWebController {
                 "<head>" +
                 "  <meta charset='UTF-8'>" +
                 "  <meta name='viewport' content='width=device-width, initial-scale=1.0'>" +
+                "  <meta http-equiv='refresh' content='0;url=" + androidIntentUrl + "'>" +
                 "  <title>" + title + " - MeetMind AI Invitation</title>" +
                 "  <link rel='preconnect' href='https://fonts.googleapis.com'>" +
                 "  <link rel='preconnect' href='https://fonts.gstatic.com' crossorigin>" +
@@ -200,7 +202,7 @@ public class InvitationWebController {
                 "        <span class='code-text'>" + rawCode + "</span>" +
                 "      </div>" +
                 "    </div>" +
-                "    <a href='" + deepLink + "' class='btn-primary'>" +
+                "    <a href='" + androidIntentUrl + "' class='btn-primary'>" +
                 "      <span>📱 Open & Accept in MeetMind App</span>" +
                 "    </a>" +
                 "    <a href='" + downloadUrl + "' class='btn-download'>" +
@@ -211,15 +213,30 @@ public class InvitationWebController {
                 "    </div>" +
                 "  </div>" +
                 "  <script>" +
-                "    // If on a mobile device, automatically attempt to launch the app" +
+                "    // Automatically attempt to launch the app on Android via Intent URI" +
                 "    if (/android/i.test(navigator.userAgent)) {" +
-                "      setTimeout(function() {" +
-                "        window.location = '" + deepLink + "';" +
-                "      }, 400);" +
+                "      window.location.href = '" + androidIntentUrl + "';" +
                 "    }" +
                 "  </script>" +
                 "</body>" +
                 "</html>";
+    }
+
+    @GetMapping(value = "/.well-known/assetlinks.json", produces = MediaType.APPLICATION_JSON_VALUE)
+    @ResponseBody
+    public String getAssetLinks() {
+        return "[\n" +
+                "  {\n" +
+                "    \"relation\": [\"delegate_permission/common.handle_all_urls\"],\n" +
+                "    \"target\": {\n" +
+                "      \"namespace\": \"android_app\",\n" +
+                "      \"package_name\": \"com.developer_rahul.meetmind_ai\",\n" +
+                "      \"sha256_cert_fingerprints\": [\n" +
+                "        \"A4:DC:E8:98:18:B4:45:49:B5:C2:2A:75:43:58:CA:BB:7B:EF:36:5D:56:94:AF:FA:54:ED:8B:3B:26:5F:74:F6\"\n" +
+                "      ]\n" +
+                "    }\n" +
+                "  }\n" +
+                "]";
     }
 
     @GetMapping(value = "/download", produces = MediaType.TEXT_HTML_VALUE)
