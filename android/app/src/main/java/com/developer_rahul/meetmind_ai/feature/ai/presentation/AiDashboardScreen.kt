@@ -141,7 +141,12 @@ fun AiDashboardScreen(
         },
         containerColor = BackgroundSurface
     ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
+        ResponsiveContainer(maxWidth = 960.dp) { layout ->
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
             if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator(color = ElectricIndigo)
@@ -169,6 +174,7 @@ fun AiDashboardScreen(
                 }
             }
         }
+        }
     }
 }
 
@@ -176,11 +182,12 @@ fun AiDashboardScreen(
 fun SummaryTab(summary: SummaryDetailResponseDto) {
     val clipboardManager = LocalClipboardManager.current
     var copied by remember { mutableStateOf(false) }
+    val layout = LocalResponsiveLayout.current
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        contentPadding = PaddingValues(horizontal = layout.horizontalPadding, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(layout.itemSpacing)
     ) {
         // 1. Executive Brief Hero Card
         item {
@@ -385,10 +392,11 @@ fun KeyPointsTab(
         )
     }
 
+    val layout = LocalResponsiveLayout.current
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        contentPadding = PaddingValues(horizontal = layout.horizontalPadding, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(layout.itemSpacing)
     ) {
         // 1. Key Decisions & Agreement Tracking Section
         item {
@@ -548,10 +556,11 @@ fun ActionItemsTab(
             else -> summary.actionItems
         }
 
+        val layout = LocalResponsiveLayout.current
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(20.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(horizontal = layout.horizontalPadding, vertical = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(layout.itemSpacing)
         ) {
             // 1. Task Progress Card
             item {
@@ -772,10 +781,11 @@ fun TopicsTab(
         )
     }
 
+    val layout = LocalResponsiveLayout.current
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+        contentPadding = PaddingValues(horizontal = layout.horizontalPadding, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(layout.itemSpacing)
     ) {
         // Feedback banner when timestamp is tapped
         if (jumpFeedback != null) {
@@ -1330,10 +1340,11 @@ fun ParkingQuestionCard(
 
 @Composable
 fun AnalyticsTab(summary: SummaryDetailResponseDto) {
+    val layout = LocalResponsiveLayout.current
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+        contentPadding = PaddingValues(horizontal = layout.horizontalPadding, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(layout.itemSpacing)
     ) {
         item {
             SectionHeader(title = "Transcript Statistics")

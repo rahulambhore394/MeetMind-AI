@@ -25,6 +25,7 @@ fun MeetMindAlertDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismissRequest,
+        modifier = Modifier.widthIn(max = 480.dp),
         title = { Text(title, style = Typography.titleLarge, color = TextPrimary) },
         text = { Text(text, style = Typography.bodyMedium, color = TextSecondary) },
         confirmButton = {
@@ -210,6 +211,7 @@ fun JoinMeetingDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
+        modifier = Modifier.widthIn(max = 480.dp),
         title = { Text("Join Meeting", style = Typography.titleLarge, color = TextPrimary) },
         text = {
             Column {

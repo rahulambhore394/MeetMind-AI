@@ -163,14 +163,15 @@ fun MeetingsScreen(
                 CircularProgressIndicator(color = ElectricIndigo)
             }
         } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(top = 12.dp, bottom = 160.dp)
-            ) {
+            ResponsiveContainer(maxWidth = 840.dp) { layout ->
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(horizontal = layout.horizontalPadding),
+                    verticalArrangement = Arrangement.spacedBy(layout.itemSpacing),
+                    contentPadding = PaddingValues(top = 12.dp, bottom = 160.dp)
+                ) {
                 // PROMINENT REJOIN LIVE MEETING HERO BANNER
                 if (uiState.liveMeetings.isNotEmpty()) {
                     val activeMeeting = uiState.liveMeetings.first()
@@ -327,6 +328,7 @@ fun MeetingsScreen(
                         MeetingItemCard(meeting = meeting, onClick = { onMeetingClick(meeting.id.toString()) })
                     }
                 }
+            }
             }
         }
     }

@@ -169,11 +169,12 @@ fun CalendarScreen(
         },
         containerColor = BackgroundSurface
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+        ResponsiveContainer(maxWidth = 840.dp) { layout ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
             // Month Header Card & View Toggle
             Surface(
                 modifier = Modifier
@@ -466,6 +467,7 @@ fun CalendarScreen(
                     }
                 }
             }
+        }
         }
     }
 }

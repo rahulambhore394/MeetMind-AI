@@ -67,44 +67,52 @@ fun MainScreen(
         bottomBar = {
             val navBackStackEntry by navController.currentBackStackEntryAsState()
             val currentDestination = navBackStackEntry?.destination
+            val layout = LocalResponsiveLayout.current
 
-            Surface(
+            Box(
                 modifier = Modifier
-                    .navigationBarsPadding()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
                     .fillMaxWidth()
-                    .shadow(24.dp, RoundedCornerShape(36.dp), spotColor = ElectricIndigo.copy(alpha = 0.3f)),
-                shape = RoundedCornerShape(36.dp),
-                color = CardSurface.copy(alpha = 0.92f),
-                border = androidx.compose.foundation.BorderStroke(
-                    1.5.dp,
-                    Brush.linearGradient(listOf(GlassWhite, ElectricIndigo.copy(alpha = 0.4f), BorderColor))
-                )
+                    .navigationBarsPadding(),
+                contentAlignment = Alignment.Center
             ) {
-                Row(
+                Surface(
                     modifier = Modifier
+                        .padding(horizontal = if (layout.isSmallPhone) 10.dp else 16.dp, vertical = 8.dp)
+                        .widthIn(max = 540.dp)
                         .fillMaxWidth()
-                        .height(68.dp)
-                        .padding(horizontal = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceAround,
-                    verticalAlignment = Alignment.CenterVertically
+                        .shadow(24.dp, RoundedCornerShape(36.dp), spotColor = ElectricIndigo.copy(alpha = 0.3f)),
+                    shape = RoundedCornerShape(36.dp),
+                    color = CardSurface.copy(alpha = 0.92f),
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.5.dp,
+                        Brush.linearGradient(listOf(GlassWhite, ElectricIndigo.copy(alpha = 0.4f), BorderColor))
+                    )
                 ) {
-                    items.forEach { item ->
-                        val isSelected = currentDestination?.hierarchy?.any { it.route == item.route } == true
-                        
-                        CustomBottomNavItem(
-                            item = item,
-                            isSelected = isSelected,
-                            onClick = {
-                                navController.navigate(item.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(if (layout.isSmallPhone) 60.dp else 68.dp)
+                            .padding(horizontal = if (layout.isSmallPhone) 4.dp else 8.dp),
+                        horizontalArrangement = Arrangement.SpaceAround,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        items.forEach { item ->
+                            val isSelected = currentDestination?.hierarchy?.any { it.route == item.route } == true
+                            
+                            CustomBottomNavItem(
+                                item = item,
+                                isSelected = isSelected,
+                                onClick = {
+                                    navController.navigate(item.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
-                                    launchSingleTop = true
-                                    restoreState = true
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }
@@ -187,6 +195,9 @@ private fun CustomBottomNavItem(
         Modifier
     }
 
+    val layout = LocalResponsiveLayout.current
+    val isSmall = layout.isSmallPhone
+
     Box(
         modifier = Modifier
             .bounceClick()
@@ -197,7 +208,7 @@ private fun CustomBottomNavItem(
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = if (isSmall) 8.dp else 14.dp, vertical = if (isSmall) 6.dp else 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(
@@ -208,7 +219,7 @@ private fun CustomBottomNavItem(
                 imageVector = item.icon,
                 contentDescription = item.title,
                 tint = animatedIconColor,
-                modifier = Modifier.size(22.dp)
+                modifier = Modifier.size(if (isSmall) 18.dp else 22.dp)
             )
 
             AnimatedVisibility(
@@ -217,13 +228,13 @@ private fun CustomBottomNavItem(
                 exit = fadeOut() + shrinkHorizontally()
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Spacer(modifier = Modifier.width(8.dp))
+                    Spacer(modifier = Modifier.width(if (isSmall) 4.dp else 8.dp))
                     Text(
                         text = item.title,
                         style = Typography.labelMedium,
                         fontWeight = FontWeight.Bold,
                         color = Color.White,
-                        fontSize = 12.sp
+                        fontSize = if (isSmall) 11.sp else 12.sp
                     )
                 }
             }

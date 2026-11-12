@@ -6,6 +6,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -57,6 +58,7 @@ fun MeetMindTheme(
 ) {
     val colorScheme = if (darkTheme) MeetMindDarkColorScheme else MeetMindLightColorScheme
     val view = LocalView.current
+    val responsiveLayout = rememberResponsiveLayoutInfo()
     
     if (!view.isInEditMode) {
         SideEffect {
@@ -68,10 +70,12 @@ fun MeetMindTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        shapes = Shapes,
-        content = content
-    )
+    CompositionLocalProvider(LocalResponsiveLayout provides responsiveLayout) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            shapes = Shapes,
+            content = content
+        )
+    }
 }

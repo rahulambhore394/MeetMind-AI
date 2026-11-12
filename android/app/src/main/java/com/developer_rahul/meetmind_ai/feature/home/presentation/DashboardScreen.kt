@@ -246,14 +246,16 @@ fun DashboardScreen(
         },
         containerColor = BackgroundSurface
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(bottom = 120.dp)
-        ) {
+        val layoutInfo = LocalResponsiveLayout.current
+        ResponsiveContainer(maxWidth = 960.dp) { layout ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = layout.horizontalPadding),
+                verticalArrangement = Arrangement.spacedBy(layout.itemSpacing),
+                contentPadding = PaddingValues(bottom = 120.dp)
+            ) {
             // 1. Personalized Greeting Header with scrollable superpower pills
             item {
                 Spacer(modifier = Modifier.height(2.dp))
@@ -415,6 +417,7 @@ fun DashboardScreen(
                 }
             }
         }
+        }
     }
 }
 
@@ -424,6 +427,7 @@ private fun GreetingHeader(
     userName: String,
     todayFormatted: String
 ) {
+    val layout = LocalResponsiveLayout.current
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = CardSurface,
@@ -433,7 +437,7 @@ private fun GreetingHeader(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(if (layout.isSmallPhone) 12.dp else 16.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -443,7 +447,7 @@ private fun GreetingHeader(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "$greeting, $userName 👋",
-                        style = Typography.headlineMedium,
+                        style = if (layout.isSmallPhone) Typography.titleLarge else Typography.headlineMedium,
                         fontWeight = FontWeight.ExtraBold,
                         color = TextPrimary,
                         maxLines = 1,
@@ -768,7 +772,7 @@ private fun EmptyHeroCard(
 }
 
 /**
- * 2x2 Bento Grid: Spacious, highly readable, and guaranteed compatible with any screen density (360dp to tablets).
+ * Bento Grid: Dynamically adapts across compact phones, standard screens, and wide tablets/foldables.
  */
 @Composable
 private fun ResponsiveQuickControlsGrid(
@@ -777,54 +781,40 @@ private fun ResponsiveQuickControlsGrid(
     onSchedule: () -> Unit,
     onAiProxy: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        // Row 1: Instant Call & Join Call
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            QuickControlCard(
-                title = "Instant Call",
-                subtitle = "Start a new room",
-                icon = Icons.Default.VideoCall,
-                color = ElectricIndigo,
-                modifier = Modifier.weight(1f),
-                onClick = onNewMeeting
-            )
-            QuickControlCard(
-                title = "Join Call",
-                subtitle = "Enter code or ID",
-                icon = Icons.Default.AddBox,
-                color = NeonCyan,
-                modifier = Modifier.weight(1f),
-                onClick = onJoinCall
-            )
-        }
+    val layout = LocalResponsiveLayout.current
+    val cols = layout.bentoGridColumns
 
-        // Row 2: Schedule & AI Proxy
+    if (cols >= 4) {
+        // Panoramic single row on large tablets / landscape
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            QuickControlCard(
-                title = "Schedule",
-                subtitle = "Plan meeting agenda",
-                icon = Icons.Default.CalendarMonth,
-                color = AmberGold,
-                modifier = Modifier.weight(1f),
-                onClick = onSchedule
-            )
-            QuickControlCard(
-                title = "AI Proxy Agent",
-                subtitle = "Voice & talking photo",
-                icon = Icons.Default.SmartToy,
-                color = PurpleViolet,
-                modifier = Modifier.weight(1f),
-                onClick = onAiProxy
-            )
+            QuickControlCard("Instant Call", "Start a new room", Icons.Default.VideoCall, ElectricIndigo, Modifier.weight(1f), onNewMeeting)
+            QuickControlCard("Join Call", "Enter code or ID", Icons.Default.AddBox, NeonCyan, Modifier.weight(1f), onJoinCall)
+            QuickControlCard("Schedule", "Plan meeting agenda", Icons.Default.CalendarMonth, AmberGold, Modifier.weight(1f), onSchedule)
+            QuickControlCard("AI Proxy Agent", "Voice & talking photo", Icons.Default.SmartToy, PurpleViolet, Modifier.weight(1f), onAiProxy)
+        }
+    } else {
+        // Adaptive 2x2 grid for smartphones & portrait screens
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                QuickControlCard("Instant Call", "Start a new room", Icons.Default.VideoCall, ElectricIndigo, Modifier.weight(1f), onNewMeeting)
+                QuickControlCard("Join Call", "Enter code or ID", Icons.Default.AddBox, NeonCyan, Modifier.weight(1f), onJoinCall)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                QuickControlCard("Schedule", "Plan meeting agenda", Icons.Default.CalendarMonth, AmberGold, Modifier.weight(1f), onSchedule)
+                QuickControlCard("AI Proxy Agent", "Voice & talking photo", Icons.Default.SmartToy, PurpleViolet, Modifier.weight(1f), onAiProxy)
+            }
         }
     }
 }
@@ -838,6 +828,14 @@ private fun QuickControlCard(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
+    val layout = LocalResponsiveLayout.current
+    val isSmall = layout.isSmallPhone
+    val iconBoxSize = if (isSmall) 38.dp else 44.dp
+    val iconInnerSize = if (isSmall) 18.dp else 22.dp
+    val padH = if (isSmall) 10.dp else 14.dp
+    val padV = if (isSmall) 10.dp else 14.dp
+    val spacerW = if (isSmall) 8.dp else 12.dp
+
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(18.dp),
@@ -848,24 +846,24 @@ private fun QuickControlCard(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 14.dp),
+                .padding(horizontal = padH, vertical = padV),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
-                modifier = Modifier.size(44.dp),
+                modifier = Modifier.size(iconBoxSize),
                 shape = RoundedCornerShape(12.dp),
                 color = color.copy(alpha = 0.15f),
                 border = androidx.compose.foundation.BorderStroke(1.dp, color.copy(alpha = 0.4f))
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(22.dp))
+                    Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(iconInnerSize))
                 }
             }
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(spacerW))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    title, 
-                    style = Typography.titleSmall, 
+                    title,
+                    style = if (isSmall) Typography.labelLarge else Typography.titleSmall,
                     fontWeight = FontWeight.Bold,
                     color = TextPrimary,
                     maxLines = 1,
@@ -874,7 +872,7 @@ private fun QuickControlCard(
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
                     subtitle,
-                    style = Typography.labelSmall,
+                    style = if (isSmall) Typography.bodySmall.copy(fontSize = 11.sp) else Typography.labelSmall,
                     color = TextSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

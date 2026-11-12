@@ -144,13 +144,14 @@ fun ProfileScreen(
                 CircularProgressIndicator(color = NeonCyan)
             }
         } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-                    .padding(horizontal = 20.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+            ResponsiveContainer(maxWidth = 640.dp) { layout ->
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                        .padding(horizontal = layout.horizontalPadding),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
                 item {
                     Spacer(modifier = Modifier.height(12.dp))
                     
@@ -300,6 +301,7 @@ fun ProfileScreen(
                     
                     Spacer(modifier = Modifier.height(120.dp))
                 }
+            }
             }
         }
     }

@@ -48,17 +48,25 @@ fun RegisterScreen(
         }
     }
 
-    Column(
+    val layout = LocalResponsiveLayout.current
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(BackgroundGradient)
             .statusBarsPadding()
             .navigationBarsPadding()
-            .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 24.dp, vertical = 16.dp)
+            .imePadding(),
+        contentAlignment = Alignment.TopCenter
     ) {
-        // Back Navigation Button
+        Column(
+            modifier = Modifier
+                .widthIn(max = layout.formMaxWidth)
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = layout.horizontalPadding, vertical = 16.dp)
+        ) {
+            // Back Navigation Button
         IconButton(
             onClick = onBack,
             modifier = Modifier
@@ -321,7 +329,8 @@ fun RegisterScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 }
 

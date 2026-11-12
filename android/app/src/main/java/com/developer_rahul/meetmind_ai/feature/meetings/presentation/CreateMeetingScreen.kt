@@ -387,63 +387,67 @@ fun CreateMeetingScreen(
                             listOf(BackgroundSurface.copy(alpha = 0.0f), BackgroundSurface, BackgroundSurface)
                         )
                     )
-                    .padding(20.dp)
-                    .navigationBarsPadding()
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .navigationBarsPadding(),
+                contentAlignment = Alignment.Center
             ) {
-                Button(
-                    onClick = {
-                        if (!uiState.isCreating) {
-                            val finalTitle = title.ifBlank { if (isInstantMeeting) "Instant Meeting" else "Scheduled Meeting" }
-                            val scheduledLdt = if (isInstantMeeting) {
-                                java.time.LocalDateTime.now().plusSeconds(30)
-                            } else {
-                                java.time.LocalDateTime.of(selectedYear, selectedMonth + 1, selectedDay, selectedHour, selectedMinute, 0)
+                Box(modifier = Modifier.widthIn(max = 640.dp).fillMaxWidth()) {
+                    Button(
+                        onClick = {
+                            if (!uiState.isCreating) {
+                                val finalTitle = title.ifBlank { if (isInstantMeeting) "Instant Meeting" else "Scheduled Meeting" }
+                                val scheduledLdt = if (isInstantMeeting) {
+                                    java.time.LocalDateTime.now().plusSeconds(30)
+                                } else {
+                                    java.time.LocalDateTime.of(selectedYear, selectedMonth + 1, selectedDay, selectedHour, selectedMinute, 0)
+                                }
+                                val scheduledTime = scheduledLdt.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+                                val invitedList = inviteEmails.split(",", "\n", " ", ";")
+                                    .map { it.trim() }
+                                    .filter { it.isNotBlank() }
+                                    .distinct()
+                                    .ifEmpty { null }
+                                viewModel.createMeeting(finalTitle, description, scheduledTime, invitedList)
                             }
-                            val scheduledTime = scheduledLdt.format(java.time.format.DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-                            val invitedList = inviteEmails.split(",", "\n", " ", ";")
-                                .map { it.trim() }
-                                .filter { it.isNotBlank() }
-                                .distinct()
-                                .ifEmpty { null }
-                            viewModel.createMeeting(finalTitle, description, scheduledTime, invitedList)
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth().height(56.dp),
-                    shape = RoundedCornerShape(18.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isInstantMeeting) ElectricIndigo else EmeraldGreen
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
-                ) {
-                    if (uiState.isCreating) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp), strokeWidth = 2.5.dp)
-                    } else {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                if (isInstantMeeting) Icons.Default.FlashOn else Icons.Default.CalendarToday,
-                                contentDescription = null,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(Modifier.width(10.dp))
-                            Text(
-                                if (isInstantMeeting) "Start Instant Meeting Now" else "Confirm & Schedule Meeting",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = Color.White
-                            )
+                        },
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(18.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (isInstantMeeting) ElectricIndigo else EmeraldGreen
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = 8.dp)
+                    ) {
+                        if (uiState.isCreating) {
+                            CircularProgressIndicator(color = Color.White, modifier = Modifier.size(24.dp), strokeWidth = 2.5.dp)
+                        } else {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    if (isInstantMeeting) Icons.Default.FlashOn else Icons.Default.CalendarToday,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Text(
+                                    if (isInstantMeeting) "Start Instant Meeting Now" else "Confirm & Schedule Meeting",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
                         }
                     }
                 }
             }
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp)
-                .verticalScroll(rememberScrollState())
-        ) {
+        ResponsiveContainer(maxWidth = 640.dp) { layout ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = layout.horizontalPadding)
+                    .verticalScroll(rememberScrollState())
+            ) {
             if (uiState.creationError != null) {
                 Surface(
                     color = RoseRed.copy(alpha = 0.15f),
@@ -872,6 +876,7 @@ fun CreateMeetingScreen(
             }
 
             Spacer(modifier = Modifier.height(120.dp))
+        }
         }
     }
 }

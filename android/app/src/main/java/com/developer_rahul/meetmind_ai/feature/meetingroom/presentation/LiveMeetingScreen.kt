@@ -1185,30 +1185,57 @@ fun LiveMeetingScreen(
                     // 2 REMOTE PARTICIPANTS: Split screen in equal halves, local in PIP
                     val remote0 = toUiParticipant(remoteParticipants[0])
                     val remote1 = toUiParticipant(remoteParticipants[1])
+                    val layout = LocalResponsiveLayout.current
 
                     Box(modifier = Modifier.fillMaxSize()) {
-                        Column(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            ParticipantVideoTile(
-                                participant = remote0,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                mirror = false,
-                                isPinned = (pinnedId == remote0.id),
-                                onTogglePin = { pinnedId = if (pinnedId == remote0.id) null else remote0.id }
-                            )
-                            ParticipantVideoTile(
-                                participant = remote1,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f),
-                                mirror = false,
-                                isPinned = (pinnedId == remote1.id),
-                                onTogglePin = { pinnedId = if (pinnedId == remote1.id) null else remote1.id }
-                            )
+                        if (layout.isLandscape) {
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                ParticipantVideoTile(
+                                    participant = remote0,
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .weight(1f),
+                                    mirror = false,
+                                    isPinned = (pinnedId == remote0.id),
+                                    onTogglePin = { pinnedId = if (pinnedId == remote0.id) null else remote0.id }
+                                )
+                                ParticipantVideoTile(
+                                    participant = remote1,
+                                    modifier = Modifier
+                                        .fillMaxHeight()
+                                        .weight(1f),
+                                    mirror = false,
+                                    isPinned = (pinnedId == remote1.id),
+                                    onTogglePin = { pinnedId = if (pinnedId == remote1.id) null else remote1.id }
+                                )
+                            }
+                        } else {
+                            Column(
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                ParticipantVideoTile(
+                                    participant = remote0,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    mirror = false,
+                                    isPinned = (pinnedId == remote0.id),
+                                    onTogglePin = { pinnedId = if (pinnedId == remote0.id) null else remote0.id }
+                                )
+                                ParticipantVideoTile(
+                                    participant = remote1,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f),
+                                    mirror = false,
+                                    isPinned = (pinnedId == remote1.id),
+                                    onTogglePin = { pinnedId = if (pinnedId == remote1.id) null else remote1.id }
+                                )
+                            }
                         }
 
                         FloatingPipTile(
@@ -1304,9 +1331,13 @@ fun LiveMeetingScreen(
                         }
                     }
                 } else {
-                    // 5+ PARTICIPANTS: Scrollable 2-Column Grid
+                    // 5+ PARTICIPANTS: Adaptive Multi-Column Responsive Grid
+                    val layout = LocalResponsiveLayout.current
+                    val gridCols = if (layout.isExpanded) 4 else if (layout.isTablet || layout.isLandscape) 3 else 2
+                    val tileRatio = if (layout.isLandscape) 16f / 9f else 4f / 3f
+
                     LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
+                        columns = GridCells.Fixed(gridCols),
                         modifier = Modifier.fillMaxSize(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -1316,7 +1347,7 @@ fun LiveMeetingScreen(
                                 participant = p,
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .height(180.dp),
+                                    .aspectRatio(tileRatio),
                                 mirror = (p.id == localUiParticipant.id),
                                 isPinned = (pinnedId == p.id),
                                 onTogglePin = { pinnedId = if (pinnedId == p.id) null else p.id }
@@ -1957,10 +1988,12 @@ fun TopMeetingBar(
     onStopRecording: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val layout = LocalResponsiveLayout.current
     Surface(
         modifier = modifier
             .statusBarsPadding()
-            .padding(horizontal = 10.dp, vertical = 6.dp)
+            .padding(horizontal = if (layout.isSmallPhone) 6.dp else 10.dp, vertical = 6.dp)
+            .widthIn(max = 760.dp)
             .fillMaxWidth()
             .glassmorphism(),
         shape = RoundedCornerShape(24.dp),
@@ -1969,7 +2002,7 @@ fun TopMeetingBar(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 10.dp, vertical = 8.dp),
+                .padding(horizontal = if (layout.isSmallPhone) 6.dp else 10.dp, vertical = if (layout.isSmallPhone) 6.dp else 8.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -2174,10 +2207,17 @@ fun MeetingBottomDock(
     onEndCall: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val layout = LocalResponsiveLayout.current
+    val isSmall = layout.isSmallPhone
+    val btnSize = if (isSmall) 40.dp else 48.dp
+    val endBtnSize = if (isSmall) 42.dp else 50.dp
+    val iconSize = if (isSmall) 18.dp else 22.dp
+
     Surface(
         modifier = modifier
             .navigationBarsPadding()
-            .padding(bottom = 12.dp, start = 16.dp, end = 16.dp)
+            .padding(bottom = 12.dp, start = if (isSmall) 8.dp else 16.dp, end = if (isSmall) 8.dp else 16.dp)
+            .widthIn(max = 560.dp)
             .fillMaxWidth()
             .shadow(16.dp, RoundedCornerShape(32.dp)),
         shape = RoundedCornerShape(32.dp),
@@ -2187,62 +2227,62 @@ fun MeetingBottomDock(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(horizontal = if (isSmall) 8.dp else 14.dp, vertical = if (isSmall) 8.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // 1. Mic Button (48dp)
+            // 1. Mic Button
             MeetingControlButton(
                 icon = if (isMuted) Icons.Default.MicOff else Icons.Default.Mic,
                 isActive = !isMuted,
                 activeColor = Color(0xFF3C4043),
                 inactiveColor = RoseRed,
-                size = 48.dp,
-                iconSize = 22.dp,
+                size = btnSize,
+                iconSize = iconSize,
                 onClick = onToggleMic
             )
 
-            // 2. Camera Button (48dp)
+            // 2. Camera Button
             MeetingControlButton(
                 icon = if (isVideoOff) Icons.Default.VideocamOff else Icons.Default.Videocam,
                 isActive = !isVideoOff,
                 activeColor = Color(0xFF3C4043),
                 inactiveColor = RoseRed,
-                size = 48.dp,
-                iconSize = 22.dp,
+                size = btnSize,
+                iconSize = iconSize,
                 onClick = onToggleVideo
             )
 
-            // 3. Screen Share (48dp)
+            // 3. Screen Share
             MeetingControlButton(
                 icon = if (isScreenSharing) Icons.Default.StopScreenShare else Icons.Default.PresentToAll,
                 isActive = isScreenSharing,
                 activeColor = NeonCyan,
                 inactiveColor = Color(0xFF3C4043),
                 contentColor = if (isScreenSharing) Color.Black else Color.White,
-                size = 48.dp,
-                iconSize = 22.dp,
+                size = btnSize,
+                iconSize = iconSize,
                 onClick = onToggleScreenShare
             )
 
-            // 4. More Options (48dp)
+            // 4. More Options
             MeetingControlButton(
                 icon = Icons.Default.MoreHoriz,
                 isActive = false,
                 inactiveColor = Color(0xFF3C4043),
-                size = 48.dp,
-                iconSize = 22.dp,
+                size = btnSize,
+                iconSize = iconSize,
                 onClick = onOpenMore
             )
 
-            // 5. End Call Button (50dp)
+            // 5. End Call Button
             Surface(
                 onClick = onEndCall,
                 shape = CircleShape,
                 color = RoseRed,
                 shadowElevation = 8.dp,
                 modifier = Modifier
-                    .size(50.dp)
+                    .size(endBtnSize)
                     .bounceClick()
             ) {
                 Box(contentAlignment = Alignment.Center) {
@@ -2403,10 +2443,14 @@ fun FloatingPipTile(
     onSwap: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val layout = LocalResponsiveLayout.current
+    val pipW = if (layout.isSmallPhone) 80.dp else if (layout.isTabletOrLarger) 130.dp else 96.dp
+    val pipH = if (layout.isSmallPhone) 120.dp else if (layout.isTabletOrLarger) 195.dp else 144.dp
+
     Surface(
         onClick = onSwap,
         modifier = modifier
-            .size(width = 96.dp, height = 144.dp)
+            .size(width = pipW, height = pipH)
             .shadow(16.dp, RoundedCornerShape(18.dp)),
         shape = RoundedCornerShape(18.dp),
         color = CardSurface,

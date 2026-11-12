@@ -67,78 +67,89 @@ fun AiRepConfigScreen(
         },
         containerColor = BackgroundSurface,
         bottomBar = {
+            val layout = LocalResponsiveLayout.current
             Surface(
                 modifier = Modifier.navigationBarsPadding(),
                 color = BackgroundSurface,
                 border = androidx.compose.foundation.BorderStroke(1.dp, BorderColor)
             ) {
-                Row(
-                    modifier = Modifier.padding(20.dp).fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    TextButton(
-                        onClick = { if (step > 1) step-- else onBack() },
-                        enabled = !uiState.isSaving
+                    Row(
+                        modifier = Modifier
+                            .widthIn(max = 640.dp)
+                            .fillMaxWidth()
+                            .padding(horizontal = layout.horizontalPadding, vertical = 14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(if (step == 1) "Cancel" else "Previous", color = TextSecondary)
+                        TextButton(
+                            onClick = { if (step > 1) step-- else onBack() },
+                            enabled = !uiState.isSaving
+                        ) {
+                            Text(if (step == 1) "Cancel" else "Previous", color = TextSecondary)
+                        }
+                        
+                        MeetMindButton(
+                            text = if (step == totalSteps) "Enable AI Proxy" else "Next Step",
+                            onClick = { 
+                                if (step < totalSteps) {
+                                    step++
+                                } else {
+                                    viewModel.saveConfiguration()
+                                }
+                            },
+                            modifier = Modifier.widthIn(min = 140.dp, max = 220.dp),
+                            isAiAction = step == totalSteps,
+                            isLoading = uiState.isSaving
+                        )
                     }
-                    
-                    MeetMindButton(
-                        text = if (step == totalSteps) "Enable AI Proxy" else "Next Step",
-                        onClick = { 
-                            if (step < totalSteps) {
-                                step++
-                            } else {
-                                viewModel.saveConfiguration()
-                            }
-                        },
-                        modifier = Modifier.width(200.dp),
-                        isAiAction = step == totalSteps,
-                        isLoading = uiState.isSaving
-                    )
                 }
             }
         }
     ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 20.dp)
-        ) {
-            if (uiState.error != null) {
-                Text(uiState.error!!, color = Color.Red, modifier = Modifier.padding(bottom = 8.dp))
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-            
-            // Progress Indicator
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ResponsiveContainer(maxWidth = 640.dp) { layout ->
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = layout.horizontalPadding)
             ) {
-                repeat(totalSteps) { i ->
-                    val isCompleted = i + 1 < step
-                    val isCurrent = i + 1 == step
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(4.dp)
-                            .background(
-                                if (isCompleted || isCurrent) NeonCyan else TextDisabled,
-                                CircleShape
-                            )
-                    )
+                if (uiState.error != null) {
+                    Text(uiState.error!!, color = Color.Red, modifier = Modifier.padding(bottom = 8.dp))
                 }
-            }
-            
-            Spacer(modifier = Modifier.height(24.dp))
 
-            when (step) {
-                1 -> SetupStepOne(uiState, viewModel)
-                2 -> SetupStepTwo(uiState, viewModel)
-                3 -> SetupStepThree(uiState)
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Progress Indicator
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    repeat(totalSteps) { i ->
+                        val isCompleted = i + 1 < step
+                        val isCurrent = i + 1 == step
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(4.dp)
+                                .background(
+                                    if (isCompleted || isCurrent) NeonCyan else TextDisabled,
+                                    CircleShape
+                                )
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(24.dp))
+
+                when (step) {
+                    1 -> SetupStepOne(uiState, viewModel)
+                    2 -> SetupStepTwo(uiState, viewModel)
+                    3 -> SetupStepThree(uiState)
+                }
             }
         }
     }
