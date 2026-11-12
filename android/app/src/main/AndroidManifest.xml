@@ -79,6 +79,47 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Custom URI Scheme Deep Links: meetmind://invite/{code} and meetmind://join/{code} -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="meetmind" />
+            </intent-filter>
+
+            <!-- Universal App Links for HTTP / HTTPS -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="meetmind-backend-s3yy.onrender.com"
+                    android:pathPrefix="/invite" />
+                <data
+                    android:scheme="https"
+                    android:host="meetmind-backend-s3yy.onrender.com"
+                    android:pathPrefix="/join" />
+                <data
+                    android:scheme="https"
+                    android:host="meetmind-ai.vercel.app"
+                    android:pathPrefix="/invite" />
+                <data
+                    android:scheme="https"
+                    android:host="meetmind-ai.vercel.app"
+                    android:pathPrefix="/join" />
+                <data
+                    android:scheme="http"
+                    android:host="localhost"
+                    android:port="8080"
+                    android:pathPrefix="/invite" />
+                <data
+                    android:scheme="http"
+                    android:host="10.0.2.2"
+                    android:port="8080"
+                    android:pathPrefix="/invite" />
+            </intent-filter>
         </activity>
     </application>
 

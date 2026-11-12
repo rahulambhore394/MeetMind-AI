@@ -28,5 +28,11 @@ interface MeetingRepository {
     suspend fun lockMeeting(meetingId: Long, locked: Boolean): NetworkResult<Meeting>
     suspend fun removeParticipant(meetingId: Long, userId: Long): NetworkResult<Unit>
     suspend fun updateParticipantRole(meetingId: Long, userId: Long, role: String): NetworkResult<Participant>
+
+    suspend fun getMyInvitations(): NetworkResult<List<com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation>>
+    suspend fun getInvitationByCode(code: String): NetworkResult<com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation>
+    suspend fun acceptInvitation(meetingId: Long): NetworkResult<com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation>
+    suspend fun declineInvitation(meetingId: Long): NetworkResult<com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation>
+    suspend fun acceptInvitationByCode(code: String): NetworkResult<com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation>
 }
 

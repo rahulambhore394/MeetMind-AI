@@ -91,15 +91,16 @@ public class EmailService {
                 ? scheduledAt.format(DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' hh:mm a"))
                 : "Now / Live Meeting";
 
-        String joinUrl = "https://meetmind-ai.vercel.app/join?code=" + safeMeetingCode;
-        String appDownloadUrl = "https://meetmind-ai.vercel.app/download";
+        String inviteUrl = "https://meetmind-backend-s3yy.onrender.com/invite/" + safeMeetingCode;
+        String appDownloadUrl = "https://meetmind-backend-s3yy.onrender.com/download";
+        String webJoinUrl = "https://meetmind-ai.vercel.app/join?code=" + safeMeetingCode;
 
         String subject = "Meeting Invitation: " + rawMeetingTitle + " - MeetMind AI";
 
         // Plain Text Fallback Body for anti-spam filtering
         StringBuilder plainBody = new StringBuilder();
         plainBody.append("MeetMind AI Meeting Invitation\n\n")
-                .append(rawHostName).append(" has invited you to join a live meeting on MeetMind AI.\n\n")
+                .append(rawHostName).append(" has invited you to join a meeting on MeetMind AI.\n\n")
                 .append("Meeting Title: ").append(rawMeetingTitle).append("\n")
                 .append("Host: ").append(rawHostName).append("\n")
                 .append("Schedule: ").append(formattedDate).append("\n");
@@ -109,7 +110,9 @@ public class EmailService {
         }
 
         plainBody.append("\nMeeting Access Code: ").append(rawMeetingCode).append("\n")
-                .append("Join Direct Link: ").append(joinUrl).append("\n\n");
+                .append("Accept & Join Link: ").append(inviteUrl).append("\n")
+                .append("Install App: ").append(appDownloadUrl).append("\n\n")
+                .append("If MeetMind AI app is installed on your mobile device, opening the link will launch the app and accept your invitation automatically.\n\n");
 
         if (!isRegisteredUser) {
             plainBody.append("First Time Joining MeetMind AI?\n")
@@ -172,22 +175,25 @@ public class EmailService {
                 .append("<div style='font-family: \"Courier New\", Courier, monospace; font-size: 24px; font-weight: 800; color: #0284c7; letter-spacing: 3px;'>").append(safeMeetingCode).append("</div>")
                 .append("</div>")
                 .append("<div style='margin-top: 24px; text-align: center;'>")
-                .append("<a href='").append(joinUrl).append("' style='display: inline-block; width: 85%; background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); color: #ffffff !important; text-decoration: none; font-size: 15px; font-weight: 700; padding: 14px 28px; border-radius: 12px; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3); letter-spacing: 0.3px;'>Join Meeting Direct Link</a>")
+                .append("<a href='").append(inviteUrl).append("' style='display: inline-block; width: 85%; background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%); color: #ffffff !important; text-decoration: none; font-size: 15px; font-weight: 700; padding: 14px 28px; border-radius: 12px; box-shadow: 0 4px 14px rgba(79, 70, 229, 0.3); letter-spacing: 0.3px;'>Accept Invitation & Join Meeting</a>")
+                .append("</div>")
+                .append("<div style='margin-top: 12px; text-align: center;'>")
+                .append("<span style='font-size: 12px; color: #64748b;'>📱 Tap to open in MeetMind AI App or browser</span>")
                 .append("</div></td></tr></table></td></tr>");
 
         if (!isRegisteredUser) {
             htmlBody.append("<tr><td style='padding: 0 36px 28px 36px;'>")
                     .append("<table role='presentation' width='100%' border='0' cellspacing='0' cellpadding='0' style='background: #f8fafc; border-radius: 16px; border: 1px solid #e2e8f0; padding: 20px 24px;'>")
                     .append("<tr><td>")
-                    .append("<div style='font-size: 14px; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;'>First Time Joining MeetMind AI?</div>")
-                    .append("<p style='margin: 0 0 12px 0; font-size: 13.5px; color: #475569; line-height: 1.5;'>Follow these quick steps to join from your phone or device:</p>")
+                    .append("<div style='font-size: 14px; font-weight: 700; color: #0284c7; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;'>Need the MeetMind AI App?</div>")
+                    .append("<p style='margin: 0 0 12px 0; font-size: 13.5px; color: #475569; line-height: 1.5;'>Install the Android app for native audio/video and real-time AI capabilities:</p>")
                     .append("<table role='presentation' width='100%' border='0' cellspacing='0' cellpadding='0' style='font-size: 13px; color: #475569; line-height: 1.8;'>")
-                    .append("<tr><td><strong style='color: #0284c7;'>1.</strong> Download the MeetMind AI App</td></tr>")
-                    .append("<tr><td><strong style='color: #0284c7;'>2.</strong> Register using <strong>").append(safeRecipientEmail).append("</strong></td></tr>")
-                    .append("<tr><td><strong style='color: #0284c7;'>3.</strong> Enter Meeting Code <strong style='color: #0f172a; background: #e2e8f0; padding: 2px 6px; border-radius: 4px;'>").append(safeMeetingCode).append("</strong></td></tr>")
+                    .append("<tr><td><strong style='color: #0284c7;'>1.</strong> Download and install MeetMind AI app</td></tr>")
+                    .append("<tr><td><strong style='color: #0284c7;'>2.</strong> Tap <strong>Accept Invitation</strong> from this email</td></tr>")
+                    .append("<tr><td><strong style='color: #0284c7;'>3.</strong> The app opens and accepts your invite automatically!</td></tr>")
                     .append("</table>")
                     .append("<div style='margin-top: 14px;'>")
-                    .append("<a href='").append(appDownloadUrl).append("' style='display: inline-block; background-color: #0284c7; color: #ffffff !important; text-decoration: none; font-size: 13px; font-weight: 700; padding: 10px 20px; border-radius: 8px;'>Download Mobile App</a>")
+                    .append("<a href='").append(appDownloadUrl).append("' style='display: inline-block; background-color: #0284c7; color: #ffffff !important; text-decoration: none; font-size: 13px; font-weight: 700; padding: 10px 20px; border-radius: 8px;'>Download Android App</a>")
                     .append("</div></td></tr></table></td></tr>");
         }
 
@@ -201,7 +207,7 @@ public class EmailService {
         log.info("SUBJECT: {}", subject);
         log.info("REGISTERED USER: {}", isRegisteredUser);
         log.info("MEETING CODE: {}", meetingCode);
-        log.info("JOIN LINK: {}", joinUrl);
+        log.info("INVITE LINK: {}", inviteUrl);
         log.info("===============================================================");
 
         if (mailSender != null) {

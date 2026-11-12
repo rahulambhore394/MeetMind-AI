@@ -204,4 +204,49 @@ class RealMeetingRepository(
             NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
         }
     }
+
+    override suspend fun getMyInvitations(): NetworkResult<List<com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation>> {
+        return try {
+            val response = meetingApiService.getMyInvitations()
+            NetworkResult.Success(response.map { it.toDomain() })
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun getInvitationByCode(code: String): NetworkResult<com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation> {
+        return try {
+            val response = meetingApiService.getInvitationByCode(code)
+            NetworkResult.Success(response.toDomain())
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun acceptInvitation(meetingId: Long): NetworkResult<com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation> {
+        return try {
+            val response = meetingApiService.acceptInvitation(meetingId)
+            NetworkResult.Success(response.toDomain())
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun declineInvitation(meetingId: Long): NetworkResult<com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation> {
+        return try {
+            val response = meetingApiService.declineInvitation(meetingId)
+            NetworkResult.Success(response.toDomain())
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
+
+    override suspend fun acceptInvitationByCode(code: String): NetworkResult<com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation> {
+        return try {
+            val response = meetingApiService.acceptInvitationByCode(code)
+            NetworkResult.Success(response.toDomain())
+        } catch (e: Exception) {
+            NetworkResult.Error(ErrorMapper.mapToMeetMindError(e))
+        }
+    }
 }

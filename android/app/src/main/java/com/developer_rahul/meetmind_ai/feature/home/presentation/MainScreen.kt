@@ -53,7 +53,8 @@ fun MainScreen(
     onLogout: () -> Unit,
     onNavigateToSettings: () -> Unit,
     onAddParticipant: (String) -> Unit,
-    onSummaries: () -> Unit = {}
+    onSummaries: () -> Unit = {},
+    onInvitations: () -> Unit = {}
 ) {
     val navController = rememberNavController()
     val items = listOf(
@@ -135,13 +136,15 @@ fun MainScreen(
                     onNotifications = onNotifications,
                     onProfile = { navController.navigate("profile_tab") },
                     onSummaries = onSummaries,
-                    onViewAllSchedule = { navController.navigate("meetings_tab") }
+                    onViewAllSchedule = { navController.navigate("meetings_tab") },
+                    onInvitations = onInvitations
                 )
             }
             composable("meetings_tab") {
                 MeetingsScreen(
                     onMeetingClick = onMeetingClick,
-                    onCreateMeeting = onNewMeeting
+                    onCreateMeeting = onNewMeeting,
+                    onInvitations = onInvitations
                 )
             }
             composable("calendar_tab") {

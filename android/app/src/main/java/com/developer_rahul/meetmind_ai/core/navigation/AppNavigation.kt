@@ -102,7 +102,8 @@ fun AppNavigation(navController: NavHostController) {
                 onLogout = { navController.navigate(Screen.Welcome.route) { popUpTo(0) } },
                 onNavigateToSettings = { navController.navigate(Screen.Settings.route) },
                 onAddParticipant = { id -> navController.navigate(Screen.AddParticipant.createRoute(id)) },
-                onSummaries = { navController.navigate(Screen.MeetingSummaries.route) }
+                onSummaries = { navController.navigate(Screen.MeetingSummaries.route) },
+                onInvitations = { navController.navigate(Screen.MeetingInvitation.createRoute()) }
             )
         }
 
@@ -242,6 +243,29 @@ fun AppNavigation(navController: NavHostController) {
             arguments = listOf(navArgument("meetingId") { defaultValue = "" })
         ) {
             MeetingPermissionsScreen(onBack = { navController.popBackStack() })
+        }
+
+        composable(
+            Screen.MeetingInvitation.route,
+            arguments = listOf(
+                navArgument("code") {
+                    type = androidx.navigation.NavType.StringType
+                    nullable = true
+                    defaultValue = null
+                }
+            )
+        ) { backStackEntry ->
+            val code = backStackEntry.arguments?.getString("code")
+            MeetingInvitationScreen(
+                inviteCode = code,
+                onBack = { navController.popBackStack() },
+                onJoinMeeting = { meetingId ->
+                    navController.navigate(Screen.PreJoinMeeting.createRoute(meetingId))
+                },
+                onViewMeetingDetails = { meetingId ->
+                    navController.navigate(Screen.MeetingDetails.createRoute(meetingId))
+                }
+            )
         }
 
         composable(

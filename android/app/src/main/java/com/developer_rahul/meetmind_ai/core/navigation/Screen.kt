@@ -40,7 +40,9 @@ sealed class Screen(val route: String) {
     object MeetingEnded : Screen("meeting_ended/{meetingId}/{duration}") {
         fun createRoute(meetingId: String, duration: String) = "meeting_ended/$meetingId/$duration"
     }
-    object MeetingInvitation : Screen("meeting_invitation")
+    object MeetingInvitation : Screen("meeting_invitation?code={code}") {
+        fun createRoute(code: String = "") = if (code.isBlank()) "meeting_invitation" else "meeting_invitation?code=$code"
+    }
     object Participants : Screen("participants/{meetingId}") {
         fun createRoute(id: String) = "participants/$id"
     }

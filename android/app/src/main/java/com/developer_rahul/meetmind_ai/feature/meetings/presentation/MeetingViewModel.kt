@@ -43,6 +43,7 @@ class MeetingViewModel(
 
     init {
         loadMeetings()
+        loadInvitations()
         observeRealtimeEvents()
         observePresence()
         observeRecordingEvents()
@@ -689,6 +690,117 @@ class MeetingViewModel(
         _uiState.update { it.copy(joinSuccess = false) }
     }
 
+    fun loadInvitations() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingInvitations = true, invitationError = null) }
+            when (val result = meetingRepository.getMyInvitations()) {
+                is NetworkResult.Success -> {
+                    _uiState.update { it.copy(invitations = result.data, isLoadingInvitations = false) }
+                }
+                is NetworkResult.Error -> {
+                    _uiState.update { it.copy(isLoadingInvitations = false, invitationError = result.error.message) }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun loadInvitationByCode(code: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingInvitations = true, invitationError = null) }
+            when (val result = meetingRepository.getInvitationByCode(code)) {
+                is NetworkResult.Success -> {
+                    _uiState.update { it.copy(selectedInvitation = result.data, isLoadingInvitations = false) }
+                }
+                is NetworkResult.Error -> {
+                    _uiState.update { it.copy(isLoadingInvitations = false, invitationError = result.error.message) }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun acceptInvitation(meetingId: Long, onAccepted: ((com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation) -> Unit)? = null) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(invitationActionInProgress = true, invitationError = null) }
+            when (val result = meetingRepository.acceptInvitation(meetingId)) {
+                is NetworkResult.Success -> {
+                    _uiState.update { state ->
+                        val updatedList = state.invitations.map {
+                            if (it.meetingId == meetingId) it.copy(status = "ACCEPTED") else it
+                        }
+                        state.copy(
+                            invitations = updatedList,
+                            selectedInvitation = result.data,
+                            invitationActionInProgress = false,
+                            invitationMessage = "Invitation accepted!"
+                        )
+                    }
+                    loadMeetings()
+                    onAccepted?.invoke(result.data)
+                }
+                is NetworkResult.Error -> {
+                    _uiState.update { it.copy(invitationActionInProgress = false, invitationError = result.error.message) }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun declineInvitation(meetingId: Long, onDeclined: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(invitationActionInProgress = true, invitationError = null) }
+            when (val result = meetingRepository.declineInvitation(meetingId)) {
+                is NetworkResult.Success -> {
+                    _uiState.update { state ->
+                        val updatedList = state.invitations.map {
+                            if (it.meetingId == meetingId) it.copy(status = "DECLINED") else it
+                        }
+                        state.copy(
+                            invitations = updatedList,
+                            selectedInvitation = result.data,
+                            invitationActionInProgress = false,
+                            invitationMessage = "Invitation declined."
+                        )
+                    }
+                    onDeclined?.invoke()
+                }
+                is NetworkResult.Error -> {
+                    _uiState.update { it.copy(invitationActionInProgress = false, invitationError = result.error.message) }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun acceptInvitationByCode(code: String, onAccepted: ((com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation) -> Unit)? = null) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(invitationActionInProgress = true, invitationError = null) }
+            when (val result = meetingRepository.acceptInvitationByCode(code)) {
+                is NetworkResult.Success -> {
+                    _uiState.update { state ->
+                        state.copy(
+                            selectedInvitation = result.data,
+                            invitationActionInProgress = false,
+                            invitationMessage = "Invitation accepted!"
+                        )
+                    }
+                    loadMeetings()
+                    loadInvitations()
+                    onAccepted?.invoke(result.data)
+                }
+                is NetworkResult.Error -> {
+                    _uiState.update { it.copy(invitationActionInProgress = false, invitationError = result.error.message) }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    fun clearInvitationMessage() {
+        _uiState.update { it.copy(invitationMessage = null, invitationError = null) }
+    }
+
     override fun onCleared() {
         super.onCleared()
         webSocketManager.disconnect()
@@ -722,5 +834,13 @@ data class MeetingUiState(
     val actionInProgress: Boolean = false,
     val joinSuccess: Boolean = false,
     val uploadProgress: Int? = null,
-    val uploadStatus: String? = null
+    val uploadStatus: String? = null,
+
+    // Invitations
+    val invitations: List<com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation> = emptyList(),
+    val selectedInvitation: com.developer_rahul.meetmind_ai.feature.meetings.domain.model.Invitation? = null,
+    val isLoadingInvitations: Boolean = false,
+    val invitationActionInProgress: Boolean = false,
+    val invitationMessage: String? = null,
+    val invitationError: String? = null
 )

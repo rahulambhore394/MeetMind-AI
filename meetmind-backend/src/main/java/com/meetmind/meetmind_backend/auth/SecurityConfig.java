@@ -74,12 +74,16 @@ public class SecurityConfig {
                 )
                 .authorizeHttpRequests(auth -> auth
 
-                        // Public authentication endpoints
+                        // Public authentication endpoints & Invitation Landing Pages
                         .requestMatchers(
                                 "/api/auth/**",
                                 "/error",
                                 "/actuator/health",
-                                "/actuator/info"
+                                "/actuator/info",
+                                "/invite/**",
+                                "/join/**",
+                                "/download/**",
+                                "/api/invitations/public/**"
                         ).permitAll()
 
                         // Actuator metrics and prometheus should be protected in production

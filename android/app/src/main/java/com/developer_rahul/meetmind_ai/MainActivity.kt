@@ -47,14 +47,45 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                // Handle Notification Tap Intents
+                // Handle Notification & Deep Link Intents
                 LaunchedEffect(intent) {
+                    // 1. Deep Link URI processing
+                    val uri = intent.data
+                    if (uri != null) {
+                        val scheme = uri.scheme
+                        val host = uri.host
+                        val path = uri.path
+
+                        var extractedCode: String? = null
+                        if (scheme == "meetmind") {
+                            if (host == "invite" || host == "join") {
+                                extractedCode = uri.pathSegments?.firstOrNull() ?: uri.lastPathSegment
+                            } else if (path != null) {
+                                extractedCode = uri.lastPathSegment
+                            }
+                        } else if (scheme == "https" || scheme == "http") {
+                            if (path != null && (path.contains("/invite/") || path.contains("/join/"))) {
+                                extractedCode = uri.lastPathSegment
+                            } else {
+                                extractedCode = uri.getQueryParameter("code")
+                            }
+                        }
+
+                        if (!extractedCode.isNullOrBlank()) {
+                            navController.navigate(Screen.MeetingInvitation.createRoute(extractedCode))
+                            intent.data = null
+                            return@LaunchedEffect
+                        }
+                    }
+
+                    // 2. Push Notification Extras
                     val meetingId = intent.getStringExtra("meetingId")
                     val type = intent.getStringExtra("type")
                     if (meetingId != null && meetingId.isNotBlank()) {
                         when (type) {
                             "MEETING_STARTED" -> navController.navigate(Screen.LiveMeeting.createRoute(meetingId))
-                            "MEETING_INVITATION", "MEETING_REMINDER" -> navController.navigate(Screen.MeetingDetails.createRoute(meetingId))
+                            "MEETING_INVITATION" -> navController.navigate(Screen.MeetingInvitation.createRoute(meetingId))
+                            "MEETING_REMINDER" -> navController.navigate(Screen.MeetingDetails.createRoute(meetingId))
                             "AI_SUMMARY_READY" -> navController.navigate(Screen.MeetingIntelligence.createRoute(meetingId))
                             "TRANSCRIPT_READY" -> navController.navigate(Screen.Transcript.createRoute(meetingId))
                             "REPRESENTATIVE_REPORT_READY" -> {

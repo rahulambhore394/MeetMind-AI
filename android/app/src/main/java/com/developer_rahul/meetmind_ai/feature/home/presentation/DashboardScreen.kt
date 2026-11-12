@@ -60,6 +60,7 @@ fun DashboardScreen(
     onProfile: () -> Unit,
     onSummaries: () -> Unit = {},
     onViewAllSchedule: () -> Unit = {},
+    onInvitations: () -> Unit = {},
     viewModel: MeetingViewModel = viewModel(factory = ViewModelFactory),
     notificationViewModel: NotificationViewModel = viewModel(factory = ViewModelFactory)
 ) {
@@ -69,6 +70,9 @@ fun DashboardScreen(
     var searchQuery by remember { mutableStateOf("") }
     var selectedTab by remember { mutableStateOf(MeetingFilterTab.ALL) }
     val context = LocalContext.current
+    val pendingInvites = remember(uiState.invitations) {
+        uiState.invitations.filter { "INVITED".equals(it.status, ignoreCase = true) }
+    }
 
     // Time-aware greeting
     val currentHour = remember { Calendar.getInstance().get(Calendar.HOUR_OF_DAY) }
@@ -264,6 +268,57 @@ fun DashboardScreen(
                     userName = viewModel.currentUserName,
                     todayFormatted = todayFormatted
                 )
+            }
+
+            // Pending Meeting Invitations Banner (if any)
+            if (pendingInvites.isNotEmpty()) {
+                item {
+                    Surface(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .clickable { onInvitations() },
+                        color = CardSurface,
+                        border = androidx.compose.foundation.BorderStroke(1.5.dp, ElectricIndigo)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(
+                                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                                        listOf(ElectricIndigo.copy(alpha = 0.2f), NeonCyan.copy(alpha = 0.08f), androidx.compose.ui.graphics.Color.Transparent)
+                                    )
+                                )
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(CircleShape)
+                                    .background(ElectricIndigo),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.MailOutline, contentDescription = null, tint = androidx.compose.ui.graphics.Color.White, modifier = Modifier.size(20.dp))
+                            }
+                            Spacer(Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    "${pendingInvites.size} Pending Meeting Invitation${if (pendingInvites.size > 1) "s" else ""}",
+                                    style = Typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = TextPrimary
+                                )
+                                Text(
+                                    "Tap to view, accept & join immediately",
+                                    style = Typography.bodySmall,
+                                    color = TextSecondary
+                                )
+                            }
+                            Icon(Icons.Default.ChevronRight, null, tint = ElectricIndigo, modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
             }
 
             // 2. Upcoming / Live Meeting Hero Banner

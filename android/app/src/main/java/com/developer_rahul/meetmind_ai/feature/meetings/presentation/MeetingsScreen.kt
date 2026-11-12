@@ -53,6 +53,7 @@ enum class MeetingScopeFilter {
 fun MeetingsScreen(
     onMeetingClick: (String) -> Unit,
     onCreateMeeting: () -> Unit,
+    onInvitations: () -> Unit = {},
     viewModel: MeetingViewModel = viewModel(factory = ViewModelFactory)
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -144,6 +145,29 @@ fun MeetingsScreen(
                             modifier = Modifier.bounceClick()
                         ) {
                             Icon(Icons.Default.Add, contentDescription = "New Meeting", tint = ElectricIndigo)
+                        }
+                        val pendingInvitesCount = remember(uiState.invitations) {
+                            uiState.invitations.count { "INVITED".equals(it.status, ignoreCase = true) }
+                        }
+                        IconButton(
+                            onClick = onInvitations,
+                            modifier = Modifier.bounceClick()
+                        ) {
+                            BadgedBox(
+                                badge = {
+                                    if (pendingInvitesCount > 0) {
+                                        Badge(containerColor = ElectricIndigo) {
+                                            Text(pendingInvitesCount.toString(), color = Color.White)
+                                        }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    Icons.Default.MailOutline,
+                                    contentDescription = "Invitations",
+                                    tint = if (pendingInvitesCount > 0) NeonCyan else TextPrimary
+                                )
+                            }
                         }
                         IconButton(
                             onClick = { isSearchActive = !isSearchActive },

@@ -80,4 +80,19 @@ interface MeetingApiService {
         @Path("userId") userId: Long,
         @Query("role") role: String
     ): ParticipantResponseDto
+
+    @GET("api/invitations/my-invitations")
+    suspend fun getMyInvitations(): List<com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.InvitationDto>
+
+    @GET("api/invitations/code/{code}")
+    suspend fun getInvitationByCode(@Path("code") code: String): com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.InvitationDto
+
+    @POST("api/invitations/{meetingId}/accept")
+    suspend fun acceptInvitation(@Path("meetingId") meetingId: Long): com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.InvitationDto
+
+    @POST("api/invitations/{meetingId}/decline")
+    suspend fun declineInvitation(@Path("meetingId") meetingId: Long): com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.InvitationDto
+
+    @POST("api/invitations/code/{code}/accept")
+    suspend fun acceptInvitationByCode(@Path("code") code: String): com.developer_rahul.meetmind_ai.feature.meetings.data.remote.dto.InvitationDto
 }
