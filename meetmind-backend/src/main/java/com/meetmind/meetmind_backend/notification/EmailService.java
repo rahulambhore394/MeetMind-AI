@@ -245,7 +245,7 @@ public class EmailService {
                 mailSender.send(message);
                 log.info("Email successfully dispatched via SMTP to {}", recipientEmail);
             } catch (Exception e) {
-                log.error("SMTP mail sending failed for recipient {}: {}", recipientEmail, e.getMessage());
+                log.error("SMTP mail sending failed for recipient {}: {}", recipientEmail, e.getMessage(), e);
             }
         } else {
             log.warn("JavaMailSender is NOT configured. Skipping SMTP dispatch for {}.", recipientEmail);
