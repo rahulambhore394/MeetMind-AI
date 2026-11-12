@@ -9,4 +9,6 @@ interface AuthRepository {
     suspend fun register(name: String, email: String, password: String): NetworkResult<RegisterResponse>
     fun logout()
     fun isLoggedIn(): Boolean
+    fun hasCompletedOnboarding(): Boolean = false
+    fun setOnboardingCompleted(completed: Boolean) {}
 }

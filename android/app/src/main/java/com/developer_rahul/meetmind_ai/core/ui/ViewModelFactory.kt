@@ -10,6 +10,7 @@ import com.developer_rahul.meetmind_ai.feature.chat.presentation.ChatViewModel
 import com.developer_rahul.meetmind_ai.feature.meetingroom.presentation.LiveMeetingViewModel
 import com.developer_rahul.meetmind_ai.feature.meetings.presentation.MeetingViewModel
 import com.developer_rahul.meetmind_ai.feature.splash.presentation.SplashViewModel
+import com.developer_rahul.meetmind_ai.feature.onboarding.presentation.OnboardingViewModel
 import com.developer_rahul.meetmind_ai.feature.transcript.presentation.TranscriptViewModel
 import com.developer_rahul.meetmind_ai.feature.translation.presentation.LiveTranslationViewModel
 import com.developer_rahul.meetmind_ai.feature.ai.presentation.MeetingIntelligenceViewModel
@@ -34,6 +35,9 @@ class BaseViewModelFactory(
             }
             modelClass.isAssignableFrom(SplashViewModel::class.java) -> {
                 SplashViewModel(container.authRepository) as T
+            }
+            modelClass.isAssignableFrom(OnboardingViewModel::class.java) -> {
+                OnboardingViewModel(container.authRepository) as T
             }
             modelClass.isAssignableFrom(MainViewModel::class.java) -> {
                 MainViewModel(container.tokenProvider, container.meetingWebSocketManager) as T

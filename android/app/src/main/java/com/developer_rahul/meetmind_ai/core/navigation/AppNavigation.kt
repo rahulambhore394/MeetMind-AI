@@ -38,7 +38,11 @@ fun AppNavigation(navController: NavHostController) {
         
         composable(Screen.Onboarding.route) {
             OnboardingScreen(
-                onFinish = { navController.navigate(Screen.Permissions.route) }
+                onFinish = { 
+                    navController.navigate(Screen.Permissions.route) { 
+                        popUpTo(Screen.Onboarding.route) { inclusive = true } 
+                    } 
+                }
             )
         }
         

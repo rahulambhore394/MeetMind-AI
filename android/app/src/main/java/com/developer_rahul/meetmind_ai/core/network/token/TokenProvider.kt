@@ -13,6 +13,8 @@ interface TokenProvider {
     fun saveUserEmail(email: String)
     fun clearToken()
     fun hasToken(): Boolean
+    fun hasCompletedOnboarding(): Boolean = false
+    fun setOnboardingCompleted(completed: Boolean) {}
     val unauthorizedEvent: SharedFlow<Unit>
     fun notifyUnauthorized()
 }

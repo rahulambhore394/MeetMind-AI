@@ -50,4 +50,12 @@ class RealAuthRepository(
     override fun isLoggedIn(): Boolean {
         return tokenProvider.hasToken()
     }
+
+    override fun hasCompletedOnboarding(): Boolean {
+        return tokenProvider.hasCompletedOnboarding()
+    }
+
+    override fun setOnboardingCompleted(completed: Boolean) {
+        tokenProvider.setOnboardingCompleted(completed)
+    }
 }

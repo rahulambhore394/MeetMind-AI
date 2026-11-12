@@ -26,6 +26,7 @@ class SecureTokenProvider(context: Context) : TokenProvider {
         private const val KEY_USER_ID = "user_id"
         private const val KEY_USER_NAME = "user_name"
         private const val KEY_USER_EMAIL = "user_email"
+        private const val KEY_ONBOARDING_COMPLETED = "onboarding_completed"
 
         private fun createEncryptedSharedPreferences(context: Context): SharedPreferences {
             return try {
@@ -117,5 +118,13 @@ class SecureTokenProvider(context: Context) : TokenProvider {
 
     override fun hasToken(): Boolean {
         return getToken() != null
+    }
+
+    override fun hasCompletedOnboarding(): Boolean {
+        return sharedPreferences.getBoolean(KEY_ONBOARDING_COMPLETED, false)
+    }
+
+    override fun setOnboardingCompleted(completed: Boolean) {
+        sharedPreferences.edit().putBoolean(KEY_ONBOARDING_COMPLETED, completed).apply()
     }
 }

@@ -21,11 +21,13 @@ class SplashViewModel(
 
     private fun checkSession() {
         viewModelScope.launch {
-            delay(400) // Fast 400ms splash for instant app response
+            delay(1200) // Delightful 1200ms splash to showcase brand identity & aura animations
             if (authRepository.isLoggedIn()) {
                 _uiState.value = SplashUiState.Authenticated
+            } else if (authRepository.hasCompletedOnboarding()) {
+                _uiState.value = SplashUiState.Unauthenticated
             } else {
-                _uiState.value = SplashUiState.FirstLaunch // Or Unauthenticated
+                _uiState.value = SplashUiState.FirstLaunch
             }
         }
     }
