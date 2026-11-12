@@ -36,7 +36,7 @@ public class GeminiService {
     @Value("${intelligence.gemini.api-key:${GEMINI_API_KEY:}}")
     private String apiKey;
 
-    @Value("${intelligence.gemini.model:${GEMINI_MODEL:gemini-1.5-flash}}")
+    @Value("${intelligence.gemini.model:${GEMINI_MODEL:gemini-3.5-flash}}")
     private String model;
 
     public GeminiService(ObjectMapper objectMapper) {
@@ -59,7 +59,7 @@ public class GeminiService {
     }
 
     public String getModel() {
-        return model != null && !model.isBlank() ? model : "gemini-1.5-flash";
+        return model != null && !model.isBlank() ? model : "gemini-3.5-flash";
     }
 
     /**
@@ -243,3 +243,4 @@ public class GeminiService {
         return executeGenerateContent(prompt, systemInstruction, false, 0.2);
     }
 }
+
